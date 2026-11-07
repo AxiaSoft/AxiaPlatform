@@ -110,6 +110,19 @@ The generated files are output — never edit them by hand; edit `public/` inste
 published: the builder copies only `public/`, omits `admin/admin.js`, `admin/admin.css` and every `*.md`, and
 `tools/pages-workflow.yml` fails the build if a database file would ever end up in the output.
 
+### Something looks wrong on the live site
+
+Run the diagnostic first — it separates "the content is wrong" from "Pages is pointed at the wrong place",
+which look identical in a browser but have completely different fixes:
+
+```bash
+python3 tools/check_pages.py
+```
+
+If it reports that Pages serves a different branch than the one the site was built on, change it in
+**Settings → Pages → Build and deployment → Source** and pick the right branch and folder. If the content is
+fine and the setting is right, a cached copy is showing: hard-reload or use a private window.
+
 ### Serving from a user site or a custom domain
 
 If the site ever moves to `<owner>.github.io` or a custom domain, rebuild with `--base /` so absolute links
