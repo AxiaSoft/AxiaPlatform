@@ -78,7 +78,7 @@ Optional settings: `PORT` (default `8000`) and `AXIA_DB` (database file path). F
 
 ## GitHub: source and checks vs hosting
 
-This project is a Python application with a server API and SQLite database. GitHub can store the repository and run its automated checks, but **GitHub Pages alone cannot run this backend or the admin login**. A CI workflow is included at `.github/workflows/ci.yml`; it runs the Python test suite and JavaScript syntax checks on every push and pull request. To make the repository public or private on GitHub, create an empty repository there, then from this project root run:
+This project is a Python application with a server API and SQLite database. GitHub can store the repository and run its automated checks, but **GitHub Pages alone cannot run this backend or the admin login**. The CI pipeline is provided at `docs/ci-workflow.yml`; it runs the Python test suite, JavaScript syntax checks and the DOM tests, and fails if a database file is ever committed. Copy it to `.github/workflows/ci.yml` to enable it, or add it through the GitHub UI, because pushing a workflow file requires the token `workflows` permission. To make the repository public or private on GitHub, create an empty repository there, then from this project root run:
 
 ```bash
 git init -b main
