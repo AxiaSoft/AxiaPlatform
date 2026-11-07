@@ -1,0 +1,544 @@
+/* ==========================================================================
+   AXIASOFT — motion & light layer
+   Additive only: every rule here is a progressive enhancement. The site is
+   fully usable with JavaScript disabled and with reduced motion requested.
+   Performance rules followed throughout:
+     * only transform / opacity / background-position are animated;
+     * no animated box-shadow, blur or filter on large surfaces;
+     * no will-change on long-lived elements.
+   ========================================================================== */
+
+:root {
+  --fx-ease: cubic-bezier(.22, .75, .22, 1);
+  --fx-soft: cubic-bezier(.4, 0, .2, 1);
+  --fx-spot: rgba(106, 169, 255, .16);
+  --scroll-progress: 0;
+}
+
+[data-theme=light] {
+  --fx-spot: rgba(36, 111, 209, .1);
+}
+
+/* --------------------------------------------------------------------------
+   1. Scroll progress rail
+   -------------------------------------------------------------------------- */
+.scroll-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 80;
+  pointer-events: none;
+  transform-origin: 0 50%;
+  transform: scaleX(var(--scroll-progress));
+  background: linear-gradient(90deg, #4f9dff, #8fc4ff 45%, #b2a5ff);
+  box-shadow: 0 0 14px rgba(90, 158, 255, .55);
+  opacity: .9;
+}
+
+[dir=rtl] .scroll-progress {
+  transform-origin: 100% 50%;
+  background: linear-gradient(270deg, #4f9dff, #8fc4ff 45%, #b2a5ff);
+}
+
+[data-theme=light] .scroll-progress {
+  background: linear-gradient(90deg, #2b6fd6, #5c9bf0 45%, #8a7ce0);
+  box-shadow: 0 0 12px rgba(58, 118, 214, .4);
+}
+
+/* --------------------------------------------------------------------------
+   2. Ambient field — drifting aurora wash behind everything
+   -------------------------------------------------------------------------- */
+.aurora-field {
+  position: fixed;
+  inset: -20vmax;
+  z-index: -2;
+  pointer-events: none;
+  opacity: .55;
+  background:
+    radial-gradient(38vmax 30vmax at 18% 22%, rgba(31, 106, 255, .16), transparent 70%),
+    radial-gradient(30vmax 26vmax at 82% 30%, rgba(97, 61, 207, .14), transparent 70%),
+    radial-gradient(34vmax 30vmax at 55% 88%, rgba(28, 133, 189, .12), transparent 72%);
+  animation: aurora-drift 34s var(--fx-soft) infinite alternate;
+  will-change: transform;
+}
+
+[data-theme=light] .aurora-field {
+  opacity: .75;
+  background:
+    radial-gradient(38vmax 30vmax at 18% 22%, rgba(60, 128, 240, .13), transparent 70%),
+    radial-gradient(30vmax 26vmax at 82% 30%, rgba(120, 92, 226, .11), transparent 70%),
+    radial-gradient(34vmax 30vmax at 55% 88%, rgba(46, 152, 214, .1), transparent 72%);
+}
+
+@keyframes aurora-drift {
+  0%   { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+  50%  { transform: translate3d(1.8%, 1.4%, 0) scale(1.06); }
+  100% { transform: translate3d(-.6%, 2%, 0) scale(1.02); }
+}
+
+/* Particle constellation canvas (drawn by effects.js) */
+#fx-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.2s var(--fx-soft);
+}
+
+#fx-canvas.is-ready { opacity: .85; }
+
+/* --------------------------------------------------------------------------
+   3. Pointer spotlight
+   -------------------------------------------------------------------------- */
+.fx-spotlight {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 620px;
+  height: 620px;
+  margin: -310px 0 0 -310px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  background: radial-gradient(circle, var(--fx-spot), transparent 62%);
+  transform: translate3d(-1000px, -1000px, 0);
+  transition: opacity .45s var(--fx-soft);
+  will-change: transform;
+}
+
+.fx-spotlight.is-live { opacity: 1; }
+
+/* The spotlight must not sit above page content. These shells already paint
+   above the negative z-index layers, so only lift them when they are static. */
+main, #modal-root { z-index: 1; }
+
+/* --------------------------------------------------------------------------
+   4. Scroll reveal
+   -------------------------------------------------------------------------- */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+  transition:
+    opacity .72s var(--fx-ease) var(--reveal-delay, 0ms),
+    transform .72s var(--fx-ease) var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.reveal[data-reveal="left"]  { transform: translate3d(-32px, 0, 0); }
+.reveal[data-reveal="right"] { transform: translate3d(32px, 0, 0); }
+.reveal[data-reveal="scale"] { transform: scale(.94); }
+.reveal.is-visible { will-change: auto; }
+
+/* Hero entrance (runs immediately, not scroll-linked) */
+@keyframes fx-rise {
+  from { opacity: 0; transform: translate3d(0, 26px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.fx-rise {
+  animation: fx-rise .9s var(--fx-ease) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+/* --------------------------------------------------------------------------
+   5. Text & colour motion
+   -------------------------------------------------------------------------- */
+.gradient {
+  background-size: 220% 100%;
+  animation: gradient-pan 11s var(--fx-soft) infinite;
+}
+
+@keyframes gradient-pan {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* Headline sheen — a single slow highlight pass, then rest */
+@keyframes fx-sheen {
+  0%   { background-position: -160% 0; }
+  100% { background-position: 260% 0; }
+}
+
+.headline .gradient::after { content: none; }
+
+::selection {
+  background: rgba(84, 148, 255, .32);
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------------------
+   6. Buttons
+   -------------------------------------------------------------------------- */
+.button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.button-primary::after {
+  content: "";
+  position: absolute;
+  inset: -40% -120%;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .38) 50%, transparent 62%);
+  transform: translate3d(-120%, 0, 0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.button-primary:hover::after,
+.button-primary:focus-visible::after {
+  opacity: 1;
+  transition: transform .75s var(--fx-ease), opacity .2s linear;
+  transform: translate3d(120%, 0, 0);
+}
+
+.button:focus-visible,
+.tab:focus-visible,
+.icon-button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+/* Click ripple (span injected by effects.js) */
+.fx-ripple {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
+  background: radial-gradient(circle, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 70%);
+  animation: fx-ripple .62s var(--fx-soft) forwards;
+  z-index: 0;
+}
+
+.fx-ripple.dark {
+  background: radial-gradient(circle, rgba(106, 169, 255, .4), rgba(106, 169, 255, 0) 70%);
+}
+
+@keyframes fx-ripple {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   7. Cards, covers and glass
+   -------------------------------------------------------------------------- */
+.category-card,
+.product-card,
+.feature-panel,
+.cta-band,
+.detail-visual,
+.stat-card,
+.dash-panel {
+  transition:
+    transform .38s var(--fx-ease),
+    border-color .3s var(--fx-soft),
+    box-shadow .38s var(--fx-soft),
+    background-color .3s var(--fx-soft);
+}
+
+/* Light sweep across product covers on hover */
+.product-card .product-cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(180, 216, 255, .22) 48%, transparent 66%);
+  transform: translate3d(-130%, 0, 0);
+  opacity: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-card:hover .product-cover::before {
+    opacity: 1;
+    transform: translate3d(130%, 0, 0);
+    transition: transform 1.05s var(--fx-ease), opacity .25s linear;
+  }
+
+  .product-card:hover .cover-mark {
+    transform: translateZ(26px) scale(1.08) rotate(-4deg);
+    transition: transform .55s var(--fx-ease);
+  }
+
+  .cover-mark { transition: transform .5s var(--fx-ease); }
+
+  .category-card:hover .category-icon {
+    transform: translateY(-3px) rotate(-6deg) scale(1.06);
+    border-color: rgba(118, 174, 247, .42);
+  }
+
+  .category-icon { transition: transform .45s var(--fx-ease), border-color .3s; }
+
+  .category-card:hover .arrow-link {
+    transform: translate3d(4px, -4px, 0);
+  }
+
+  .arrow-link { transition: transform .35s var(--fx-ease); }
+
+  /* Gentle lift for the whole card */
+  .product-card:hover,
+  .category-card:hover {
+    box-shadow: 0 32px 70px -26px rgba(6, 20, 48, .72), 0 0 0 1px rgba(112, 170, 250, .18);
+  }
+
+  [data-theme=light] .product-card:hover,
+  [data-theme=light] .category-card:hover {
+    box-shadow: 0 28px 60px -28px rgba(38, 74, 130, .42), 0 0 0 1px rgba(60, 124, 224, .16);
+  }
+}
+
+/* Animated gradient hairline on top of key panels */
+.card {
+  position: relative;
+}
+
+.cta-band::before,
+.feature-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(122, 180, 255, .55), rgba(178, 165, 255, .45), transparent);
+  background-size: 220% 100%;
+  animation: gradient-pan 8s var(--fx-soft) infinite;
+  opacity: .8;
+}
+
+/* --------------------------------------------------------------------------
+   8. Navigation
+   -------------------------------------------------------------------------- */
+.nav-links a {
+  position: relative;
+}
+
+.nav-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 1px;
+  transform: scaleX(0);
+  transform-origin: var(--nav-origin, 0%) 50%;
+  background: linear-gradient(90deg, var(--blue), rgba(178, 165, 255, .9));
+  transition: transform .38s var(--fx-ease);
+}
+
+.nav-links a:hover::after,
+.nav-links a:focus-visible::after {
+  transform: scaleX(1);
+}
+
+[dir=rtl] .nav-links a::after {
+  transform-origin: 100% 50%;
+  background: linear-gradient(270deg, var(--blue), rgba(178, 165, 255, .9));
+}
+
+/* Topbar gains a touch of contrast once the page is scrolled */
+.topbar {
+  transition: background .35s var(--fx-soft), border-color .35s, box-shadow .35s;
+}
+
+body.is-scrolled .topbar {
+  box-shadow: 0 14px 40px -28px rgba(0, 0, 0, .85);
+  border-bottom-color: rgba(150, 186, 240, .2);
+}
+
+[data-theme=light] body.is-scrolled .topbar {
+  box-shadow: 0 14px 34px -26px rgba(40, 70, 120, .3);
+}
+
+/* Trust strip shimmer */
+.trust-strip {
+  position: relative;
+  overflow: hidden;
+}
+
+.trust-strip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 42%, rgba(140, 190, 255, .1) 50%, transparent 58%);
+  background-size: 260% 100%;
+  animation: gradient-pan 9s linear infinite;
+}
+
+.trust-strip i {
+  animation: fx-twinkle 4.5s ease-in-out infinite;
+}
+
+.trust-strip span:nth-child(2) i { animation-delay: .6s; }
+.trust-strip span:nth-child(3) i { animation-delay: 1.2s; }
+.trust-strip span:nth-child(4) i { animation-delay: 1.8s; }
+
+@keyframes fx-twinkle {
+  0%, 100% { opacity: .55; transform: scale(.92); }
+  50%      { opacity: 1; transform: scale(1.08); }
+}
+
+/* --------------------------------------------------------------------------
+   9. Hero
+   -------------------------------------------------------------------------- */
+.hero-art::before {
+  content: "";
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(96, 160, 255, .5) 52deg, transparent 128deg, transparent 240deg, rgba(168, 150, 255, .4) 300deg, transparent 360deg);
+  filter: blur(26px);
+  opacity: .55;
+  animation: fx-spin 18s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes fx-spin {
+  to { transform: rotate(360deg); }
+}
+
+.hero-orbit {
+  animation: fx-orbit-breathe 9s var(--fx-soft) infinite;
+}
+
+@keyframes fx-orbit-breathe {
+  0%, 100% { transform: rotateX(65deg) rotateZ(-25deg) scale(1); opacity: .85; }
+  50%      { transform: rotateX(65deg) rotateZ(-19deg) scale(1.035); opacity: 1; }
+}
+
+.orbit-tag {
+  animation: fx-float-soft 7s ease-in-out infinite;
+}
+
+.hero-art .tag-one { animation-delay: -1.4s; }
+.hero-art .tag-two { animation-delay: -3.6s; }
+
+@keyframes fx-float-soft {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, -9px, 0); }
+}
+
+.hero-logo {
+  animation: fx-logo-breathe 7.5s ease-in-out infinite;
+}
+
+@keyframes fx-logo-breathe {
+  0%, 100% { transform: translateY(0) rotateY(-6deg) rotateX(3deg); }
+  50%      { transform: translateY(-10px) rotateY(6deg) rotateX(-2deg); }
+}
+
+/* Parallax offset applied by effects.js (kept separate from the keyframes) */
+.hero-art {
+  translate: 0 var(--parallax-y, 0px);
+}
+
+/* --------------------------------------------------------------------------
+   10. Chat launcher
+   -------------------------------------------------------------------------- */
+.chat-launcher {
+  isolation: isolate;
+}
+
+.chat-launcher::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid rgba(106, 169, 255, .55);
+  opacity: 0;
+  animation: fx-pulse 3.4s var(--fx-soft) infinite;
+  pointer-events: none;
+}
+
+@keyframes fx-pulse {
+  0%   { transform: scale(1); opacity: .55; }
+  70%  { transform: scale(1.22); opacity: 0; }
+  100% { transform: scale(1.22); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   11. Page transitions inside the SPA
+   -------------------------------------------------------------------------- */
+#app.fx-enter .container,
+#app.fx-enter > section {
+  animation: fx-rise .62s var(--fx-ease) both;
+}
+
+/* --------------------------------------------------------------------------
+   12. Custom scrollbar & focus polish
+   -------------------------------------------------------------------------- */
+@supports (scrollbar-width: thin) {
+  html { scrollbar-width: thin; scrollbar-color: rgba(120, 165, 225, .4) transparent; }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(112, 162, 232, .5), rgba(112, 162, 232, .28));
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: rgba(130, 180, 245, .7); background-clip: content-box; }
+
+/* --------------------------------------------------------------------------
+   13. Admin console: calm version of the same language
+   -------------------------------------------------------------------------- */
+body[data-fx="admin"] .aurora-field { opacity: .35; }
+body[data-fx="admin"] .fx-spotlight { width: 420px; height: 420px; margin: -210px 0 0 -210px; }
+
+body[data-fx="admin"] .side-link,
+body[data-fx="admin"] .btn,
+body[data-fx="admin"] .stat-card {
+  transition: background-color .26s var(--fx-soft), border-color .26s var(--fx-soft), transform .3s var(--fx-ease), color .2s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body[data-fx="admin"] .stat-card:hover { transform: translateY(-3px); }
+  body[data-fx="admin"] .side-link:hover { transform: translateX(2px); }
+  [dir=rtl] body[data-fx="admin"] .side-link:hover { transform: translateX(-2px); }
+}
+
+/* --------------------------------------------------------------------------
+   14. Reduced motion & coarse pointers
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-field,
+  .hero-art::before,
+  .hero-orbit,
+  .hero-logo,
+  .orbit-tag,
+  .gradient,
+  .chat-launcher::after,
+  .trust-strip::after,
+  .trust-strip i,
+  .cta-band::before,
+  .feature-panel::after {
+    animation: none !important;
+  }
+
+  .gradient { background-size: 100% 100%; }
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .hero-art { translate: none; }
+  .button-primary::after { display: none; }
+  #fx-canvas, .fx-spotlight, .scroll-progress { display: none; }
+  #app.fx-enter .container, #app.fx-enter > section, .fx-rise { animation: none !important; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .fx-spotlight { display: none; }
+  .product-card .product-cover::before { display: none; }
+}

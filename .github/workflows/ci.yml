@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Python syntax check
+        run: python -m py_compile server/app.py server/db.py server/security.py server/provision_admin.py
+
+      - name: JavaScript syntax check
+        run: |
+          node --check public/app.js
+          node --check public/i18n.js
+          node --check public/effects.js
+          node --check public/admin/admin.js
+
+      - name: Unit and API tests
+        env:
+          AXIA_DB: ${{ runner.temp }}/ci.sqlite3
+        run: python -m unittest discover -s tests -v
+
+      - name: DOM smoke tests (effects layer)
+        run: |
+          npm install --no-save jsdom
+          node tests/browser/effects.dom.test.mjs
+          node tests/browser/admin.dom.test.mjs
+
+      - name: Fail if a database file was committed
+        run: |
+          if git ls-files | grep -qE '\.sqlite3'; then
+            echo "::error::A SQLite database is tracked in Git. Remove it and rely on .gitignore."
+            exit 1
+          fi

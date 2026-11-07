@@ -3,13 +3,39 @@ services:
     build: .
     container_name: axiasoft-local
     restart: unless-stopped
+    init: true
     ports:
       - "${PORT:-8000}:8000"
     environment:
       PORT: "8000"
       AXIA_DB: /app/data/axiasoft.sqlite3
+      # Abuse-control ceilings. Raise on a bigger box, lower on a small VM.
+      AXIA_MAX_INFLIGHT: "${AXIA_MAX_INFLIGHT:-256}"
+      AXIA_MAX_INFLIGHT_PER_CLIENT: "${AXIA_MAX_INFLIGHT_PER_CLIENT:-16}"
+      AXIA_RATE_READ: "${AXIA_RATE_READ:-1800}"
+      AXIA_RATE_WRITE: "${AXIA_RATE_WRITE:-120}"
+      AXIA_RATE_AUTH: "${AXIA_RATE_AUTH:-30}"
+      AXIA_RATE_REGISTER: "${AXIA_RATE_REGISTER:-12}"
+      AXIA_HEADER_TIMEOUT: "${AXIA_HEADER_TIMEOUT:-10}"
+      # Set to 1 only when the app is served over HTTPS (directly or via proxy).
+      AXIA_COOKIE_SECURE: "${AXIA_COOKIE_SECURE:-0}"
+      AXIA_HSTS: "${AXIA_HSTS:-0}"
+      # Only when a reverse proxy that forwards X-Forwarded-For is in front.
+      AXIA_TRUSTED_PROXIES: "${AXIA_TRUSTED_PROXIES:-}"
     volumes:
       - axiasoft_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          # A memory ceiling protects the host if the process misbehaves.
+          memory: 512M
 
 volumes:
   axiasoft_data:

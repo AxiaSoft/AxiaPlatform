@@ -1,10 +1,32 @@
-"""SQLite persistence layer for the AXIASOFT development platform."""
-import sqlite3, os, json
+"""SQLite persistence layer for the AXIASOFT development platform.
+
+Connection policy
+-----------------
+The development server is multi-threaded, so the connection factory is tuned for
+concurrent readers plus short serialised writers:
+
+* ``isolation_level=None`` (autocommit). Every statement commits immediately, so a
+  connection can never sit on an uncommitted write transaction. This is what keeps
+  a single failed write from wedging the whole database for every other request.
+* ``busy_timeout`` makes concurrent writers wait briefly instead of failing.
+* WAL journaling lets readers proceed while a writer is active.
+* ``transaction()`` is provided for the few operations that must be atomic.
+
+Callers should still close connections promptly; ``connect()`` is usable as a
+context manager and ``Handler.finish()`` closes anything a request opened.
+"""
+import json
+import os
+import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = Path(os.environ.get('AXIA_DB', ROOT / 'data' / 'axiasoft.sqlite3'))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+DEFAULT_DB_PATH = ROOT / 'data' / 'axiasoft.sqlite3'
+
+DB_PATH = Path(os.environ.get('AXIA_DB') or DEFAULT_DB_PATH)
+DB_TIMEOUT = float(os.environ.get('AXIA_DB_TIMEOUT') or 5.0)
+
 SCHEMA = '''
 PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE, phone TEXT DEFAULT '', password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'customer' CHECK(role IN ('customer','admin')), active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -20,22 +42,83 @@ CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category,published);
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
 '''
 
+SEED_PRODUCTS = [
+    ('northstar-corporate', 'Northstar Corporate', 'Websites', 'A confident digital home for ambitious teams.', 'A responsive corporate website designed to clarify your value and turn visits into conversations. Includes an editorial-ready page system and a polished contact journey.', 'web', '["Responsive pages","CMS-ready structure","Accessibility-minded","Lead capture"]', '["Next.js","TypeScript","PostgreSQL"]', 'available', 'Request a quote'),
+    ('atelier-store', 'Atelier Commerce', 'Websites', 'A considered storefront built for modern retail.', 'A conversion-focused commerce experience with product storytelling, clear navigation and an extensible foundation. Scope and integrations are confirmed during discovery.', 'shopping-bag', '["Product discovery","Mobile-first checkout design","Catalog structure","Analytics-ready"]', '["React","Node.js","PostgreSQL"]', 'available', 'Request a quote'),
+    ('care-clinic', 'Careline Clinic', 'Websites', 'A calmer, more accessible patient experience.', 'A clean healthcare website concept with service information, provider profiles and a booking journey designed around clarity.', 'heart-pulse', '["Service directory","Appointment inquiry","Accessible UI","Privacy-aware forms"]', '["Next.js","TypeScript"]', 'available', 'Request a quote'),
+    ('fieldwork-app', 'Fieldwork Mobile', 'Applications', 'Keep field teams connected and work moving.', 'A cross-platform mobile product concept for task coordination, updates and field operations. Final feature scope is agreed with your team.', 'smartphone', '["Team task flows","Status updates","Offline-first planning","Role-aware screens"]', '["React Native","TypeScript","API"]', 'available', 'Request a quote'),
+    ('orbit-booking', 'Orbit Booking', 'Applications', 'A friction-light booking experience for services.', 'A mobile booking application concept with service discovery, schedule selection and clear customer communication.', 'calendar-days', '["Booking flow","Availability interface","Customer profile","Notifications-ready"]', '["Flutter","REST API"]', 'available', 'Request a quote'),
+    ('aurion', 'AURION', 'Aurion', 'A symbolic showcase for MetaTrader companion software.', 'AURION is presented as a product concept for working with trading robots in the MetaTrader environment. No trading, broker connection, license generation, activation or payment is available in this showcase.', 'orbit', '["MetaTrader-oriented concept","Package presentation","Demo-only experience","No live trading"]', '["Product showcase"]', 'showcase', 'Presentation only'),
+]
+
+
 def connect():
-    db=sqlite3.connect(DB_PATH, timeout=10); db.row_factory=sqlite3.Row; db.execute('PRAGMA foreign_keys=ON'); return db
+    """Open a hardened, autocommit SQLite connection."""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(str(DB_PATH), timeout=DB_TIMEOUT, isolation_level=None)
+    db.row_factory = sqlite3.Row
+    db.execute('PRAGMA foreign_keys=ON')
+    db.execute('PRAGMA busy_timeout=%d' % int(DB_TIMEOUT * 1000))
+    return db
+
+
+@contextmanager
+def connection():
+    """Context manager that always closes the connection, even on error."""
+    db = connect()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def transaction():
+    """Atomic multi-statement block: BEGIN IMMEDIATE ... COMMIT / ROLLBACK."""
+    db = connect()
+    try:
+        db.execute('BEGIN IMMEDIATE')
+        try:
+            yield db
+        except Exception:
+            db.execute('ROLLBACK')
+            raise
+        db.execute('COMMIT')
+    finally:
+        db.close()
+
 
 def init():
-    db=connect(); db.executescript(SCHEMA)
-    if db.execute('SELECT count(*) FROM products').fetchone()[0] == 0:
-        data=[
-          ('northstar-corporate','Northstar Corporate','Websites','A confident digital home for ambitious teams.','A responsive corporate website designed to clarify your value and turn visits into conversations. Includes an editorial-ready page system and a polished contact journey.','web','["Responsive pages","CMS-ready structure","Accessibility-minded","Lead capture"]','["Next.js","TypeScript","PostgreSQL"]','available','Request a quote'),
-          ('atelier-store','Atelier Commerce','Websites','A considered storefront built for modern retail.','A conversion-focused commerce experience with product storytelling, clear navigation and an extensible foundation. Scope and integrations are confirmed during discovery.','shopping-bag','["Product discovery","Mobile-first checkout design","Catalog structure","Analytics-ready"]','["React","Node.js","PostgreSQL"]','available','Request a quote'),
-          ('care-clinic','Careline Clinic','Websites','A calmer, more accessible patient experience.','A clean healthcare website concept with service information, provider profiles and a booking journey designed around clarity.','heart-pulse','["Service directory","Appointment inquiry","Accessible UI","Privacy-aware forms"]','["Next.js","TypeScript"]','available','Request a quote'),
-          ('fieldwork-app','Fieldwork Mobile','Applications','Keep field teams connected and work moving.','A cross-platform mobile product concept for task coordination, updates and field operations. Final feature scope is agreed with your team.','smartphone','["Team task flows","Status updates","Offline-first planning","Role-aware screens"]','["React Native","TypeScript","API"]','available','Request a quote'),
-          ('orbit-booking','Orbit Booking','Applications','A friction-light booking experience for services.','A mobile booking application concept with service discovery, schedule selection and clear customer communication.','calendar-days','["Booking flow","Availability interface","Customer profile","Notifications-ready"]','["Flutter","REST API"]','available','Request a quote'),
-          ('aurion','AURION','Aurion','A symbolic showcase for MetaTrader companion software.','AURION is presented as a product concept for working with trading robots in the MetaTrader environment. No trading, broker connection, license generation, activation or payment is available in this showcase.','orbit','["MetaTrader-oriented concept","Package presentation","Demo-only experience","No live trading"]','["Product showcase"]','showcase','Presentation only')]
-        db.executemany('INSERT INTO products(slug,title,category,summary,description,cover,features,technologies,status,price_label) VALUES(?,?,?,?,?,?,?,?,?,?)',data)
-    db.commit(); db.close()
+    """Create the schema and seed the showcase catalog. Safe to run repeatedly."""
+    with connection() as db:
+        db.execute('PRAGMA journal_mode=WAL')
+        db.executescript(SCHEMA)
+        if db.execute('SELECT count(*) FROM products').fetchone()[0] == 0:
+            db.executemany(
+                'INSERT INTO products(slug,title,category,summary,description,cover,features,technologies,status,price_label) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                SEED_PRODUCTS,
+            )
 
-if __name__=='__main__': init(); print(DB_PATH)
+
+def prune_sessions(db, now_iso=None):
+    """Delete expired session rows. Returns the number of rows removed."""
+    from datetime import datetime, timezone
+    now_iso = now_iso or datetime.now(timezone.utc).isoformat(timespec='seconds')
+    return db.execute('DELETE FROM sessions WHERE expires_at<=?', (now_iso,)).rowcount
+
+
+def prune_audit(db, keep=20000):
+    """Keep the audit log bounded so it cannot grow without limit."""
+    return db.execute(
+        'DELETE FROM audit_logs WHERE id NOT IN (SELECT id FROM audit_logs ORDER BY id DESC LIMIT ?)',
+        (int(keep),),
+    ).rowcount
+
+
+if __name__ == '__main__':
+    init()
+    print(DB_PATH)

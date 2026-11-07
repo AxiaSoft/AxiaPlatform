@@ -1,4 +1,8 @@
+# AXIASOFT — crawler policy
 User-agent: *
 Allow: /
 Disallow: /api/
-Sitemap: /sitemap.xml
+Disallow: /admin/
+
+# Replace https://example.com with the production origin before deploying.
+Sitemap: https://example.com/sitemap.xml

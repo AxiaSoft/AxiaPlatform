@@ -12,6 +12,40 @@ A responsive AXIASOFT brand site with a real server-side API and persistent SQLi
 - Refund window enforced on the server at 14 calendar days from the order record. Admin approval only records a decision; there is no payment provider or automatic refund.
 - Local bounded help assistant with approved product/process/policy guidance and a real human-support ticket escalation path. It is **not an LLM integration** and has no database/order access.
 - AURION purchases and activation are intentionally non-operational.
+- Ambient motion layer (`public/effects.js` + `public/effects.css`): scroll progress rail, drifting aurora wash, pointer constellation canvas, cursor spotlight, scroll-reveal with stagger, animated gradient type, button shimmer and click ripples, cover light-sweep, hero parallax, and a calm variant for the admin console. It is additive and fully disabled under `prefers-reduced-motion`.
+
+## Security and load hardening
+
+Beyond the baseline (PBKDF2 hashing, hashed session tokens, HttpOnly/SameSite cookies, CSRF on writes, role checks on the server, ownership-scoped SQL), the server now defends against the failure modes that matter for a public shop with unpredictable traffic.
+
+**Database safety.** Every request opens its connections through a tracked factory, and every one of them is closed when the request finishes — including error paths, which previously leaked a connection holding an open write transaction and wedged all writes with `database is locked`. SQLite now runs in WAL mode with autocommit plus `busy_timeout`, so a failed write cannot poison later requests. Multi-statement operations use `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`.
+
+**Abuse control.**
+
+| Control | Default | Notes |
+| --- | --- | --- |
+| Per-client concurrency | 16 in flight | extra requests get a clean `503` |
+| Global in-flight ceiling | 256 (scales with CPU) | protects the process, not just one client |
+| API reads | 1800/min | keyed per session, so shared NAT does not throttle neighbours |
+| Identity bootstrap (`/api/me`) | 3000/min | separate generous bucket so a flood cannot lock a visitor out of the UI |
+| API writes | 120/min | |
+| Sign-in attempts | 30/min | plus per-email lockout after 8 failures for 15 min |
+| Registration | 12/min | |
+| Static assets | 3000/min | |
+| Header block | 16 KB / 10 s | slow-header (slowloris) connections are cut |
+| Request body | 100 KB, JSON depth 12 | oversized or non-object bodies are refused |
+
+Buckets are fixed names chosen by the route, never the raw URL, so `?nonce=` no longer buys a fresh allowance. `/api/health` is never rate limited and never shed, so monitoring stays truthful during an attack.
+
+**Hardening.** Directory listings are disabled; path traversal is rejected after decoding; only `GET/HEAD/POST/PUT/DELETE` are answered (`TRACE`, `PATCH`, `OPTIONS` get `405`); the `Server` banner is stripped; the Host header is validated; and the response headers add `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy` and `object-src 'none'` to the existing CSP/nosniff/frame policy.
+
+**Shutdown and operations.** `SIGTERM`/`SIGINT` stop the listener, finish in-flight requests, and release the port. A background task prunes expired sessions and trims the audit log every hour. The Docker image runs unprivileged, read-only, with a health check against the unmetered endpoint.
+
+Every ceiling above is an environment variable (`AXIA_MAX_INFLIGHT`, `AXIA_MAX_INFLIGHT_PER_CLIENT`, `AXIA_RATE_READ`, `AXIA_RATE_WRITE`, `AXIA_RATE_AUTH`, `AXIA_RATE_REGISTER`, `AXIA_RATE_STATIC`, `AXIA_RATE_IDENTITY`, `AXIA_LOCKOUT_THRESHOLD`, `AXIA_LOCKOUT_SECONDS`, `AXIA_HEADER_TIMEOUT`, `AXIA_SOCKET_TIMEOUT`, `AXIA_MAX_BODY_BYTES`, `AXIA_MAX_HEADER_BYTES`, `AXIA_BACKLOG`, `AXIA_DB_TIMEOUT`, `AXIA_TRUSTED_PROXIES`). Set `AXIA_TRUSTED_PROXIES` only when a reverse proxy you control forwards `X-Forwarded-For`; otherwise the header is ignored so clients cannot forge their identity.
+
+**Measured in this repository's test run:** 500 parallel requests in ~0.5 s (≈960 req/s) with zero failures and p95 latency ≈110 ms on a single development process; a deliberately over-tuned instance (`AXIA_MAX_INFLIGHT=4`) shed load with clean `503`s and recovered immediately; the database accepted a write with no wedged lock after every burst.
+
+**What still needs real infrastructure.** In-process memory for limits and lockouts is correct for one process only. Behind multiple instances or on a CDN you still want distributed rate limiting (Redis), a WAF/DDoS layer, PostgreSQL with pooling, and a real ASGI/WSGI server. This code removes the self-inflicted outages; it does not replace edge protection.
 
 ## Run locally
 
@@ -44,7 +78,7 @@ Optional settings: `PORT` (default `8000`) and `AXIA_DB` (database file path). F
 
 ## GitHub: source and checks vs hosting
 
-This project is a Python application with a server API and SQLite database. GitHub can store the repository and run its automated checks, but **GitHub Pages alone cannot run this backend or the admin login**. The workflow in `.github/workflows/ci.yml` runs Python tests and JavaScript syntax checks on pushes and pull requests. To make the repository public or private on GitHub, create an empty repository there, then from this project root run:
+This project is a Python application with a server API and SQLite database. GitHub can store the repository and run its automated checks, but **GitHub Pages alone cannot run this backend or the admin login**. A CI workflow is included at `.github/workflows/ci.yml`; it runs the Python test suite and JavaScript syntax checks on every push and pull request. To make the repository public or private on GitHub, create an empty repository there, then from this project root run:
 
 ```bash
 git init -b main
@@ -54,7 +88,7 @@ git remote add origin https://github.com/YOUR-ACCOUNT/YOUR-REPOSITORY.git
 git push -u origin main
 ```
 
-Replace the remote URL with your own repository URL. Do not commit `.env` files, passwords, or `data/*.sqlite3`. To make the site reachable to other people, deploy the container/app to a Python-capable server; pushing source to GitHub does not itself publish a running website.
+Replace the remote URL with your own repository URL. A `.gitignore` now excludes databases, `__pycache__`, `.env` files and backups, so runtime data stays out of the repository. To make the site reachable to other people, deploy the container/app to a Python-capable server; pushing source to GitHub does not itself publish a running website.
 
 ## Separate administrator console
 
@@ -103,9 +137,20 @@ The database file is configured by `AXIA_DB`; the default is `data/axiasoft.sqli
 ```bash
 node --check public/app.js
 node --check public/i18n.js
+node --check public/effects.js
 node --check public/admin/admin.js
 python3 -m py_compile server/app.py server/db.py server/provision_admin.py
 python3 -m unittest discover -s tests -v
 ```
 
-The current test set covers important persistence/security invariants, but is not a production penetration test or complete end-to-end suite.
+The Python suite (26 tests) covers the persistence and security invariants, plus explicit regressions for the write-lock wedge, request-body validation, rate-limit keying, login lockout, and the limiter primitives.
+
+Two optional DOM tests render the real markup, scripts and effects layer in jsdom and assert that the decorative layers appear, that they are hidden from assistive technology, and that `prefers-reduced-motion` users get a calm page with no canvas or spotlight:
+
+```bash
+npm install --no-save jsdom
+node tests/browser/effects.dom.test.mjs
+node tests/browser/admin.dom.test.mjs
+```
+
+jsdom is intentionally not a project dependency; these tests are skipped in CI when it is absent. They are not a substitute for a full browser suite or a penetration test.
