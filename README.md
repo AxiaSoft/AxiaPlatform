@@ -80,24 +80,47 @@ Optional settings: `PORT` (default `8000`) and `AXIA_DB` (database file path). F
 
 **https://axiasoft.github.io/AxiaPlatform/** is generated from this repository by `tools/build_static.py`.
 
-GitHub Pages serves static files only, so the published site is the real public interface — design, motion layer, catalog, product pages, About/Services/Contact and the policies — with the product data exported from the database. Accounts, project requests, support, refunds and the admin console need the Python API, so those actions open a clear explanation (and `/admin/` shows a gate page) instead of failing silently. The catalog is served from `docs/data/products.json` via a small adapter, so the storefront renders even if `fetch` is unavailable.
+GitHub Pages serves static files only, so the published site is the real public interface — design, motion
+layer, catalog, product pages, About/Services/Contact and the policies — with the product data exported from
+the database. Accounts, project requests, support, refunds and the admin console need the Python API, so those
+actions open a clear explanation (and `/admin/` shows a gate page) instead of failing silently.
+
+### How it is published
+
+Pages is configured as **Source: Deploy from a branch → `main` → `/`**, so the generated files are committed to
+the **repository root** next to the Python application. A project site is always served from
+`/<repository>/`, which is why the base path is `/AxiaPlatform/` even though the files sit at the root.
+`.nojekyll` at the root stops Jekyll from processing the tree — without it GitHub renders `README.md` as the
+homepage and publishes raw `server/` sources.
 
 | Item | Value |
 | --- | --- |
-| Published directory | `docs/` (committed, because Pages serves `main` → `/`) |
-| Pages base | `/AxiaPlatform/` |
-| Generator | `python3 tools/build_static.py --out docs --base /AxiaPlatform/ --origin https://axiasoft.github.io` |
+| Served from | repository root (`main`, `/`) |
+| Base path | `/AxiaPlatform/` |
+| Key files | `index.html`, `404.html`, `.nojekyll`, `styles.css`, `app.js`, `static-adapter.js`, `data/products.json` |
 
 Rebuild and publish after changing the catalog, text or styles:
 
 ```bash
-python3 tools/build_static.py --out docs --base /AxiaPlatform/ --origin https://axiasoft.github.io
-git add docs && git commit -m "Rebuild static site" && git push origin main
+python3 tools/build_static.py --out . --base /AxiaPlatform/ --origin https://axiasoft.github.io
+git add -A && git commit -m "Rebuild static site" && git push origin main
 ```
 
-`docs/` is generated output — never edit it by hand. Nothing secret is published: `tools/build_static.py` copies only `public/`, omits `admin/admin.js`, `admin/admin.css` and every `*.md`, and the CI/deploy checks fail if a database file would end up in the output.
+The generated files are output — never edit them by hand; edit `public/` instead. Nothing secret is
+published: the builder copies only `public/`, omits `admin/admin.js`, `admin/admin.css` and every `*.md`, and
+`tools/pages-workflow.yml` fails the build if a database file would ever end up in the output.
 
-To serve from the **repository root** instead (`https://<owner>.github.io/<repo>/` directly out of `main`), either commit the generated files to the root or switch Pages to *GitHub Actions* / the *docs/* folder in repository settings, then adjust `--base` accordingly (`--base /` for a user site or custom domain). An automated pipeline for that setup is provided at `tools/pages-workflow.yml`; it could not be installed directly because pushing `.github/workflows/*` requires a token with the `workflows` scope.
+### Serving from a user site or a custom domain
+
+If the site ever moves to `<owner>.github.io` or a custom domain, rebuild with `--base /` so absolute links
+point at the origin root, and keep `.nojekyll` in place.
+
+### Automatic deployment
+
+`tools/pages-workflow.yml` is a ready-made pipeline (build → `upload-pages-artifact` → `deploy-pages`).
+Copy it to `.github/workflows/pages.yml` in the GitHub UI and set Pages **Source** to *GitHub Actions* to use
+it. Pushing `.github/workflows/*` needs a token with the `workflows` scope, which is why the file lives in
+`tools/`.
 
 ## GitHub: source and checks vs hosting
 

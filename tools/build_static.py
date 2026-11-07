@@ -191,15 +191,23 @@ def main() -> int:
     parser.add_argument('--out', default=str(DIST), help='Output directory (default: dist/)')
     parser.add_argument('--demo', action='store_true',
                         help='Also hide project-request buttons (pure catalog demo)')
+    parser.add_argument('--clean', action='store_true',
+                        help='Delete the output directory before writing. Only needed when '
+                             'the directory holds stale files (e.g. both docs/ and a root build).')
     args = parser.parse_args()
 
     base = '/' + args.base.strip('/') + '/' if args.base.strip('/') else '/'
     origin = args.origin.rstrip('/')
     out = Path(args.out)
 
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    if out.resolve() == ROOT.resolve():
+        # Never wipe the repository: a root build only replaces its own files.
+        print('Building the site into the repository root (Pages serves main -> /).')
+        out.mkdir(parents=True, exist_ok=True)
+    else:
+        if args.clean and out.exists():
+            shutil.rmtree(out)
+        out.mkdir(parents=True, exist_ok=True)
 
     print(f'Building static site')
     print(f'  origin : {origin}')
