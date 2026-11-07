@@ -1,0 +1,6 @@
+# AXIASOFT — crawler policy (static GitHub Pages build)
+User-agent: *
+Allow: /
+Disallow: /admin/
+
+Sitemap: https://axiasoft.github.io/AxiaPlatform/sitemap.xml

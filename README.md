@@ -76,9 +76,32 @@ The script prompts for a name, email and password (the password is not echoed). 
 
 Optional settings: `PORT` (default `8000`) and `AXIA_DB` (database file path). For a containerized local run, use `docker compose up --build`, then open the same URL. Provision an admin inside the container with `docker compose exec axiasoft python server/provision_admin.py`. Docker persists SQLite data in a named volume.
 
+## Live static site on GitHub Pages
+
+**https://axiasoft.github.io/AxiaPlatform/** is generated from this repository by `tools/build_static.py`.
+
+GitHub Pages serves static files only, so the published site is the real public interface — design, motion layer, catalog, product pages, About/Services/Contact and the policies — with the product data exported from the database. Accounts, project requests, support, refunds and the admin console need the Python API, so those actions open a clear explanation (and `/admin/` shows a gate page) instead of failing silently. The catalog is served from `docs/data/products.json` via a small adapter, so the storefront renders even if `fetch` is unavailable.
+
+| Item | Value |
+| --- | --- |
+| Published directory | `docs/` (committed, because Pages serves `main` → `/`) |
+| Pages base | `/AxiaPlatform/` |
+| Generator | `python3 tools/build_static.py --out docs --base /AxiaPlatform/ --origin https://axiasoft.github.io` |
+
+Rebuild and publish after changing the catalog, text or styles:
+
+```bash
+python3 tools/build_static.py --out docs --base /AxiaPlatform/ --origin https://axiasoft.github.io
+git add docs && git commit -m "Rebuild static site" && git push origin main
+```
+
+`docs/` is generated output — never edit it by hand. Nothing secret is published: `tools/build_static.py` copies only `public/`, omits `admin/admin.js`, `admin/admin.css` and every `*.md`, and the CI/deploy checks fail if a database file would end up in the output.
+
+To serve from the **repository root** instead (`https://<owner>.github.io/<repo>/` directly out of `main`), either commit the generated files to the root or switch Pages to *GitHub Actions* / the *docs/* folder in repository settings, then adjust `--base` accordingly (`--base /` for a user site or custom domain). An automated pipeline for that setup is provided at `tools/pages-workflow.yml`; it could not be installed directly because pushing `.github/workflows/*` requires a token with the `workflows` scope.
+
 ## GitHub: source and checks vs hosting
 
-This project is a Python application with a server API and SQLite database. GitHub can store the repository and run its automated checks, but **GitHub Pages alone cannot run this backend or the admin login**. The CI pipeline is provided at `docs/ci-workflow.yml`; it runs the Python test suite, JavaScript syntax checks and the DOM tests, and fails if a database file is ever committed. Copy it to `.github/workflows/ci.yml` to enable it, or add it through the GitHub UI, because pushing a workflow file requires the token `workflows` permission. To make the repository public or private on GitHub, create an empty repository there, then from this project root run:
+This project is a Python application with a server API and SQLite database. GitHub stores the repository, runs the automated checks, and publishes the static storefront on Pages; **Pages cannot run the backend or the admin login**, which is why the published build gates those features. The CI pipeline is provided at `docs/ci-workflow.yml`; it runs the Python test suite, JavaScript syntax checks and the DOM tests, and fails if a database file is ever committed. Copy it to `.github/workflows/ci.yml` to enable it, or add it through the GitHub UI, because pushing a workflow file requires the token `workflows` permission. To make the repository public or private on GitHub, create an empty repository there, then from this project root run:
 
 ```bash
 git init -b main

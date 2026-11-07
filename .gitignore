@@ -46,3 +46,8 @@ node_modules/
 # Local backups
 backups/
 *.bak
+
+# The published static build is committed under docs/ because GitHub Pages for
+# this repository is configured to serve main -> / (root). Generate it with
+# tools/build_static.py; never edit it by hand.
+dist/
