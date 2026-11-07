@@ -1,0 +1,15 @@
+services:
+  axiasoft:
+    build: .
+    container_name: axiasoft-local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      PORT: "8000"
+      AXIA_DB: /app/data/axiasoft.sqlite3
+    volumes:
+      - axiasoft_data:/app/data
+
+volumes:
+  axiasoft_data:
