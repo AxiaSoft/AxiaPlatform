@@ -202,13 +202,67 @@ main, #modal-root { z-index: 1; }
   transform: translate3d(120%, 0, 0);
 }
 
-.button:focus-visible,
-.tab:focus-visible,
-.icon-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--blue);
+/* Keyboard focus.
+   The previous rule set a square blue outline on every focused link and button
+   and forced border-radius:10px onto elements that had none, so clicking a
+   control (and any browser that reports focus-visible for pointer input) drew a
+   blue box around it. Use a shape-aware ring instead: it follows the element's
+   own corner radius, only appears for keyboard users, and is painted with a
+   shadow so it can never be clipped by an ancestor's overflow.
+
+   `:focus-visible` is already keyboard-only in modern browsers; the `:focus`
+   fallback for very old ones is scoped with :not(:focus-visible) guarded below. */
+/* One ring for everything focusable. A solid 2px outline in the brand blue was
+   loud enough to read as a "blue box" around a control, so the ring is drawn
+   with a soft halo plus a thin inner line: visible for keyboard users, quiet
+   enough not to look like a selection state. `outline` follows the element's
+   own border radius, so pills stay pill-shaped and cards stay rounded. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 12%, transparent);
+}
+
+/* Cards already carry a shadow; give them the ring alone so the two do not
+   stack into a heavy block. */
+.product-card:focus-visible,
+.category-card:focus-visible,
+.wide-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent);
   outline-offset: 3px;
-  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+/* Browsers without color-mix() get a plain, still-soft fallback. */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid rgba(82, 150, 255, .55);
+    box-shadow: 0 0 0 4px rgba(82, 150, 255, .12);
+  }
+}
+
+/* Never draw the browser's own square focus ring on top of ours. */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Remove the grey/blue flash browsers paint over a tapped element on touch
+   devices. This is the box that appears over a control while the finger is
+   down, and it is the one users notice most on cards and buttons.
+
+   The user-agent highlight is NOT inherited, so a selector that only lists
+   `a` and `button` misses the clickable elements that are neither — the
+   product cards are <article>s and the admin rows are <tr>s. Listing the
+   interactive classes as well covers them. */
+a, button, [role="button"], summary, label, input, select, textarea,
+input[type="checkbox"], input[type="radio"], img,
+.button, .btn, .tab, .side-link, .chat-chip, .icon-button, .chat-launcher,
+.product-card, .category-card, .wide-card, .feature-panel, .stat-card,
+.package, .workflow-card, .detail-visual, .price-card, .tilt-hover,
+.mouse-light, .nav-links a, .footer-links a, .arrow-link, .text-button,
+.admin-tab, .data-table tr, .list-row, .toast, .language-toggle {
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
 }
 
 /* Click ripple (span injected by effects.js) */

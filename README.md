@@ -110,6 +110,32 @@ The generated files are output — never edit them by hand; edit `public/` inste
 published: the builder copies only `public/`, omits `admin/admin.js`, `admin/admin.css` and every `*.md`, and
 `tools/pages-workflow.yml` fails the build if a database file would ever end up in the output.
 
+### Buttons and click targets
+
+Two rules keep interactive controls from drawing a box around themselves:
+
+* **No square focus box.** The old rule was `*:focus-visible { outline: 2px solid var(--blue) }` plus a
+  forced `border-radius: 10px` on `a:focus-visible`, so every focused link and button got a hard blue
+  rectangle that ignored its own shape — and `:focus-visible` also fires for pointer input in some browsers.
+  Focus is now one soft, shape-following ring, and `:focus:not(:focus-visible)` guarantees a mouse click
+  leaves nothing behind. Keyboard users still get a clearly visible ring.
+* **No tap flash.** Browsers paint `-webkit-tap-highlight-color` over a pressed element and it looks like a
+  blue square. It is set to `transparent`, and because the highlight is *not* inherited, the list of
+  selectors has to include every clickable class — product cards are `<article>`s, not links, and that is
+  exactly the kind of control a plain `a, button` selector misses.
+
+Press feedback is real now too: controls move 1px down on `:active` (removed under
+`prefers-reduced-motion`), and disabled controls never react.
+
+```bash
+npm install --no-save --prefix /tmp/pup puppeteer-core@23
+CHROME=/path/to/chrome SITE=http://127.0.0.1:8000/AxiaPlatform/ \
+  node tests/browser/controls.browser.test.mjs
+```
+
+171 checks: it clicks and taps every control type across four viewports and four routes, asserts no ring
+survives a pointer activation and no tap highlight remains, and asserts keyboard focus *is* still visible.
+
 ### The page must never scroll sideways
 
 The site scrolls vertically only. Horizontal overflow is a real defect, not a cosmetic one: it appears
