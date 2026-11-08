@@ -136,6 +136,29 @@ CHROME=/path/to/chrome SITE=http://127.0.0.1:8000/AxiaPlatform/ \
 171 checks: it clicks and taps every control type across four viewports and four routes, asserts no ring
 survives a pointer activation and no tap highlight remains, and asserts keyboard focus *is* still visible.
 
+### The header travels with the page
+
+The top bar is `position: sticky; top: 0`, and it depends on one rule staying true: **the root element must
+not be a scroll container.** Any `overflow` value other than `visible` on `html` makes `html` the scroll box,
+so a sticky child tracks that box instead of the viewport and scrolls out of sight with the content. That is
+exactly what happened when horizontal-overflow containment was first added as `html { overflow-x: clip }`: the
+header scrolled away and every page lost its navigation.
+
+So containment lives on **`body`**, and it uses `clip` rather than `hidden` — `hidden` on body would also
+create a scroll container and trap the header. The two requirements pull against each other, which is why
+`tests/browser/sticky-header.browser.test.mjs` checks both at once: 117 assertions across six routes and five
+viewports that the header stays at `top: 0` while scrolling, keeps its height and z-index, and that the page
+still has no horizontal scroll.
+
+```bash
+npm install --no-save --prefix /tmp/pup puppeteer-core@23
+CHROME=/path/to/chrome SITE=http://127.0.0.1:8000/AxiaPlatform/ \
+  node tests/browser/sticky-header.browser.test.mjs
+```
+
+While scrolling, `body.is-scrolled` (set by `effects.js`) makes the glass background more opaque and adds a
+soft shadow, so content passing underneath stays legible.
+
 ### The page must never scroll sideways
 
 The site scrolls vertically only. Horizontal overflow is a real defect, not a cosmetic one: it appears
