@@ -54,6 +54,10 @@ STATIC_OMIT = {'admin/admin.js', 'admin/admin.css', 'static-config.js'}
 # Root-relative references that must become base-aware. Bindings and protocol
 # URLs are handled separately so "//" sequences are never touched.
 REFERENCE_RE = re.compile(r'(?<![\w:/.\\])(href|src|action|content)="(/[^/"][^"]*)"')
+# `url(/fonts/...)` inside CSS (and inline styles) points at the origin root, so it
+# also has to follow the Pages base path. Without this the @font-face 404s and the
+# Persian text renders in a wider fallback font.
+CSS_URL_RE = re.compile(r'(url\(\s*[\'"]?)(/[^/\'")\s][^\'")\s]*)')
 
 SITEMAP_ROUTES = [
     ('', 'weekly', '1.0'),
@@ -129,7 +133,15 @@ def rewrite_references(text: str, base: str) -> str:
             return match.group(0)
         return f'{attr}="{base}{target.lstrip("/")}"'
 
-    return REFERENCE_RE.sub(replace, text)
+    text = REFERENCE_RE.sub(replace, text)
+
+    def replace_url(match: re.Match) -> str:
+        lead, target = match.group(1), match.group(2)
+        if target.startswith(base):
+            return match.group(0)
+        return f'{lead}{base}{target.lstrip("/")}'
+
+    return CSS_URL_RE.sub(replace_url, text)
 
 
 def build_sitemap(origin: str, base: str) -> str:

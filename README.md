@@ -110,6 +110,33 @@ The generated files are output — never edit them by hand; edit `public/` inste
 published: the builder copies only `public/`, omits `admin/admin.js`, `admin/admin.css` and every `*.md`, and
 `tools/pages-workflow.yml` fails the build if a database file would ever end up in the output.
 
+### The page must never scroll sideways
+
+The site scrolls vertically only. Horizontal overflow is a real defect, not a cosmetic one: it appears
+when a decorative layer (the hero's 3D orbit, ambient glows, the aurora field) is larger than its container,
+and it is worst in RTL, where a rotated element leans the other way.
+
+Containment lives in `public/styles.css`:
+
+* `html { overflow-x: hidden; overflow-x: clip }` — the guard has to be on the root, because
+  `body { overflow-x: hidden }` alone does not stop scrolling when the overflow comes from a transformed
+  descendant. `clip` is preferred so `position: sticky` keeps working, with `hidden` as the fallback.
+* `.hero-art { overflow: clip }` — decorations are clipped to their own box instead of the page.
+* `min-width: 0` on grid and flex children, plus `overflow-wrap: anywhere` on long-form text, so content
+  cannot widen its track.
+
+There is also a regression test that runs in a real browser:
+
+```bash
+npm install --no-save --prefix /tmp/pup puppeteer-core@23
+CHROME=/path/to/chrome SITE=http://127.0.0.1:8000/AxiaPlatform/ \
+  node tests/browser/overflow.browser.test.mjs
+```
+
+It walks 11 viewport widths in both English and Persian across 9 routes (198 combinations), asserts
+`scrollWidth <= clientWidth`, proves it by trying to scroll, and fails if any asset 404s — a missing font
+silently widens the text and brings the overflow back. That last check is how the font 404 below was found.
+
 ### Something looks wrong on the live site
 
 Two small scripts answer "why am I seeing the README?" without any guesswork:
