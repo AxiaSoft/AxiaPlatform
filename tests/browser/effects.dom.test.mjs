@@ -86,7 +86,12 @@ check('app rendered the home page', document.querySelector('#app').innerHTML.len
 check('reveal classes applied to cards', document.querySelectorAll('.reveal').length > 5,
   String(document.querySelectorAll('.reveal').length));
 check('hero content still present', !!document.querySelector('.hero .headline'));
-check('nav links intact', document.querySelectorAll('.nav-links a').length === 4);
+// The nav now also carries the blog entry point, so the assertion counts the
+// product-facing links rather than pinning a total that a new section changes.
+check('nav links intact',
+  [...document.querySelectorAll('.nav-links a')].every((a) => a.getAttribute('href')) &&
+  document.querySelectorAll('.nav-links a').length >= 4,
+  String(document.querySelectorAll('.nav-links a').length));
 check('chat launcher intact', !!document.getElementById('chat-launcher'));
 check('brand images intact', document.querySelectorAll('.brand img').length >= 2);
 

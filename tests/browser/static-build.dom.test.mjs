@@ -101,16 +101,18 @@ window.location.hash = '#/products/tutorial-product';
 await new Promise(r => setTimeout(r, 700));
 const detailHtml = document.getElementById('app').innerHTML;
 ck('product detail renders', /Tutorial Product/.test(detailHtml));
-ck('detail page offers the GitHub preview', /Open preview/i.test(detailHtml));
+// The site defaults to Persian, so labels are translated; accept either.
+ck('detail page offers the GitHub preview', /Open preview|پیش‌نمایش/i.test(detailHtml));
 
 // Account action must explain, not silently fail
 window.location.hash = '#/';
 await new Promise(r => setTimeout(r, 400));
 const accountBtn = document.getElementById('accountButton');
-ck('account button says Sign in', /Sign in/i.test(accountBtn.textContent), accountBtn.textContent);
+ck('account button says Sign in', /Sign in|ورود/i.test(accountBtn.textContent), accountBtn.textContent);
 accountBtn.click();
 await new Promise(r => setTimeout(r, 200));
-ck('sign-in explains the static build', /live server/i.test(document.getElementById('modal-root').innerHTML),
+ck('sign-in explains the static build',
+   /live server|سرور زنده|نسخهٔ نمایشی/i.test(document.getElementById('modal-root').innerHTML),
    document.getElementById('modal-root').innerHTML.slice(0,120));
 ck('app did not throw on account click', errors.length === 0, errors.join('|'));
 

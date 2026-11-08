@@ -61,16 +61,13 @@ REFERENCE_RE = re.compile(r'(?<![\w:/.\\])(href|src|action|content)="(/[^/"][^"]
 # Persian text renders in a wider fallback font.
 CSS_URL_RE = re.compile(r'(url\(\s*[\'"]?)(/[^/\'")\s][^\'")\s]*)')
 
+# Only real, crawlable documents are listed. The storefront's inner screens are
+# hash routes (#/products), which a crawler never fetches as separate pages, so
+# listing them would advertise addresses that are not documents. The storefront
+# is one page with server-rendered blog sections alongside it.
 SITEMAP_ROUTES = [
     ('', 'weekly', '1.0'),
-    ('#/products', 'weekly', '0.9'),
-    ('#/services', 'monthly', '0.8'),
-    ('#/aurion', 'monthly', '0.7'),
-    ('#/about', 'monthly', '0.6'),
-    ('#/contact', 'monthly', '0.8'),
-    ('#/privacy', 'yearly', '0.3'),
-    ('#/terms', 'yearly', '0.3'),
-    ('#/refunds-policy', 'yearly', '0.3'),
+    ('blog/', 'daily', '0.9'),
 ]
 
 # The adapter must be registered before app.js, so it is inserted immediately
@@ -146,12 +143,175 @@ def rewrite_references(text: str, base: str) -> str:
     return CSS_URL_RE.sub(replace_url, text)
 
 
+def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
+    """Render /blog/ (and any exported articles) as static HTML."""
+    import sys
+    sys.path.insert(0, str(ROOT / 'server'))
+    try:
+        import blog  # noqa: WPS433 - imported here so the build stays standalone
+    except Exception:
+        print('  blog: skipped (server/blog.py not importable)')
+        return
+
+    # data/articles.json is the source of truth for the static build: it is
+    # committed, so a checkout with no database still publishes the same
+    # articles. A database is only consulted when that file is absent (a local
+    # build straight from the console's data).
+    articles = []
+    source = ROOT / 'data' / 'articles.json'
+    if not source.is_file():
+        source = out / 'data' / 'articles.json'
+    if source.is_file():
+        try:
+            articles = json.loads(source.read_text(encoding='utf-8')) or []
+        except Exception:
+            articles = []
+    if not articles:
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(DB_PATH))
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM articles WHERE status='published' "
+                                "ORDER BY COALESCE(published_at, created_at) DESC, id DESC").fetchall()
+            articles = [blog.article_out(r, full=True) for r in rows]
+            conn.close()
+        except Exception:
+            articles = []
+    if not articles:
+        try:
+            fallback = out / 'data' / 'articles.json'
+            if fallback.is_file() and fallback != source:
+                articles = json.loads(fallback.read_text(encoding='utf-8')) or []
+        except Exception:
+            articles = []
+
+    def rebase(markup: str) -> str:
+        """Point root-relative links at the deployment sub-path."""
+        if base == '/':
+            return markup
+        return re.sub(r'(href|src)="/(?!/)', lambda m: f'{m.group(1)}="{base}', markup)
+
+    # Persian is the published language. The English mirror is written from the
+    # same articles, using any stored translation (out/data/translations.json)
+    # and otherwise labelling the page as untranslated rather than pretending.
+    stored = {}
+    tsource = out / 'data' / 'translations.json'
+    if tsource.is_file():
+        try:
+            stored = {str(k): v for k, v in (json.loads(tsource.read_text(encoding='utf-8')) or {}).items()}
+        except Exception:
+            stored = {}
+
+    def english(article, full=False):
+        """An article's English fields, or None when no translation is stored."""
+        hit = stored.get(str(article.get('slug')))
+        if not hit:
+            return None
+        item = dict(article)
+        for field in ('title', 'summary', 'body'):
+            item[field] = hit.get(field) or article.get(field) or ''
+        item['language'] = 'en'
+        item['translated'] = True
+        if not full:
+            item.pop('body', None)
+        return item
+
+    fa_posts = articles
+    # Every article gets an English URL, because the language switch and the
+    # hreflang alternates both point at one. A post with no stored translation
+    # is rendered in its original language and labelled as untranslated.
+    en_posts = []
+    for article in articles:
+        hit = english(article)
+        if hit:
+            en_posts.append(hit)
+        else:
+            item = dict(article)
+            item['translated'] = False
+            en_posts.append(item)
+
+    def write_lang(root_dir, lang, posts, prefix):
+        blog_dir = root_dir / 'blog'
+        blog_dir.mkdir(parents=True, exist_ok=True)
+        index_body = blog.render_index(posts, lang=lang, base=base.rstrip('/'))
+        fa_url = f'{origin}{base}blog/'
+        en_url = f'{origin}{base}en/blog/'
+        index_head = blog.head_tags(
+            title='AXIASOFT Blog — notes on engineering and product design' if lang == 'en'
+                  else 'وبلاگ AXIASOFT — یادداشت‌های مهندسی و طراحی محصول',
+            description='Articles from Axiasoft on building websites, mobile applications, custom software and digital products.' if lang == 'en'
+                        else 'مقاله‌های آکسیا سافت درباره طراحی وب‌سایت، اپلیکیشن موبایل، نرم‌افزار سفارشی و ساختن محصول دیجیتال.',
+            canonical=en_url if lang == 'en' else fa_url, origin=origin, base=base,
+            kind='blog', items=posts, lang=lang,
+            alt_url=fa_url if lang == 'en' else en_url)
+        # The shell builds its own links from `base`; only the body carries
+        # root-relative URLs that need rebasing, so rebase it before wrapping.
+        (blog_dir / 'index.html').write_text(
+            blog.shell(head=index_head, body=rebase(index_body), lang=lang,
+                       base=base.rstrip('/')), encoding='utf-8')
+
+        for article in posts:
+            item = dict(article)
+            item['html'] = blog.render_markdown(article.get('body') or '')
+            item.setdefault('translated', True)
+            folder = blog_dir / str(article.get('slug') or '')
+            folder.mkdir(parents=True, exist_ok=True)
+            body = blog.render_article(item, lang=lang, base=base.rstrip('/'))
+            post_fa = f'{origin}{base}blog/{article.get("slug")}/'
+            post_en = f'{origin}{base}en/blog/{article.get("slug")}/'
+            head = blog.head_tags(
+                title=f"{article.get('title', '')} — AXIASOFT",
+                description=article.get('summary') or blog.plain_text(article.get('body') or '', 160),
+                canonical=post_en if lang == 'en' else post_fa,
+                origin=origin, base=base, kind='article', article=item, lang=lang,
+                alt_url=post_fa if lang == 'en' else post_en)
+            # Rebase inside-out: head/body URLs first, then wrap. Re-running the
+            # rebase over a finished document would prefix the shell's already
+            # correct links a second time.
+            (folder / 'index.html').write_text(
+                blog.shell(head=rebase(head), body=rebase(body), lang=lang,
+                           base=base.rstrip('/'), slug=str(article.get('slug') or '')),
+                encoding='utf-8')
+        return blog_dir
+
+    blog_dir = write_lang(out, 'fa', fa_posts, 'blog')
+    # The English index lists only posts that really are in English; the
+    # per-article pages still exist for every slug so no link dead-ends.
+    written = write_lang(out / 'en', 'en', [p for p in en_posts if p.get('translated')], 'en/blog')
+    for article in en_posts:
+        if article.get('translated'):
+            continue
+        item = dict(article)
+        item['html'] = blog.render_markdown(article.get('body') or '')
+        folder = written / str(article.get('slug') or '')
+        folder.mkdir(parents=True, exist_ok=True)
+        body = blog.render_article(item, lang='en', base=base.rstrip('/'))
+        (folder / 'index.html').write_text(
+            blog.shell(head='', body=rebase(body), lang='en', base=base.rstrip('/'),
+                       slug=str(article.get('slug') or '')), encoding='utf-8')
+
+    (blog_dir / 'feed.xml').write_text(
+        blog.render_rss(origin, base, articles), encoding='utf-8')
+    print(f'  blog  : {len(articles)} article(s) to /blog/, '
+          f'{len(en_posts)} translated to /en/blog/')
+
+
 def build_sitemap(origin: str, base: str) -> str:
+    """The site map, with each page's language mirror named as an alternate."""
     lines = ['<?xml version="1.0" encoding="UTF-8"?>',
-             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+             ' xmlns:xhtml="http://www.w3.org/1999/xhtml">']
     for route, freq, priority in SITEMAP_ROUTES:
+        mirror = f'en/{route}' if route.startswith('blog') else ''
+        alternates = ''
+        if mirror:
+            alternates = (f'<xhtml:link rel="alternate" hreflang="fa-IR" href="{origin}{base}{route}"/>'
+                          f'<xhtml:link rel="alternate" hreflang="en" href="{origin}{base}{mirror}"/>')
         lines.append(f'  <url><loc>{origin}{base}{route}</loc>'
-                     f'<changefreq>{freq}</changefreq><priority>{priority}</priority></url>')
+                     f'<changefreq>{freq}</changefreq><priority>{priority}</priority>{alternates}</url>')
+        if mirror:
+            lines.append(f'  <url><loc>{origin}{base}{mirror}</loc>'
+                         f'<changefreq>{freq}</changefreq><priority>{priority}</priority>{alternates}</url>')
     lines.append('</urlset>')
     return '\n'.join(lines) + '\n'
 
@@ -294,6 +454,13 @@ def main() -> int:
         settings = {}
     (data_dir / 'settings.json').write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    # ---- blog ------------------------------------------------------------- #
+    # The published site is static, so there is no article database here. If the
+    # source tree carries published articles (data/articles.json, written by the
+    # console's export) they are rendered now; otherwise an honest empty index is
+    # published, so /blog/ is never a dead link.
+    write_blog(out, base, origin, DB_PATH=Path(getattr(args, 'db', '') or ''))
+
     (data_dir / 'settings.js').write_text(
         '/* Generated by tools/build_static.py — storefront settings snapshot. */\n'
         'window.AXIA_STATIC = window.AXIA_STATIC || {};\n'

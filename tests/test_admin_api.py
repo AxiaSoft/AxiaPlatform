@@ -249,5 +249,62 @@ class AdminApiTests(unittest.TestCase):
         self.assertGreaterEqual(audit, 1)
 
 
+    # ---- blog ---------------------------------------------------------- #
+    def test_drafts_never_reach_the_public_feed(self):
+        status, data = self.request(self.admin, '/api/admin/articles', 'POST', {
+            'title': 'A draft about caching', 'slug': 'about-caching',
+            'summary': 'Not published yet.', 'body': 'x' * 120, 'status': 'draft',
+        }, self.csrf)
+        self.assertEqual(status, 201)
+        status, feed = self.request(build_opener(), '/api/articles')
+        self.assertEqual(status, 200)
+        self.assertNotIn('about-caching', [a['slug'] for a in feed['articles']])
+
+    def test_publishing_exposes_the_article_with_rendered_html(self):
+        status, created = self.request(self.admin, '/api/admin/articles', 'POST', {
+            'title': 'Shipping a small site', 'slug': 'shipping-small',
+            'summary': 'How a small site actually ships.', 'tags': ['process'],
+            'body': '## First\n\nWrite **clearly** and ship the whole thing.\n\n- one\n- two', 'status': 'published',
+        }, self.csrf)
+        self.assertEqual(status, 201)
+        status, item = self.request(build_opener(), '/api/articles/shipping-small')
+        self.assertEqual(status, 200)
+        # '##' becomes an <h3> because the article page owns the single <h1>
+        # and '#' becomes <h2>, so a writer never competes with the headline.
+        self.assertIn('<h3>First</h3>', item['html'])
+        self.assertIn('<strong>clearly</strong>', item['html'])
+        self.assertIn('<li>one</li>', item['html'])
+        self.assertGreaterEqual(item['reading_minutes'], 1)
+
+    def test_a_duplicate_slug_is_refused(self):
+        payload = {'title': 'Unique title here', 'slug': 'unique-slug',
+                   'summary': 's', 'body': 'x' * 100, 'status': 'draft'}
+        self.assertEqual(self.request(self.admin, '/api/admin/articles', 'POST', payload, self.csrf)[0], 201)
+        self.assertEqual(self.request(self.admin, '/api/admin/articles', 'POST', payload, self.csrf)[0], 409)
+
+    def test_article_writes_are_role_gated_and_csrf_protected(self):
+        # Signed out: no listing, no writes.
+        self.assertEqual(self.request(build_opener(), '/api/admin/articles')[0], 403)
+        # A customer session is not an administrator session.
+        self.assertEqual(self.request(self.customer, '/api/admin/articles')[0], 403)
+        # Signed in, but a write without the session's CSRF token is refused.
+        status, _ = self.request(self.admin, '/api/admin/articles', 'DELETE', {'id': 999999})
+        self.assertEqual(status, 403)
+        # The same write with the token is allowed through to the handler.
+        status, _ = self.request(self.admin, '/api/admin/articles', 'DELETE', {'id': 999999}, self.csrf)
+        self.assertEqual(status, 404)
+
+    def test_the_support_agent_answers_without_a_session(self):
+        status, data = self.request(build_opener(), '/api/agent', 'POST',
+                                    {'question': 'how do I request a product?'})
+        self.assertEqual(status, 200)
+        self.assertIn('source', data)
+        self.assertTrue(data['answer'])
+
+    def test_the_agent_rejects_an_empty_question(self):
+        status, _ = self.request(build_opener(), '/api/agent', 'POST', {'question': '   '})
+        self.assertEqual(status, 400)
+
+
 if __name__ == '__main__':
     unittest.main()
