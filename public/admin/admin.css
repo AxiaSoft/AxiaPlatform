@@ -242,3 +242,25 @@ html[dir="rtl"] .switch input:checked+.switch-track:after{transform:translateX(-
 /* Persian needs a little more room in the editor toolbar labels. */
 html[lang="fa"] .editor-bar-mid strong{font-weight:600}
 html[lang="fa"] .article-row h3{line-height:1.65}
+
+/* Product cover uploader ------------------------------------------------ */
+.cover-uploader { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.cover-preview {
+  flex: 0 0 auto;
+  width: 148px;
+  height: 108px;
+  border-radius: 12px;
+  border: 1px dashed var(--line, rgba(170, 194, 230, .2));
+  background: rgba(255, 255, 255, .03);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.cover-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-empty { font-size: 11px; color: var(--muted, #9aa9bf); }
+.cover-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cover-pick { cursor: pointer; }
+.cover-pick input[type="file"] { display: none; }
+.cover-pick:focus-within { outline: 2px solid var(--blue, #6aa9ff); outline-offset: 2px; }
+.cover-status { font-size: 11px; color: var(--muted, #9aa9bf); }
+.cover-status.is-error { color: var(--red, #ff8791); }

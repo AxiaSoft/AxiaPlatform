@@ -516,7 +516,7 @@ function modalHead(kicker,title,sub=''){return`<div class="modal-head"><div><div
 async function openOrder(id){const o=state.orders.find(x=>x.id===Number(id));if(!o)return;showModal(`${modalHead('Project request',esc(o.number),`${esc(o.product_title)} · submitted ${moneyFreeDate(o.created_at)}`)}<div class="detail-grid"><div class="detail-item"><small>Customer</small><strong>${esc(o.name)}</strong></div><div class="detail-item"><small>Email / phone</small><strong>${esc(o.email)}<br>${esc(o.phone)}</strong></div><div class="detail-item"><small>Contact preference</small><strong>${esc(o.contact_method||'Email')}</strong></div><div class="detail-item"><small>Current status</small><strong>${pill(o.status)}</strong></div><div class="detail-item full"><small>Project details</small><p>${esc(o.description)}</p></div><div class="detail-item full"><small>Additional requirements</small><p>${esc(o.requirements||'No additional requirements supplied.')}</p></div></div><h3 style="font-size:11px;margin:19px 0 9px">Status history</h3><div class="timeline" id="orderTimeline"><div class="skeleton" style="width:70%;margin:8px"></div><div class="skeleton" style="width:50%;margin:8px"></div></div><form data-form="order-update" data-id="${o.id}"><div class="form-grid"><div class="field"><label>Update status</label><select name="status">${ordersStatus.map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Internal status note</label><input name="note" maxlength="1000" placeholder="Optional note for the audit trail"></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Save status update</button></div></form>`,true);
  try{const history=await api(`/api/admin/orders/${Number(id)}/history`);const box=$('#orderTimeline');if(box)box.innerHTML=history.length?history.map(h=>`<div class="timeline-item"><strong>${esc(h.status)}</strong><p>${esc(h.note||'Status recorded')}</p><small>${moneyFreeDate(h.created_at)} · ${esc(h.actor_name||'System')}</small></div>`).join(''):'<div class="muted" style="font-size:9px">No history yet.</div>'}catch(e){const box=$('#orderTimeline');if(box)box.innerHTML=`<div class="muted" style="font-size:9px">${esc(e.message)}</div>`}
 }
-function productForm(p=null){const edit=!!p;showModal(`${modalHead(edit?'Catalog editor':'New catalog product',edit?'Edit product':'Add a product concept',edit?'Changes affect the public product data, its featured slot and its order.':'Add a product to the database-backed catalog.') }<form data-form="product" data-id="${p?.id||''}"><div class="form-grid"><div class="field"><label>Product title</label><input name="title" required maxlength="140" value="${esc(p?.title||'')}"></div><div class="field"><label>URL slug</label><input name="slug" required pattern="[a-z0-9-]{3,100}" maxlength="100" value="${esc(p?.slug||'')}"><span class="field-hint">Lowercase letters, digits and hyphens.</span></div><div class="field"><label>Category</label><select name="category">${['Websites','Applications','Aurion'].map(x=>`<option ${p?.category===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Availability label</label><select name="status"><option value="available" ${p?.status==='available'?'selected':''}>Available</option><option value="showcase" ${p?.status==='showcase'?'selected':''}>Showcase only</option></select></div><div class="field"><label>Price label</label><input name="price_label" maxlength="80" value="${esc(p?.price_label||'Request a quote')}"></div><div class="field full"><label>GitHub preview link</label><input name="github_url" type="url" inputmode="url" maxlength="300" pattern="https://.+" placeholder="https://github.com/your-org/your-project" value="${esc(p?.github_url||'')}"><span class="field-hint">Opened by the product preview button. Must start with https://. Leave empty to show the built-in concept preview.</span></div><div class="field"><label>Cover icon key</label><input name="cover" maxlength="120" value="${esc(p?.cover||'')}"><span class="field-hint">Text key only; image uploads are not enabled.</span></div><div class="field full"><label>Short summary</label><input name="summary" required maxlength="300" value="${esc(p?.summary||'')}"></div><div class="field full"><label>Full description</label><textarea name="description" required maxlength="3000">${esc(p?.description||'')}</textarea></div><div class="field"><label>Features</label><textarea name="features" placeholder="Separate each item with a comma">${esc((p?.features||[]).join(', '))}</textarea></div><div class="field"><label>Technologies</label><textarea name="technologies" placeholder="Separate each item with a comma">${esc((p?.technologies||[]).join(', '))}</textarea></div><div class="field"><label for="p-position">Catalog order</label><input id="p-position" name="position" type="number" min="0" max="9999" step="1" value="${Number(p?.position)||0}"><span class="field-hint">Lower numbers appear first.</span></div><div class="field" style="align-content:end"><label class="check-line"><input name="featured" type="checkbox" ${p&&p.featured?'checked':''}> Feature this product</label><span class="field-hint">Featured products lead the public catalog.</span></div><div class="field full"><label><input name="published" type="checkbox" ${p&&!p.published?'':'checked'}> Published in product data</label><span class="field-hint">AURION remains a showcase concept; no trading or real license/payment features are enabled.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn btn-primary">${edit?'Save product':'Create product'}</button></div></form>`,true)}
+function productForm(p=null){const edit=!!p;showModal(`${modalHead(edit?'Catalog editor':'New catalog product',edit?'Edit product':'Add a product concept',edit?'Changes affect the public product data, its featured slot and its order.':'Add a product to the database-backed catalog.') }<form data-form="product" data-id="${p?.id||''}"><div class="form-grid"><div class="field"><label>Product title</label><input name="title" required maxlength="140" value="${esc(p?.title||'')}"></div><div class="field"><label>URL slug</label><input name="slug" required pattern="[a-z0-9-]{3,100}" maxlength="100" value="${esc(p?.slug||'')}"><span class="field-hint">Lowercase letters, digits and hyphens.</span></div><div class="field"><label>Category</label><select name="category">${['Websites','Applications','Aurion'].map(x=>`<option ${p?.category===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Availability label</label><select name="status"><option value="available" ${p?.status==='available'?'selected':''}>Available</option><option value="showcase" ${p?.status==='showcase'?'selected':''}>Showcase only</option></select></div><div class="field"><label>Price label</label><input name="price_label" maxlength="80" value="${esc(p?.price_label||'Request a quote')}"></div><div class="field full"><label>GitHub preview link</label><input name="github_url" type="url" inputmode="url" maxlength="300" pattern="https://.+" placeholder="https://github.com/your-org/your-project" value="${esc(p?.github_url||'')}"><span class="field-hint">Opened by the product preview button. Must start with https://. Leave empty to show the built-in concept preview.</span></div><div class="field full"><label>Cover image</label>${coverUploader(p?.cover||'')}<span class="field-hint">PNG, JPEG, WebP or GIF, up to 5 MB. Shown on the product card and its detail page. The image is re-encoded on upload, so camera metadata is removed.</span></div><div class="field full"><label>Short summary</label><input name="summary" required maxlength="300" value="${esc(p?.summary||'')}"></div><div class="field full"><label>Full description</label><textarea name="description" required maxlength="3000">${esc(p?.description||'')}</textarea></div><div class="field"><label>Features</label><textarea name="features" placeholder="Separate each item with a comma">${esc((p?.features||[]).join(', '))}</textarea></div><div class="field"><label>Technologies</label><textarea name="technologies" placeholder="Separate each item with a comma">${esc((p?.technologies||[]).join(', '))}</textarea></div><div class="field"><label for="p-position">Catalog order</label><input id="p-position" name="position" type="number" min="0" max="9999" step="1" value="${Number(p?.position)||0}"><span class="field-hint">Lower numbers appear first.</span></div><div class="field" style="align-content:end"><label class="check-line"><input name="featured" type="checkbox" ${p&&p.featured?'checked':''}> Feature this product</label><span class="field-hint">Featured products lead the public catalog.</span></div><div class="field full"><label><input name="published" type="checkbox" ${p&&!p.published?'':'checked'}> Published in product data</label><span class="field-hint">AURION remains a showcase concept; no trading or real license/payment features are enabled.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn btn-primary">${edit?'Save product':'Create product'}</button></div></form>`,true)}
 function openTicket(id){const t=state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label><select name="status">${['Open','In progress','Closed'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
 function refundModal(id,decision){const r=state.refunds.find(x=>x.id===Number(id));if(!r)return;showModal(`${modalHead('Refund review',`${decision} request ${esc(r.ref)}`,`Order ${esc(r.order_number)} · submitted ${moneyFreeDate(r.created_at)}`)}<div class="detail-item"><small>Customer's stated reason</small><p>${esc(r.reason)}</p></div><form data-form="refund" data-id="${r.id}" data-decision="${decision}"><div class="field" style="margin-top:12px"><label>Administrative note</label><textarea name="note" maxlength="1000" placeholder="Record the review rationale. This will not trigger a payment."></textarea></div><div class="field" style="margin-top:10px"><label>Transaction reference (optional, record only)</label><input name="transaction_ref" maxlength="120"></div><div class="notice">${decision==='Approved'?'Approval records a decision only.':'Rejection records a decision only.'} The website does not process or confirm payment-provider refunds.</div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn ${decision==='Approved'?'btn-primary':'btn-danger'}">Record ${decision.toLowerCase()}</button></div></form>`)}
 function exportCsv(kind){const data=({orders:state.orders,products:state.products,customers:state.customers,tickets:state.tickets,refunds:state.refunds})[kind]||[];if(!data.length){toast('There are no records to export.');return}const columns=Object.keys(data[0]).filter(k=>!['password_hash','csrf','token_hash'].includes(k));const csv=[columns.map(qcsv).join(','),...data.map(row=>columns.map(k=>qcsv(Array.isArray(row[k])?row[k].join('; '):row[k])).join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`axiasoft-${kind}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('CSV export downloaded.')}
@@ -668,7 +668,7 @@ async function changeCustomerStatus(btn){const c=state.customers.find(x=>x.id===
 async function submitHandler(e){const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();const submit=$('button[type="submit"]',form)||$('button:not([type="button"])',form);if(submit){submit.disabled=true;submit.dataset.old=submit.textContent;submit.textContent='Saving…'}const values=Object.fromEntries(new FormData(form));try{
  if(form.dataset.form==='login'){const data=await api('/api/login',{method:'POST',body:{email:values.email,password:values.password}});state.me=data.user;if(state.me.role!=='admin'){deniedView();return}const s=await api('/api/me');state.csrf=s.csrf;state.page=location.hash.slice(1)||'dashboard';if(!PAGES.includes(state.page))state.page='dashboard';shell();await fetchPageData();toast('Administrator session established.');return}
  if(form.dataset.form==='settings'){await saveSettings(form);return}
- if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover,summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}closeModal();state.overview=null;await fetchPageData();return}
+ if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}closeModal();state.overview=null;await fetchPageData();return}
  if(form.dataset.form==='order-update'){await api('/api/admin/orders/status',{method:'PUT',body:{id:Number(form.dataset.id),status:values.status,note:values.note||''}});closeModal();toast('Project status and history updated.');state.overview=null;await fetchPageData();return}
  if(form.dataset.form==='ticket-reply'){if(values.message?.trim())await api('/api/admin/tickets/reply',{method:'POST',body:{id:Number(form.dataset.id),message:values.message.trim()}});if(values.status!=='In progress')await api('/api/admin/tickets/status',{method:'PUT',body:{id:Number(form.dataset.id),status:values.status}});closeModal();toast(values.message?.trim()?'Reply added and ticket updated.':'Ticket status updated.');state.tickets=await api('/api/support');$('#pageContent').innerHTML=supportHTML();return}
  if(form.dataset.form==='refund'){await api('/api/admin/refunds/decision',{method:'PUT',body:{id:Number(form.dataset.id),status:form.dataset.decision,note:values.note||'',transaction_ref:values.transaction_ref||''}});closeModal();toast('Refund decision recorded. No payment was processed.');state.refunds=await api('/api/refunds');$('#pageContent').innerHTML=refundsHTML();return}
@@ -684,4 +684,121 @@ root.addEventListener('click',clickHandler);root.addEventListener('submit',submi
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show')}});
 window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(p&&PAGES.includes(p)){state.page=p;state.search='';state.statusFilter='All';fetchPageData();updateNav()}});
 (async()=>{document.documentElement.dataset.theme=localStorage.getItem('axia-theme')||'dark';const page=location.hash.slice(1);if(PAGES.includes(page))state.page=page;await loadSession()})();
+  /* -------------------------------------------------------------------------
+     Product cover upload
+
+     The console sends the file itself rather than a URL, so an administrator
+     never has to host an image somewhere else first. The widget keeps the
+     uploaded path in a hidden input, which is what the product form reads, so the
+     rest of the save path is unchanged.
+     ------------------------------------------------------------------------- */
+  const COVER_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
+  const COVER_MAX = 5 * 1024 * 1024;
+
+  function coverPreview(url) {
+    /* Only shapes this page produces are rendered: a stored path, an https URL,
+       or the data URL a demo console creates. Anything else stays text and never
+       becomes an <img src>. */
+    if (!url) return '';
+    const allowed = /^(\/uploads\/covers\/[\w-]+\.png|\/brand\/[\w-]+\.(png|jpg|jpeg|webp|svg)|https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/;
+    if (!allowed.test(url)) return '';
+    return `<img class="cover-thumb" src="${esc(url)}" alt="Current cover">`;
+  }
+
+  function coverUploader(current) {
+    return `<div class="cover-uploader" data-cover-uploader>
+      <input type="hidden" name="cover_image" value="${esc(current || '')}">
+      <div class="cover-preview" data-cover-preview>${coverPreview(current) || '<span class="cover-empty">No cover image</span>'}</div>
+      <div class="cover-actions">
+        <label class="btn btn-quiet cover-pick">
+          <input type="file" data-cover-file accept="${COVER_ACCEPT}" hidden>
+          <span>Choose image…</span>
+        </label>
+        <button type="button" class="btn btn-quiet" data-cover-clear ${current ? '' : 'hidden'}>Remove</button>
+        <span class="cover-status" data-cover-status role="status"></span>
+      </div>
+      <p class="field-hint">The image is stored under /uploads/covers. Choose a new image to replace the current one.</p>
+    </div>`;
+  }
+
+  /* One upload at a time. The request is a plain binary body with the image's own
+     Content-Type: it needs no multipart wrapper, and it keeps the server's
+     handling of the bytes identical to what the decoder expects. */
+  async function uploadCover(file) {
+    if (!file) return null;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+      throw new Error('Choose a PNG, JPEG, WebP or GIF image.');
+    }
+    if (file.size > COVER_MAX) {
+      throw new Error('That image is larger than 5 MB.');
+    }
+    const headers = { 'Content-Type': file.type };
+    if (!state.csrf) {
+      const session = await fetch('/api/me', { credentials: 'same-origin' }).then((r) => r.json()).catch(() => ({}));
+      state.csrf = session.csrf || null;
+    }
+    if (state.csrf) headers['X-CSRF-Token'] = state.csrf;
+    const response = await fetch('/api/admin/uploads', {
+      method: 'POST', headers, body: file, credentials: 'same-origin',
+    });
+    const data = await response.json().catch(() => ({ error: 'The server returned an unreadable response.' }));
+    if (response.status === 501) {
+      // The static demo console has no server. Reading the file here keeps the
+      // feature usable, and the caller labels it as browser-local so nobody
+      // believes the image was uploaded.
+      return { url: await readAsDataUrl(file), local: true };
+    }
+    if (!response.ok) throw new Error(data.error || `Upload failed (${response.status})`);
+    return { url: data.url, local: false };
+  }
+
+  // Delegated so it survives the modal being rebuilt.
+  document.addEventListener('change', async (event) => {
+    const input = event.target.closest('[data-cover-file]');
+    if (!input) return;
+    const box = input.closest('[data-cover-uploader]');
+    const status = $('[data-cover-status]', box);
+    const hidden = $('input[name="cover_image"]', box);
+    const preview = $('[data-cover-preview]', box);
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    status.textContent = 'Uploading…';
+    status.className = 'cover-status';
+    $('[data-cover-clear]', box)?.setAttribute('hidden', '');
+    try {
+      const result = await uploadCover(file);
+      hidden.value = result.url;
+      preview.innerHTML = coverPreview(result.url);
+      status.textContent = result.local
+        ? 'Read in this browser only — the demo console has no server to store it.'
+        : 'Uploaded.';
+      $('[data-cover-clear]', box)?.removeAttribute('hidden');
+    } catch (error) {
+      status.textContent = error.message;
+      status.className = 'cover-status is-error';
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    const clear = event.target.closest('[data-cover-clear]');
+    if (!clear) return;
+    const box = clear.closest('[data-cover-uploader]');
+    $('input[name="cover_image"]', box).value = '';
+    $('[data-cover-preview]', box).innerHTML = '<span class="cover-empty">No cover image</span>';
+    $('[data-cover-status]', box).textContent = '';
+    clear.setAttribute('hidden', '');
+  });
+
+  /* A demo console has no server to store a file. Reading it in the browser keeps
+     the cover picker usable there, and the caller says plainly that the image was
+     not uploaded anywhere. */
+  function readAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('That file could not be read.'));
+      reader.readAsDataURL(file);
+    });
+  }
 })();

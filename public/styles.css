@@ -323,3 +323,144 @@ html[lang="fa"] .arrow-link{right:auto;left:22px}
 html[lang="fa"] .category-card{padding:23px 23px 58px}
 @media(max-width:650px){html[lang="fa"] .category-card{padding:17px 17px 50px}}
 html[lang="fa"] .category-card .arrow-link{left:17px;bottom:16px}
+
+/* --------------------------------------------------------------------------
+   Product brands
+
+   The picker sits above the catalog tabs. Each button previews the brand as a
+   customer would meet it: the full lockup, its own tagline, and how many
+   products currently sit under it. The logo plates stay light because the
+   supplied marks are blue-on-white and lose all contrast on the dark surface.
+   -------------------------------------------------------------------------- */
+.brand-picker { margin: 26px 0 6px; }
+.brand-picker-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.brand-picker-head h2 {
+  font-size: clamp(20px, 2.4vw, 27px);
+  font-weight: 550;
+  letter-spacing: -.02em;
+  margin: 6px 0 0;
+}
+.brand-picker-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+.brand-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: start;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .2s, background .2s, transform .2s;
+  min-width: 0;
+}
+.brand-pick:hover,
+.brand-pick:focus-visible {
+  border-color: color-mix(in srgb, var(--brand-accent-soft, #4d92d6) 55%, transparent);
+  background: var(--surface2);
+  transform: translateY(-2px);
+  outline: none;
+}
+.brand-pick.is-active {
+  border-color: var(--brand-accent-soft, #4d92d6);
+  background: var(--surface2);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-accent-soft, #4d92d6) 45%, transparent);
+}
+.brand-pick-logo {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  /* The marks are supplied on white; a light plate keeps them legible instead
+     of turning them into a blue-on-navy smear. */
+  background: #f3f7fd;
+  border: 1px solid rgba(30, 74, 130, .16);
+}
+.brand-pick-logo img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  display: block;
+}
+.brand-pick-copy { display: grid; gap: 3px; min-width: 0; }
+.brand-pick-copy strong { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.brand-pick-copy small { font-size: 11px; color: var(--muted); line-height: 1.45; }
+.brand-pick-count {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface3);
+}
+
+/* A product's uploaded cover fills the card art. */
+.product-cover.has-image { padding: 0; overflow: hidden; background: #0e1726; }
+.product-cover.has-image img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.product-cover.has-image .cover-label {
+  position: absolute;
+  inset-inline-start: 12px;
+  top: 12px;
+  z-index: 2;
+  padding: 4px 9px;
+  border-radius: 99px;
+  background: rgba(8, 13, 24, .72);
+  backdrop-filter: blur(6px);
+}
+
+/* The header mark follows the chosen brand. The plate is light for the same
+   reason as the picker: these marks are drawn for a white ground. */
+#brand-mark {
+  background: #f3f7fd;
+  border: 1px solid rgba(30, 74, 130, .16);
+}
+html[data-brand] #brand-mark img { width: 26px; height: 26px; object-fit: contain; }
+
+@media (max-width: 860px) {
+  .brand-picker-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .brand-picker-row { grid-template-columns: 1fr; }
+  .brand-pick-logo { width: 46px; height: 46px; }
+  .brand-pick-logo img { width: 36px; height: 36px; }
+}
+
+/* When a product brand is active the header mark shows that brand's own
+   artwork instead of the AXIASOFT emblem, so the emblem's float, glow and
+   square plate are switched off — they were drawn for a vector glyph, not a
+   photograph of a logo. */
+html[data-brand] .brand-mark {
+  animation: none;
+  filter: none;
+  transform: none;
+  background: #f3f7fd;
+  border-radius: 9px;
+  padding: 3px;
+}
+html[data-brand] .brand-mark img { width: 100%; height: 100%; object-fit: contain; }
+html[data-brand] .brand-wordmark { display: none; }

@@ -556,6 +556,15 @@
         return json(demoAudit());
       }
 
+      /* The demo console runs entirely in the browser, so there is no server to
+         store a file. Rather than fail silently or pretend, the upload is read
+         here and returned as a data URL, which the product form stores like any
+         other cover. It is honest about the limit: the image lives in this
+         browser's local storage and is not uploaded anywhere. */
+      if (path === '/api/admin/uploads' && method === 'POST') {
+        return json({ error: 'This demo console has no server to store files. Use "Choose image…" — the image is read in your browser and kept locally.' }, 501);
+      }
+
       if (path === '/api/admin/products' && method === 'POST') {
         var list = readProducts();
         var slugNew = String(payload.slug || '').toLowerCase();
