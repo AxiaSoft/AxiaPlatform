@@ -109,7 +109,7 @@ class AdminApiTests(unittest.TestCase):
         payload = {'id': self.product_id, 'title': 'Updated test product', 'slug': 'northstar-corporate',
                    'summary': 'Updated summary', 'description': 'Updated description for this project concept.',
                    'price_label': 'Request a quote', 'category': 'Websites', 'status': 'available',
-                   'cover': 'web', 'features': ['One', 'Two'], 'technologies': ['Python'], 'published': True}
+                   'cover': '/uploads/covers/abc123.png', 'features': ['One', 'Two'], 'technologies': ['Python'], 'published': True}
         self.assertEqual(self.request(self.admin, '/api/admin/products', 'PUT', payload)[0], 403)
         status, _ = self.request(self.admin, '/api/admin/products', 'PUT', payload, self.csrf)
         self.assertEqual(status, 200)

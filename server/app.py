@@ -36,6 +36,7 @@ import uuid
 import db as database
 import blog
 import agent
+import uploads
 import site_settings
 from db import connect, init, ROOT, DB_PATH
 from security import (
@@ -126,6 +127,31 @@ def clean_github_url(value, limit=300):
         return ''
     return url if GITHUB_URL_RE.match(url) else None
 SAFE_PATH_RE = re.compile(r'^/[a-z0-9._/-]*$', re.IGNORECASE)
+
+# Covers this server can vouch for: an uploaded file, or one of the images
+# shipped in the brand folder. Both are paths inside the public tree, so a
+# stored cover is always something the site itself serves.
+COVER_PATH_RE = re.compile(
+    r'^(?:/uploads/covers/[A-Za-z0-9_-]+\.png'
+    r'|/brand/[A-Za-z0-9_-]+\.(?:png|jpg|jpeg|webp|svg))$')
+
+
+def clean_cover(value, limit=300):
+    """Validate a product cover.
+
+    Two shapes are accepted: a path produced by the upload endpoint, and a full
+    https URL for a cover hosted elsewhere. Anything else — a javascript: URL, a
+    data: URI, a protocol-relative address, a traversal attempt — is refused
+    rather than quietly stored.
+    """
+    text = clean(value, limit)
+    if not text:
+        return ''
+    if COVER_PATH_RE.match(text):
+        return text
+    if text.startswith('https://') and ' ' not in text:
+        return text
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -630,8 +656,30 @@ class Handler(SimpleHTTPRequestHandler):
             close_request_connections()
 
     def dispatch_write(self, method):
+        path = urlparse(self.path).path
+        if path == '/api/admin/uploads' and method == 'POST':
+            return self.handle_upload()
         d = self.body()
-        self.api_write(urlparse(self.path).path, method, d)
+        self.api_write(path, method, d)
+
+    def raw_body(self, limit):
+        """Read a binary request body, enforcing this route's own ceiling.
+
+        The JSON gate uses a much smaller limit; an uploaded image is the one
+        request in the API that is legitimately measured in megabytes, so it is
+        read here with its own bound instead of raising the ceiling for
+        everything.
+        """
+        try:
+            n = int(self.headers.get('Content-Length', '0') or 0)
+        except (TypeError, ValueError):
+            raise Reject('Invalid request size.', 400)
+        if n <= 0:
+            raise Reject('No image was received.', 400)
+        if n > limit:
+            self.close_connection = True
+            raise Reject('The image is larger than 5 MB.', 413)
+        return self.rfile.read(n)
 
     # -- static files -------------------------------------------------------- #
     def serve_feed(self, path):
@@ -962,6 +1010,83 @@ class Handler(SimpleHTTPRequestHandler):
     # ------------------------------------------------------------------ #
     # Write routes                                                        #
     # ------------------------------------------------------------------ #
+    def handle_upload(self):
+        """POST /api/admin/uploads — store one product cover.
+
+        Authentication and CSRF are checked here rather than by api_write,
+        because this route reads a binary body instead of JSON.
+        """
+        user = self.auth()
+        if not user or user['role'] != 'admin':
+            self._send_json({'error': 'Administrator sign-in required.'}, 403); return
+        if not self.check_csrf(user):
+            self._send_json({'error': 'Your session expired. Sign in again.'}, 403); return
+        if not self.rate('api_write'):
+            return
+
+        ctype = (self.headers.get('Content-Type') or '').split(';')[0].strip().lower()
+        try:
+            if ctype == 'multipart/form-data':
+                boundary = None
+                for part in (self.headers.get('Content-Type') or '').split(';'):
+                    if part.strip().startswith('boundary='):
+                        boundary = part.split('=', 1)[1].strip().strip('"')
+                if not boundary:
+                    self._send_json({'error': 'Malformed upload.'}, 400); return
+                body = self.raw_body(uploads.MAX_BYTES + 64 * 1024)
+                data = self.multipart_file(body, boundary.encode()[:70])
+                if data is None:
+                    self._send_json({'error': 'No image was received.'}, 400); return
+            elif ctype in ('image/png', 'image/jpeg', 'image/gif', 'image/webp'):
+                # A plain binary body: the admin sends the file directly.
+                data = self.raw_body(uploads.MAX_BYTES)
+            else:
+                self._send_json({'error': 'Send the image as a file upload.'}, 415); return
+            url = uploads.store(data)
+        except uploads.UploadError as exc:
+            self._send_json({'error': str(exc)}, 400); return
+        except Reject as exc:
+            self._send_json({'error': str(exc)}, exc.status); return
+        except Exception:
+            self._send_json({'error': 'The image could not be stored.'}, 500); return
+
+        self.audit(user, 'upload', 'product-cover', url)
+        self._send_json({'url': url, 'size': len(data)}, 201); return
+
+    @staticmethod
+    def multipart_file(body, boundary):
+        """The first file part of a multipart body, or None.
+
+        A small, deliberately literal parser: it looks only for the first file
+        part and hands its bytes to the image sniffer, which is what actually
+        decides whether the content is an image.
+        """
+        delimiter = b'--' + boundary
+        start = body.find(delimiter)
+        if start < 0:
+            return None
+        position = start
+        while True:
+            position = body.find(delimiter, position)
+            if position < 0:
+                return None
+            position += len(delimiter)
+            if body[position:position + 2] == b'--':
+                return None
+            position += 2 if body[position:position + 2] == b'\r\n' else 0
+            header_end = body.find(b'\r\n\r\n', position)
+            if header_end < 0:
+                return None
+            headers = body[position:header_end].decode('utf-8', 'replace').lower()
+            content_start = header_end + 4
+            next_delimiter = body.find(b'\r\n' + delimiter, content_start)
+            if next_delimiter < 0:
+                return None
+            if 'filename=' in headers or 'content-type: image/' in headers:
+                return body[content_start:next_delimiter]
+            position = next_delimiter
+
+    # ------------------------------------------------------------------ #
     def api_write(self, p, method, d):
         db = acquire_db()
         user = self.auth()
@@ -1196,7 +1321,7 @@ class Handler(SimpleHTTPRequestHandler):
             summary = clean(d.get('summary'), 300)
             description = clean(d.get('description'), 3000)
             status = clean(d.get('status', 'available'), 20)
-            cover = clean(d.get('cover'), 120)
+            cover = clean_cover(d.get('cover'))
             features = d.get('features', [])
             technologies = d.get('technologies', [])
             github_url = clean_github_url(d.get('github_url'))
@@ -1212,6 +1337,8 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json({'error': 'Check required product fields, category, status and feature lists.'}, 400); return
             if github_url is None:
                 self._send_json({'error': 'The preview link must be a full https:// URL.'}, 400); return
+            if cover is None:
+                self._send_json({'error': 'The cover must be an uploaded image or a full https:// URL.'}, 400); return
             if db.execute('SELECT 1 FROM products WHERE slug=?', (slug,)).fetchone():
                 self._send_json({'error': 'Slug already exists or product is invalid.'}, 409); return
             features = [clean(x, 100) for x in features if clean(x, 100)]
@@ -1248,7 +1375,7 @@ class Handler(SimpleHTTPRequestHandler):
             description = clean(d.get('description', old['description']), 3000)
             price = clean(d.get('price_label', old['price_label']), 80)
             cat = clean(d.get('category', old['category']), 40)
-            cover = clean(d.get('cover', old['cover']), 120)
+            cover = clean_cover(d.get('cover', old['cover']))
             status = clean(d.get('status', old['status']), 20)
             features = d.get('features', json.loads(old['features']))
             technologies = d.get('technologies', json.loads(old['technologies']))
@@ -1260,6 +1387,8 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json({'error': 'Check required product fields, slug, category, status and feature lists.'}, 400); return
             if github_url is None:
                 self._send_json({'error': 'The preview link must be a full https:// URL.'}, 400); return
+            if cover is None:
+                self._send_json({'error': 'The cover must be an uploaded image or a full https:// URL.'}, 400); return
             features = [clean(x, 100) for x in features if clean(x, 100)]
             technologies = [clean(x, 100) for x in technologies if clean(x, 100)]
             published = 1 if d.get('published', old['published']) in (True, 1, 'true', '1') else 0

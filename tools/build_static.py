@@ -425,6 +425,17 @@ def main() -> int:
             shutil.copy2(source, target)
         copied += 1
     print(f'  copied : {copied} file(s) from public/')
+    # A product can point at a cover that is not in the tree — for example one
+    # uploaded on a server whose upload folder is not committed. Say so now:
+    # a broken image on the live site is much harder to trace than a build note.
+    missing = []
+    for product in products:
+        cover = str(product.get('cover') or '')
+        if cover.startswith('/') and not cover.startswith('//'):
+            if not (out / cover.lstrip('/')).is_file():
+                missing.append(cover)
+    for cover in sorted(set(missing)):
+        print(f'  warning: cover not found in the build: {cover}', file=sys.stderr)
     if overrides:
         print(f'  gated  : {overrides} static override(s) applied (admin console)')
 

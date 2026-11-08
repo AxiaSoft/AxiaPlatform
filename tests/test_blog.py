@@ -162,5 +162,35 @@ class LanguageMirrorTest(unittest.TestCase):
         self.assertIn('xmlns:xhtml', xml)
 
 
+
+
+class CoverValidationTest(unittest.TestCase):
+    """A product cover is a path this site serves, or an https URL."""
+
+    def setUp(self):
+        import os as _os, sys as _sys
+        _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '..', 'server'))
+        import app
+        self.clean = app.clean_cover
+
+    def test_an_uploaded_path_is_accepted(self):
+        self.assertEqual(self.clean('/uploads/covers/abc123.png'),
+                         '/uploads/covers/abc123.png')
+
+    def test_a_brand_image_is_accepted(self):
+        self.assertEqual(self.clean('/brand/arya-logo.png'), '/brand/arya-logo.png')
+
+    def test_an_https_url_is_accepted(self):
+        self.assertEqual(self.clean('https://example.test/a.png'), 'https://example.test/a.png')
+
+    def test_script_urls_are_refused(self):
+        for bad in ('javascript:alert(1)', 'data:image/png;base64,xx', '//evil.test/a.png',
+                    '/uploads/covers/../../etc/passwd', '/themes/a.png', 'http://plain.test/a.png'):
+            self.assertIsNone(self.clean(bad), bad)
+
+    def test_blank_is_an_empty_cover(self):
+        self.assertEqual(self.clean(''), '')
+
+
 if __name__ == '__main__':
     unittest.main()

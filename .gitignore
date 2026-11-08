@@ -51,3 +51,7 @@ backups/
 # because Pages serves main -> /. These are its generated files; regenerate them
 # with tools/build_static.py, never edit them by hand.
 dist/
+
+# Uploaded product covers are runtime data: the file a visitor sees is written by
+# the deployment, not by the repository. The folder is created on first upload.
+public/uploads/
