@@ -50,8 +50,11 @@
    -------------------------------------------------------------------------- */
 .aurora-field {
   position: fixed;
-  inset: -20vmax;
+  inset: 0;
   z-index: -2;
+  /* Oversize by transform, not by layout: a fixed element is laid out against
+     the viewport, so a negative inset would extend the scrollable area. */
+  transform: scale(1.9);
   pointer-events: none;
   opacity: .55;
   background:
@@ -449,12 +452,23 @@ body.is-scrolled .topbar {
 .hero-art::before {
   content: "";
   position: absolute;
-  width: 380px;
-  height: 380px;
+  /* Sized from BOTH the art box and the viewport, then centred, so the disc is
+     always fully inside the box that clips it. `blur()` is deliberately not used
+     here: a blur paints past the box edge and `overflow:clip` on .hero-art would
+     slice it with a hard, dead-straight line. The soft falloff comes from the
+     mask instead, whose gradient reaches zero exactly at the box edge - so the
+     halo fades out by itself and there is nothing left for the clip to cut. */
+  inset: 0;
+  margin: auto;
+  width: auto;
+  height: min(380px, 82vw, 100%);
+  max-width: 100%;
+  aspect-ratio: 1;
+  -webkit-mask-image: radial-gradient(closest-side, #000 34%, rgba(0, 0, 0, .55) 70%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 34%, rgba(0, 0, 0, .55) 70%, transparent 100%);
   border-radius: 50%;
   background: conic-gradient(from 0deg, transparent 0deg, rgba(96, 160, 255, .5) 52deg, transparent 128deg, transparent 240deg, rgba(168, 150, 255, .4) 300deg, transparent 360deg);
-  filter: blur(26px);
-  opacity: .55;
+  opacity: .7;
   animation: fx-spin 18s linear infinite;
   pointer-events: none;
   z-index: 0;
