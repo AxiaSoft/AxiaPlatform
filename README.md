@@ -136,6 +136,34 @@ CHROME=/path/to/chrome SITE=http://127.0.0.1:8000/AxiaPlatform/ \
 171 checks: it clicks and taps every control type across four viewports and four routes, asserts no ring
 survives a pointer activation and no tap highlight remains, and asserts keyboard focus *is* still visible.
 
+### Brand lockup proportions
+
+The header brand is a symbol plus a wordmark image, and the two must read as one object. Nothing breaks
+when that drifts, which is exactly why it drifted: the wordmark width was declared in six different rules
+across media queries (a base `clamp()`, a `.topbar` override, and one per breakpoint), so changing one left
+the others behind. At its worst the wordmark was 2.3x the symbol width with a 10px gap, and the footer — which
+shares the same classes — was still at 1.89x after the header had been corrected.
+
+Current proportions, asserted at every breakpoint:
+
+| | Value |
+| --- | --- |
+| Wordmark vs symbol width | 1.2x – 2.0x (about 1.4x desktop, 1.6x phone) |
+| Gap between symbol and text | ≤ 8px |
+| Wordmark height vs symbol | never taller than the symbol |
+
+`tests/browser/brand.browser.test.mjs` measures the real rendered boxes in six viewports (320 → 1920) and
+also checks that the header and footer lockups agree, since they share the same CSS and previously diverged.
+
+```bash
+npm install --no-save --prefix /tmp/pup puppeteer-core@23
+CHROME=/path/to/chrome SITE=http://127.0.0.1:8000/AxiaPlatform/ \
+  node tests/browser/brand.browser.test.mjs
+```
+
+If you resize the wordmark, change every declaration together or the test will report which viewport was
+missed and by how much.
+
 ### The header travels with the page
 
 The top bar is `position: sticky; top: 0`, and it depends on one rule staying true: **the root element must
