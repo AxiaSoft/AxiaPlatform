@@ -289,3 +289,20 @@ button:disabled:active,
   .icon-button:active, .chat-launcher:active, .side-link:active,
   .product-card:active, .category-card:active { transform: none; }
 }
+
+/* Announcement bar — driven by the admin console's storefront settings.
+   It sits above the sticky header, never scrolls the page sideways, and is
+   removed from the DOM entirely when the administrator turns it off. */
+.announcement{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
+  padding:10px max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));
+  font-size:12px;line-height:1.5;text-align:center;border-bottom:1px solid var(--line);
+  position:relative;z-index:21;background:var(--surface2);color:var(--text)}
+.announcement[hidden]{display:none}
+.announcement.tone-info{background:linear-gradient(100deg,rgba(58,128,232,.18),rgba(58,128,232,.07));border-bottom-color:rgba(106,169,255,.28)}
+.announcement.tone-promo{background:linear-gradient(100deg,rgba(82,213,176,.16),rgba(82,213,176,.05));border-bottom-color:rgba(82,213,176,.28)}
+.announcement.tone-warning{background:linear-gradient(100deg,rgba(244,200,121,.18),rgba(244,200,121,.06));border-bottom-color:rgba(244,200,121,.32)}
+.announcement-text{max-width:70ch}
+.announcement-link{color:var(--blue);font-weight:650;white-space:nowrap}
+.announcement-close{border:0;background:transparent;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:8px;margin-inline-start:6px}
+.announcement-close:hover{color:var(--text)}
+@media(max-width:650px){.announcement{font-size:11px;gap:9px;padding:9px 12px}}

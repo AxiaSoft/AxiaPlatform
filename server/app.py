@@ -34,6 +34,7 @@ import time
 import uuid
 
 import db as database
+import site_settings
 from db import connect, init, ROOT, DB_PATH
 from security import (
     ConcurrencyGuard,
@@ -701,11 +702,19 @@ class Handler(SimpleHTTPRequestHandler):
 
         if p == '/api/products':
             cat = clean((q.get('category') or [''])[0], 40)
+            # Featured products lead the catalog; the administrator's explicit
+            # position decides the rest, then id keeps output deterministic.
+            order = 'ORDER BY featured DESC, position, id'
             if cat:
-                rows = db.execute('SELECT * FROM products WHERE published=1 AND category=? ORDER BY id', (cat,)).fetchall()
+                rows = db.execute(f'SELECT * FROM products WHERE published=1 AND category=? {order}', (cat,)).fetchall()
             else:
-                rows = db.execute('SELECT * FROM products WHERE published=1 ORDER BY id').fetchall()
+                rows = db.execute(f'SELECT * FROM products WHERE published=1 {order}').fetchall()
             self._send_json([product_out(r) for r in rows]); return
+
+        if p == '/api/site':
+            # Public, read-only storefront settings: announcement, hero copy,
+            # contact details and which sections are visible.
+            self._send_json({'settings': database.get_settings(db)}); return
 
         if p.startswith('/api/products/'):
             slug = unquote(p.rsplit('/', 1)[-1])[:100]
@@ -769,13 +778,22 @@ class Handler(SimpleHTTPRequestHandler):
                     'tickets': db.execute("SELECT count(*) FROM tickets WHERE status='Open'").fetchone()[0],
                     'refunds': db.execute("SELECT count(*) FROM refunds WHERE status='Under review'").fetchone()[0],
                     'published': db.execute('SELECT count(*) FROM products WHERE published=1').fetchone()[0],
+                    'hidden': db.execute('SELECT count(*) FROM products WHERE published=0').fetchone()[0],
+                    'featured': db.execute('SELECT count(*) FROM products WHERE published=1 AND featured=1').fetchone()[0],
+                    'customers_active': db.execute("SELECT count(*) FROM users WHERE role='customer' AND active=1").fetchone()[0],
+                    'customers_suspended': db.execute("SELECT count(*) FROM users WHERE role='customer' AND active=0").fetchone()[0],
                 }
                 orders = db.execute('SELECT o.*,p.title product_title FROM orders o JOIN products p ON p.id=o.product_id ORDER BY o.created_at DESC LIMIT 500').fetchall()
-                products = db.execute('SELECT * FROM products ORDER BY id').fetchall()
+                products = db.execute('SELECT * FROM products ORDER BY featured DESC, position, id').fetchall()
                 tickets = db.execute('SELECT * FROM tickets ORDER BY created_at DESC LIMIT 8').fetchall()
                 self._send_json({'counts': counts, 'orders': [dict(x) for x in orders],
                                  'products': [product_out(x) for x in products],
-                                 'tickets': [dict(x) for x in tickets]}); return
+                                 'tickets': [dict(x) for x in tickets],
+                                 'settings': database.get_settings(db),
+                                 'demo': False}); return
+
+            if p == '/api/admin/settings':
+                self._send_json({'settings': database.get_settings(db)}); return
 
             if p == '/api/admin/customers':
                 term = clean((q.get('q') or [''])[0], 120)
@@ -1034,6 +1052,11 @@ class Handler(SimpleHTTPRequestHandler):
             features = d.get('features', [])
             technologies = d.get('technologies', [])
             github_url = clean_github_url(d.get('github_url'))
+            featured = 1 if str(d.get('featured', '')).lower() in ('1', 'true', 'on') or d.get('featured') is True else 0
+            try:
+                position = int(d.get('position') or 0)
+            except (TypeError, ValueError):
+                self._send_json({'error': 'Position must be a whole number.'}, 400); return
             if (not SLUG_RE.fullmatch(slug) or not title or cat not in ('Websites', 'Applications', 'Aurion')
                     or status not in ('available', 'showcase') or not summary or not description
                     or not isinstance(features, list) or not isinstance(technologies, list)
@@ -1047,11 +1070,14 @@ class Handler(SimpleHTTPRequestHandler):
             technologies = [clean(x, 100) for x in technologies if clean(x, 100)]
             try:
                 cur = db.execute(
-                    'INSERT INTO products(slug,title,category,summary,description,cover,status,price_label,features,technologies,github_url,published) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                    'INSERT INTO products(slug,title,category,summary,description,cover,status,price_label,'
+                    'features,technologies,github_url,published,featured,position) '
+                    'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     (slug, title, cat, summary, description, cover, status,
                      clean(d.get('price_label'), 80) or 'Request a quote',
                      json.dumps(features, ensure_ascii=False), json.dumps(technologies, ensure_ascii=False),
-                     github_url, 1 if d.get('published', True) in (True, 1, 'true', '1') else 0))
+                     github_url, 1 if d.get('published', True) in (True, 1, 'true', '1') else 0,
+                     featured, position))
             except sqlite3.IntegrityError:
                 self._send_json({'error': 'Slug already exists or product is invalid.'}, 409); return
             except sqlite3.OperationalError:
@@ -1089,12 +1115,19 @@ class Handler(SimpleHTTPRequestHandler):
             features = [clean(x, 100) for x in features if clean(x, 100)]
             technologies = [clean(x, 100) for x in technologies if clean(x, 100)]
             published = 1 if d.get('published', old['published']) in (True, 1, 'true', '1') else 0
+            current_featured = old['featured'] if 'featured' in old.keys() else 0
+            featured = 1 if d.get('featured', current_featured) in (True, 1, 'true', '1') else 0
+            try:
+                position = int(d.get('position', old['position'] if 'position' in old.keys() else 0) or 0)
+            except (TypeError, ValueError):
+                self._send_json({'error': 'Position must be a whole number.'}, 400); return
             try:
                 db.execute(
-                    'UPDATE products SET slug=?,title=?,summary=?,description=?,price_label=?,category=?,cover=?,status=?,features=?,technologies=?,github_url=?,published=? WHERE id=?',
+                    'UPDATE products SET slug=?,title=?,summary=?,description=?,price_label=?,category=?,cover=?,'
+                    'status=?,features=?,technologies=?,github_url=?,published=?,featured=?,position=? WHERE id=?',
                     (slug, title, summary, description, price, cat, cover, status,
                      json.dumps(features, ensure_ascii=False), json.dumps(technologies, ensure_ascii=False),
-                     github_url, published, pid))
+                     github_url, published, featured, position, pid))
             except sqlite3.IntegrityError:
                 self._send_json({'error': 'Slug already exists or product is invalid.'}, 409); return
             except sqlite3.OperationalError:
@@ -1124,6 +1157,13 @@ class Handler(SimpleHTTPRequestHandler):
                 raise
             self.audit(user, 'customer_access', 'user', uid)
             self._send_json({'ok': True, 'active': bool(active)}); return
+
+        if p == '/api/admin/settings' and method == 'PUT':
+            updated, errors = database.save_settings(db, d)
+            if errors:
+                self._send_json({'error': 'Some settings were not saved.', 'fields': errors}, 400); return
+            self.audit(user, 'settings', 'settings', 'site')
+            self._send_json({'ok': True, 'settings': updated}); return
 
         if p == '/api/admin/products' and method == 'DELETE':
             try:

@@ -147,6 +147,94 @@ class AdminApiTests(unittest.TestCase):
         payload = dict(base, slug='no-link-product', github_url='')
         self.assertEqual(self.request(self.admin, '/api/admin/products', 'POST', payload, self.csrf)[0], 201)
 
+    def test_settings_are_validated_persisted_and_publicly_readable(self):
+        # The storefront reads the settings anonymously.
+        status, public_before = self.request(build_opener(), '/api/site')
+        self.assertEqual(status, 200)
+        self.assertIs(public_before['settings']['show_catalog'], True)
+        self.assertEqual(public_before['settings']['hero_title'], 'Building digital experiences.')
+
+        # Only administrators may write them.
+        status, _ = self.request(self.customer, '/api/admin/settings', 'PUT',
+                                 {'hero_title': 'Hijacked'}, self.csrf)
+        self.assertEqual(status, 403)
+
+        # A valid partial update merges into the stored document.
+        status, body = self.request(self.admin, '/api/admin/settings', 'PUT',
+                                    {'hero_title': 'Calm software.', 'show_services': False,
+                                     'announcement_enabled': True,
+                                     'announcement_text': 'Launch week'}, self.csrf)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body['settings']['hero_title'], 'Calm software.')
+        self.assertIs(body['settings']['show_services'], False)
+        self.assertIs(body['settings']['announcement_enabled'], True)
+        # untouched values keep their defaults
+        self.assertEqual(body['settings']['hero_accent'], "Engineering what's next.")
+
+        status, public_after = self.request(build_opener(), '/api/site')
+        self.assertEqual(public_after['settings']['hero_title'], 'Calm software.')
+        self.assertIs(public_after['settings']['show_services'], False)
+
+        # Bad values are refused with a field-level error, not silently dropped.
+        status, rejected = self.request(self.admin, '/api/admin/settings', 'PUT',
+                                        {'contact_email': 'not-an-address'}, self.csrf)
+        self.assertEqual(status, 400)
+        self.assertIn('contact_email', rejected['fields'])
+        for payload in ({'announcement_link': 'javascript:alert(1)'},
+                        {'announcement_link': 'http://insecure.test'},
+                        {'default_theme': 'neon'},
+                        {'not_a_setting': 1}):
+            status, _ = self.request(self.admin, '/api/admin/settings', 'PUT', payload, self.csrf)
+            self.assertEqual(status, 400, payload)
+
+        # The change is audited.
+        conn = db.connect()
+        audited = conn.execute("SELECT count(*) n FROM audit_logs WHERE action='settings'").fetchone()['n']
+        conn.close()
+        self.assertGreaterEqual(audited, 1)
+
+        # Restore the defaults so other tests see the shipped copy.
+        self.request(self.admin, '/api/admin/settings', 'PUT',
+                     {'hero_title': 'Building digital experiences.', 'show_services': True,
+                      'announcement_enabled': False, 'announcement_text': ''}, self.csrf)
+
+    def test_products_can_be_featured_and_ordered(self):
+        base = {'title': 'Ordered Product', 'slug': 'ordered-product', 'category': 'Websites',
+                'summary': 'Summary', 'description': 'A description long enough to pass.',
+                'status': 'available', 'features': [], 'technologies': [], 'published': True}
+        created = []
+        for index, (slug, featured, position) in enumerate(
+                [('ordered-a', False, 300), ('ordered-b', True, 200), ('ordered-c', False, 100)]):
+            payload = dict(base, slug=slug, featured=featured, position=position,
+                           title=f'Ordered {slug[-1].upper()}')
+            status, body = self.request(self.admin, '/api/admin/products', 'POST', payload, self.csrf)
+            self.assertEqual(status, 201, body)
+            created.append(body['id'])
+
+        # Editing keeps the flags.
+        status, _ = self.request(self.admin, '/api/admin/products', 'PUT',
+                                 {'id': created[2], 'featured': True, 'position': 5}, self.csrf)
+        self.assertEqual(status, 200)
+        products = {p['slug']: p for p in self.request(self.admin, '/api/admin/overview')[1]['products']}
+        self.assertEqual(products['ordered-b']['position'], 200)
+        self.assertEqual(products['ordered-c']['position'], 5)
+        self.assertEqual(products['ordered-c']['featured'], 1)
+
+        # The public catalog leads with featured products and then follows position.
+        guest = build_opener(HTTPCookieProcessor(CookieJar()))
+        order = [p['slug'] for p in self.request(guest, '/api/products')[1]
+                 if p['slug'].startswith('ordered-')]
+        featured = [s for s in order
+                    if products[s]['featured']]
+        self.assertEqual(len(featured), 2)
+        self.assertEqual(order[:2], featured)
+        self.assertEqual(order[-1], 'ordered-a')
+
+        # A non-numeric position is refused rather than stored as zero.
+        status, _ = self.request(self.admin, '/api/admin/products', 'PUT',
+                                 {'id': created[0], 'position': 'north'}, self.csrf)
+        self.assertEqual(status, 400)
+
     def test_customer_suspension_revokes_sessions_and_is_audited(self):
         status, data = self.request(self.admin, '/api/admin/customers/status', 'PUT',
                                     {'id': self.customer_id, 'active': False}, self.csrf)

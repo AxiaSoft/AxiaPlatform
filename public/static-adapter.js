@@ -33,6 +33,9 @@
     '/api/admin/'
   ];
 
+  // Storefront settings edited in the demo console live next to the products.
+  var SETTINGS_KEY = 'axia-demo-settings-v1';
+
   function isProducts(url) { return url === '/api/products'; }
   function isProduct(url) { return url.indexOf('/api/products/') === 0; }
   function isMe(url) { return url === '/api/me'; }
@@ -91,11 +94,34 @@
     } catch (err) { return null; }
   }
 
+  function demoOrder(list) {
+    return list.slice().sort(function (a, b) {
+      return (Number(b.featured) || 0) - (Number(a.featured) || 0)
+        || (Number(a.position) || 0) - (Number(b.position) || 0)
+        || (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+  }
+
+  function demoSettings() {
+    var base = (window.AXIA_STATIC && window.AXIA_STATIC.settings) || null;
+    var merged = base ? JSON.parse(JSON.stringify(base)) : {};
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (raw) {
+        var stored = JSON.parse(raw);
+        if (stored && typeof stored === 'object') {
+          for (var k in stored) if (Object.prototype.hasOwnProperty.call(stored, k)) merged[k] = stored[k];
+        }
+      }
+    } catch (err) { /* corrupted value: use the shipped defaults */ }
+    return merged;
+  }
+
   function loadSnapshot() {
     if (!productsPromise) {
       var edited = demoProducts();
       if (edited) {
-        productsPromise = Promise.resolve(edited);
+        productsPromise = Promise.resolve(demoOrder(edited));
       } else if (Array.isArray(window.AXIA_STATIC && window.AXIA_STATIC.products)) {
         // The script tag in index.html normally wins; fetch covers the rest.
         productsPromise = Promise.resolve(window.AXIA_STATIC.products);
@@ -239,6 +265,13 @@
 
     if (isMe(path)) {
       return json({ user: null, csrf: null });
+    }
+
+    /* The storefront reads its announcement bar, hero copy and section toggles
+       from here. On the admin pages the demo backend answers this itself (and
+       validates writes), so the adapter only fills in for the storefront. */
+    if (path === '/api/site' && !window.AXIA_DEMO_BACKEND) {
+      return json({ settings: demoSettings() });
     }
 
     if (needsBackend(path)) {

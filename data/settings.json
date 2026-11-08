@@ -1,0 +1,21 @@
+{
+  "announcement_enabled": false,
+  "announcement_text": "",
+  "announcement_link": "",
+  "announcement_tone": "info",
+  "hero_title": "Building digital experiences.",
+  "hero_accent": "Engineering what's next.",
+  "hero_subtitle": "AXIASOFT creates thoughtful websites, mobile applications and custom software that help ambitious teams move forward.",
+  "contact_email": "",
+  "contact_phone": "",
+  "github_url": "",
+  "footer_note": "Thoughtful software. Built for what comes next.",
+  "show_catalog": true,
+  "show_services": true,
+  "show_aurion": true,
+  "show_about": true,
+  "show_contact": true,
+  "show_assistant": true,
+  "show_prices": true,
+  "default_theme": "dark"
+}
