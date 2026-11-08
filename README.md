@@ -112,16 +112,26 @@ published: the builder copies only `public/`, omits `admin/admin.js`, `admin/adm
 
 ### Something looks wrong on the live site
 
-Run the diagnostic first — it separates "the content is wrong" from "Pages is pointed at the wrong place",
-which look identical in a browser but have completely different fixes:
+Two small scripts answer "why am I seeing the README?" without any guesswork:
 
 ```bash
-python3 tools/check_pages.py
+python3 tools/verify_live_site.py    # fetches the public URL and names what it served
+python3 tools/check_pages.py         # compares the Pages setting with the branch content
 ```
 
-If it reports that Pages serves a different branch than the one the site was built on, change it in
-**Settings → Pages → Build and deployment → Source** and pick the right branch and folder. If the content is
-fine and the setting is right, a cached copy is showing: hard-reload or use a private window.
+`verify_live_site.py` prints `PAGE`, `README` or `EMPTY` plus the status of every asset, and runs from
+anywhere the site is reachable. `check_pages.py` needs the GitHub CLI and reports whether Pages is aimed at a
+branch or folder the site was never built into.
+
+Both verdicts have exactly one cause each:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| README rendered as the homepage | the served branch root has no `index.html`, or no `.nojekyll` | rebuild to the root, keep `.nojekyll` |
+| Site was fixed but nothing changed | Pages is pointed at a different branch/folder | Settings → Pages → pick the right branch and `/` |
+
+If both scripts say the setup is correct and the browser still shows the README, it is a cached copy:
+hard-reload (Ctrl/Cmd+Shift+R) or use a private window.
 
 ### Serving from a user site or a custom domain
 
