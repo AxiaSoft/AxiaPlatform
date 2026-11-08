@@ -2,6 +2,52 @@
 (()=>{
 'use strict';
 const fa={
+  "Blog":"وبلاگ",
+  "Blog articles":"مقاله‌های وبلاگ",
+  "New article":"مقالهٔ جدید",
+  "Save draft":"ذخیرهٔ پیش‌نویس",
+  "Publish":"انتشار",
+  "Preview":"پیش‌نمایش",
+  "Published":"منتشرشده",
+  "Draft":"پیش‌نویس",
+  "Edit":"ویرایش",
+  "Delete":"حذف",
+  "Back":"بازگشت",
+  "Title":"عنوان",
+  "URL slug":"نشانی مقاله",
+  "Summary":"خلاصه",
+  "Tags":"برچسب‌ها",
+  "Article":"متن مقاله",
+  "words":"واژه",
+  "min read":"دقیقه مطالعه",
+  "total":"مجموع",
+  "No articles yet":"هنوز مقاله‌ای نیست",
+  "How publishing works":"انتشار چگونه کار می‌کند",
+  "View ↗":"دیدن ↗",
+  "Heading":"سرتیتر",
+  "Subheading":"زیرتیتر",
+  "Bold":"توپر",
+  "Italic":"کج",
+  "Bullet list":"فهرست نقطه‌ای",
+  "Numbered list":"فهرست شماره‌دار",
+  "Quote":"نقل‌قول",
+  "Code":"کد",
+  "Link":"پیوند",
+  "Divider":"جداکننده",
+  "Chat with Xiona":"صحبت با Xiona",
+  "How do I start a project?":"چطور پروژه را شروع کنم؟",
+  "Tell me about AURION":"دربارهٔ AURION بگویید",
+  "Talk to a person":"صحبت با یک انسان",
+  "Ask a question…":"سؤالت را بنویس…",
+  "Send":"ارسال",
+  "Answers from this site · human support on request":"پاسخ از همین سایت · پشتیبانی انسانی در صورت درخواست",
+  "This guide does not access orders, change statuses, quote custom prices or confirm payments.":"این راهنما به سفارش‌ها دسترسی ندارد، وضعیتی را تغییر نمی‌دهد، قیمت سفارشی نمی‌دهد و پرداختی را تأیید نمی‌کند.",
+  "Close support":"بستن پشتیبانی",
+  "Hello":"سلام",
+  "Xiona · AI assistant":"Xiona · دستیار هوش مصنوعی",
+  "Answers from this site · human support on request":"پاسخ از همین سایت · پشتیبانی انسانی در صورت درخواست",
+  "Open the Xiona AI assistant":"بازکردن دستیار هوش مصنوعی Xiona",
+  "Close the Xiona assistant":"بستن دستیار Xiona",
   "banner on":"نوار اطلاع‌رسانی روشن",
   "banner off":"نوار اطلاع‌رسانی خاموش",
   "Submitted":"ثبت‌شده",
@@ -369,7 +415,12 @@ function translateText(value){const key=normal(value);if(!key)return value;if(fa
 function translateNode(node){const original=node.nodeValue;if(!original||!original.trim())return;const key=normal(original);const translated=translateText(original);if(!translated||translated===key)return;const lead=(original.match(/^\s*/)||[''])[0],tail=(original.match(/\s*$/)||[''])[0];node.nodeValue=lead+translated+tail}
 function apply(root){if(!root)return;const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;while((n=walker.nextNode())){if(n.parentElement?.closest('script,style,noscript'))continue;translateNode(n)}const translateAttrs=el=>{for(const attr of ['placeholder','aria-label','title']){const v=el.getAttribute?.(attr);if(v){const translated=translateText(v);if(translated)el.setAttribute(attr,translated)}}};if(root.nodeType===Node.ELEMENT_NODE)translateAttrs(root);if(root.querySelectorAll)root.querySelectorAll('[placeholder],[aria-label],[title]').forEach(translateAttrs)}
 function setLanguage(lang){const faMode=lang==='fa';document.documentElement.lang=faMode?'fa':'en';document.documentElement.dir=faMode?'rtl':'ltr';document.documentElement.dataset.lang=faMode?'fa':'en';document.title=faMode?'AXIASOFT — ساخت تجربه‌های دیجیتال':'AXIASOFT — Building What’s Next';const desc=document.querySelector('meta[name="description"]');if(desc)desc.content=faMode?'AXIASOFT وب‌سایت، اپلیکیشن موبایل و نرم‌افزار سفارشی می‌سازد.':'AXIASOFT builds thoughtful websites, mobile applications and custom software.';const btn=document.querySelector('#languageToggle');if(btn){btn.textContent=faMode?'EN':'فارسی';btn.setAttribute('aria-label',faMode?'Switch language to English':'تغییر زبان به فارسی');btn.setAttribute('title',faMode?'Switch to English':'تغییر زبان به فارسی')}if(faMode)apply(document.body)}
-let lang=localStorage.getItem('axia-lang');if(!lang)lang=(navigator.language||'').toLowerCase().startsWith('fa')?'fa':'en';setLanguage(lang);
+/* Persian is the default presentation for this site. A returning visitor's
+   explicit choice in localStorage always wins, and ?lang=en (or any other tag)
+   lets a shared link open in English without touching that stored choice. */
+let lang=localStorage.getItem('axia-lang');
+try{const q=new URLSearchParams(location.search).get('lang');if(q==='en'||q==='fa'){lang=q;localStorage.setItem('axia-lang',q)}}catch(e){}
+if(!lang)lang='fa';setLanguage(lang);
 const toggle=document.querySelector('#languageToggle');if(toggle)toggle.addEventListener('click',()=>{const next=lang==='fa'?'en':'fa';localStorage.setItem('axia-lang',next);location.reload()});
 const observer=new MutationObserver(records=>{if(lang!=='fa'||observer.muted)return;observer.muted=true;try{for(const r of records){if(r.type==='characterData')translateNode(r.target);for(const added of r.addedNodes){if(added.nodeType===Node.TEXT_NODE)translateNode(added);else if(added.nodeType===Node.ELEMENT_NODE)apply(added)}}}finally{observer.muted=false}});observer.observe(document.body,{subtree:true,childList:true,characterData:true});
 })();

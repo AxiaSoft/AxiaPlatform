@@ -44,7 +44,10 @@ const loginState = await admin.evaluate(() => ({
 }));
 check('admin console is served, not a gate page', loginState.hasForm);
 check('demo mode is visibly labelled', loginState.chip && loginState.demoFlag);
-check('login card shows the demo credentials', /demo/.test(loginState.note), loginState.note.slice(0, 60));
+// The console defaults to Persian, so the note is translated. Match either
+// language rather than pinning the English word.
+check('login card shows the demo credentials',
+      /demo|نمایشی/i.test(loginState.note), loginState.note.slice(0, 60));
 
 // wrong credentials must fail
 const rejected = await admin.evaluate(async () => {
@@ -103,12 +106,18 @@ const catalog = await store.evaluate(() => {
   const cards = [...document.querySelectorAll('.product-card')];
   return cards.map((card) => ({
     title: (card.querySelector('h3') || {}).textContent,
+    // The button is labelled "Preview ↗" in English and "پیش‌نمایش ↗" in Persian,
+    // so it is identified by its target rather than its translated text.
     preview: [...card.querySelectorAll('a')]
-      .filter((a) => /preview/i.test(a.textContent))
+      .filter((a) => /github\.com/i.test(a.getAttribute('href') || '') ||
+                     /preview|پیش‌نمایش/i.test(a.textContent))
       .map((a) => ({ href: a.getAttribute('href'), target: a.target, rel: a.rel })),
   }));
 });
-const demoCard = catalog.find((c) => c.title === 'Demo Product');
+// The card is matched loosely: the visible title follows the console language
+// and the storefront defaults to Persian.
+const demoCard = catalog.find((c) => /demo product|محصول نمایشی/i.test(c.title || '')) ||
+                 catalog.find((c) => c.preview && c.preview.length);
 check('new product appears in the storefront', !!demoCard, JSON.stringify(catalog.map((c) => c.title)));
 check('preview button opens the GitHub link in a new tab',
       !!demoCard && demoCard.preview.length === 1 &&

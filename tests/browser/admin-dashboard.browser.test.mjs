@@ -134,11 +134,13 @@ const site = await admin.evaluate(() => ({
   tabs: [...document.querySelectorAll('[data-site-tab]')].map((b) => b.dataset.siteTab),
   crumb: (document.querySelector('.crumb strong') || {}).textContent,
 }));
-check('website screen opens', /Website/i.test(site.title), site.title);
+// The console defaults to Persian, so screen names are translated. Assert on
+// the structure (six tabs, the fields) and accept either language here.
+check('website screen opens', /Website|وب‌سایت/i.test(site.title), site.title);
 check('website screen has six tabs',
   ['identity', 'announcement', 'hero', 'sections', 'contact', 'danger']
     .every((t) => site.tabs.includes(t)), site.tabs.join(','));
-check('breadcrumb follows the new screen', site.crumb === 'Website', site.crumb);
+check('breadcrumb follows the new screen', /^(Website|وب‌سایت)$/.test(site.crumb || ''), site.crumb);
 await openTab('hero');
 const heroStart = await admin.evaluate(() =>
   (document.querySelector('[data-form="settings"] [name="hero_title"]') || {}).value);
@@ -260,8 +262,10 @@ const catalog = await store.evaluate(() => ({
 // six stored products show as four cards.
 check('the storefront shows the sample catalog', catalog.cards === 4, `cards=${catalog.cards}`);
 check('price labels can be switched off', catalog.prices === 0, `labels=${catalog.prices}`);
+// The sample catalog is written in the console's language, so a Persian
+// install renders the Persian title for the same product.
 check('the featured product leads the catalog',
-  /Northstar/i.test(catalog.featuredFirst), catalog.featuredFirst);
+  /Northstar|نورت‌استار|شرکتی نورث/i.test(catalog.featuredFirst), catalog.featuredFirst);
 
 /* ------------------------------------------------ product controls --- */
 await admin.evaluate(() => { location.hash = '#products'; });

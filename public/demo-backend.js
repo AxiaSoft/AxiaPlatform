@@ -31,12 +31,62 @@
   var STORE_KEY = 'axia-demo-products-v1';
   var SETTINGS_KEY = 'axia-demo-settings-v1';
   var SESSION_KEY = 'axia-demo-session-v1';
+  var ARTICLES_KEY = 'axia-demo-articles-v1';
   var CSRF = 'demo-csrf-token';
   // Sample orders are generated from this seed so the dashboard's numbers are
   // stable between reloads instead of drifting with the clock.
   var DEMO_SEED = 20261107;
 
   /* ------------------------------------------------------------- storage */
+  function slugifyArticle(value) {
+    return String(value || '').toLowerCase().replace(/[^\w\s-]/g, '')
+      .replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 90);
+  }
+
+  function readingTime(body) {
+    var words = String(body || '').trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.round(words / 200));
+  }
+
+  function normaliseArticle(source, slug, id, previous) {
+    var now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    var status = source.status === 'published' ? 'published' : 'draft';
+    var tags = Array.isArray(source.tags) ? source.tags
+      : String(source.tags || '').split(',').map(function (t) { return t.trim(); });
+    return {
+      id: id,
+      slug: slug,
+      title: String(source.title || '').slice(0, 120),
+      summary: String(source.summary || '').slice(0, 320),
+      body: String(source.body || '').slice(0, 60000),
+      cover: String(source.cover || ''),
+      tags: tags.filter(Boolean).slice(0, 6),
+      status: status,
+      language: 'fa',
+      reading_minutes: readingTime(source.body),
+      published_at: (previous && previous.published_at) || (status === 'published' ? now : null),
+      created_at: (previous && previous.created_at) || now,
+      updated_at: now
+    };
+  }
+
+  /* Articles start empty for the same reason the catalog does: the published
+     site must not show invented content. The console writes real drafts here,
+     and window.AXIA_DEMO_ARTICLES() can drop in an example to click through. */
+  function readArticles() {
+    try {
+      var raw = localStorage.getItem(ARTICLES_KEY);
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) { return []; }
+  }
+
+  function writeArticles(list) {
+    try { localStorage.setItem(ARTICLES_KEY, JSON.stringify(list)); } catch (err) {}
+    return list;
+  }
+
   function readProducts() {
     var raw = null;
     try { raw = localStorage.getItem(STORE_KEY); } catch (err) { /* private mode */ }
@@ -435,6 +485,50 @@
         }
         noteAudit('settings', 'settings', 'site');
         return json({ ok: true, settings: writeSettings(payload) });
+      }
+
+      if (path === '/api/articles' && method === 'GET') {
+        return json({ articles: readArticles().filter(function (a) { return a.status === 'published'; }) });
+      }
+      if (path.indexOf('/api/articles/') === 0 && method === 'GET') {
+        var wanted = decodeURIComponent(path.split('/').pop());
+        var found = readArticles().filter(function (a) { return a.slug === wanted && a.status === 'published'; })[0];
+        return found ? json(found) : json({ error: 'Article not found' }, 404);
+      }
+      if (path === '/api/admin/articles' && method === 'GET') {
+        return json({ articles: readArticles().slice().sort(function (a, b) {
+          return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+        }) });
+      }
+      if (path.indexOf('/api/admin/articles/') === 0 && method === 'GET') {
+        var id = Number(path.split('/').pop());
+        var one = readArticles().filter(function (a) { return a.id === id; })[0];
+        return one ? json(one) : json({ error: 'Article not found' }, 404);
+      }
+      if (path === '/api/admin/articles' && method === 'POST') {
+        var listIn = readArticles();
+        var body = payload;
+        var slugIn = slugifyArticle(body.slug || body.title || '') || ('article-' + (listIn.length + 1));
+        if (listIn.some(function (a) { return a.slug === slugIn; })) {
+          return json({ error: 'That URL slug is already used.' }, 409);
+        }
+        var created = normaliseArticle(body, slugIn, listIn.length + 1);
+        listIn.push(created); writeArticles(listIn);
+        return json({ id: created.id, slug: created.slug }, 201);
+      }
+      if (path === '/api/admin/articles' && method === 'PUT') {
+        var listUp = readArticles();
+        var idx = listUp.findIndex(function (a) { return a.id === Number(payload.id); });
+        if (idx < 0) return json({ error: 'Article not found' }, 404);
+        var next = normaliseArticle(payload, payload.slug || listUp[idx].slug, listUp[idx].id, listUp[idx]);
+        listUp[idx] = next; writeArticles(listUp);
+        return json({ ok: true, slug: next.slug });
+      }
+      if (path === '/api/admin/articles' && method === 'DELETE') {
+        var listDel = readArticles();
+        var target = Number(payload.id);
+        writeArticles(listDel.filter(function (a) { return a.id !== target; }));
+        return json({ ok: true });
       }
 
       if (path === '/api/admin/customers') {

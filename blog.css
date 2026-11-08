@@ -1,0 +1,160 @@
+/* Blog styles. Loaded only by the server-rendered article pages, which share
+   styles.css for the shell (topbar, footer, buttons, ambient field) and add
+   the reading layout here. Kept separate so a storefront visitor never pays
+   for rules that only editorial pages use. */
+
+.blog-body { --blog-measure: 68ch; }
+.blog-main { width: min(1120px, 89vw); margin: 0 auto; padding: 0 0 90px; }
+
+/* ---- landing ---------------------------------------------------------- */
+.blog-hero { padding: 74px 0 46px; max-width: 760px; }
+.blog-hero h1 {
+  font-size: clamp(34px, 4.6vw, 56px); line-height: 1.22; margin: 14px 0 18px;
+  font-weight: 600; letter-spacing: -0.03em;
+}
+.blog-hero p { color: var(--muted); font-size: 15px; line-height: 1.9; margin: 0; }
+
+.blog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+
+.blog-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden; position: relative;
+  transition: transform .25s, border-color .25s;
+}
+.blog-card:hover { transform: translateY(-4px); border-color: rgba(100, 163, 255, .36); }
+.blog-card-link { display: block; padding: 26px; height: 100%; }
+.blog-card h2 { font-size: 20px; font-weight: 600; line-height: 1.5; margin: 12px 0 10px; letter-spacing: -0.02em; }
+.blog-card p { color: var(--muted); font-size: 13px; line-height: 1.85; margin: 0; }
+
+.blog-card-meta { display: flex; gap: 14px; align-items: center; color: var(--faint); font-size: 11px; }
+.blog-card-meta time { color: var(--blue); font-variant-numeric: tabular-nums; }
+
+.blog-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.blog-tag {
+  font-size: 10px; padding: 4px 9px; border-radius: 99px;
+  border: 1px solid var(--line); background: var(--blueglow); color: var(--blue);
+}
+
+.blog-empty {
+  border: 1px dashed var(--line); border-radius: var(--radius); padding: 54px 26px;
+  text-align: center; color: var(--muted); font-size: 14px; line-height: 1.9;
+}
+
+/* ---- article ---------------------------------------------------------- */
+.blog-crumbs {
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center;
+  padding: 30px 0 0; font-size: 11px; color: var(--faint);
+}
+.blog-crumbs a { color: var(--muted); }
+.blog-crumbs a:hover { color: var(--text); }
+.blog-crumbs span:last-child { color: var(--text); }
+
+.blog-article { max-width: var(--blog-measure); margin-inline: auto; padding-top: 26px; }
+.blog-crumbs { max-width: var(--blog-measure); margin-inline: auto; padding-inline: 0; }
+.blog-article-head { padding: 22px 0 30px; border-bottom: 1px solid var(--line); }
+.blog-article-head h1 {
+  font-size: clamp(30px, 4vw, 46px); line-height: 1.32; font-weight: 600;
+  letter-spacing: -0.03em; margin: 16px 0 14px;
+}
+.blog-lede { color: var(--muted); font-size: 16px; line-height: 1.9; margin: 0; }
+.blog-cover { width: 100%; border-radius: 18px; margin: 30px 0 0; border: 1px solid var(--line); }
+
+.blog-prose { font-size: 16px; line-height: 2.05; color: var(--text); padding: 34px 0 10px; }
+.blog-prose h2 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 44px 0 14px; }
+.blog-prose h3 { font-size: 20px; font-weight: 600; margin: 34px 0 12px; }
+.blog-prose h4, .blog-prose h5 { font-size: 16px; font-weight: 650; margin: 28px 0 10px; }
+.blog-prose p { margin: 0 0 20px; }
+.blog-prose a { color: var(--blue); border-bottom: 1px solid rgba(82, 150, 255, .35); }
+.blog-prose a:hover { border-bottom-color: var(--blue); }
+.blog-prose ul, .blog-prose ol { margin: 0 0 22px; padding-inline-start: 24px; }
+.blog-prose li { margin: 9px 0; }
+.blog-prose blockquote {
+  margin: 26px 0; padding: 18px 22px; border-inline-start: 3px solid var(--blue);
+  background: var(--blueglow); border-radius: 0 14px 14px 0; color: var(--muted);
+}
+html[lang="fa"] .blog-prose blockquote { border-radius: 14px 0 0 14px; }
+.blog-prose blockquote p:last-child { margin: 0; }
+.blog-prose code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .87em;
+  background: var(--surface2); border: 1px solid var(--line);
+  padding: 2px 6px; border-radius: 6px; direction: ltr; display: inline-block;
+}
+.blog-prose pre {
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 14px;
+  padding: 20px; overflow-x: auto; margin: 26px 0; direction: ltr; text-align: left;
+}
+.blog-prose pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.75; }
+.blog-prose hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+.blog-prose img { max-width: 100%; border-radius: 14px; border: 1px solid var(--line); }
+
+.blog-cta {
+  max-width: var(--blog-measure); margin: 64px auto 0; margin-inline: auto; padding: 32px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); text-align: center;
+}
+.blog-cta h2 { font-size: 22px; font-weight: 600; margin: 0 0 10px; }
+.blog-cta p { color: var(--muted); font-size: 13px; line-height: 1.9; margin: 0 0 20px; }
+
+@media (max-width: 650px) {
+  .blog-main { width: calc(100% - 34px); padding-bottom: 60px; }
+  .blog-hero { padding: 44px 0 30px; }
+  .blog-grid { grid-template-columns: 1fr; }
+  .blog-card-link { padding: 20px; }
+  .blog-prose { font-size: 15px; line-height: 1.95; }
+  .blog-prose h2 { font-size: 22px; }
+  .blog-cta { padding: 24px 20px; margin-top: 44px; }
+}
+
+/* The reading pages use the Persian typeface by default; an English article
+   still reads correctly because the shell sets lang per document. */
+html[lang="fa"] .blog-prose { text-align: justify; text-justify: inter-word; }
+
+/* Shown on the English mirror of an article that has no translation yet. It
+   says so plainly instead of passing the source text off as English. */
+.blog-notice {
+  margin: 0 0 26px;
+  padding: 13px 17px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 191, 92, .30);
+  background: rgba(255, 191, 92, .09);
+  color: #f0cd98;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* The language switch on a blog page is a plain link: the blog is server
+   rendered, so it cannot share the single-page app's toggle. */
+.blog-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: 10px;
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line, rgba(255,255,255,.14));
+  font-size: 13px;
+  color: var(--muted, #9aa6bb);
+  text-decoration: none;
+}
+.blog-lang:hover { color: var(--text, #eaf0fa); border-color: rgba(120, 160, 255, .45); }
+
+.blog-back { margin: 32px 0 0; font-size: 14px; }
+.blog-back a { color: var(--muted, #9aa6bb); text-decoration: none; }
+.blog-back a:hover { color: var(--text, #eaf0fa); }
+
+/* A skip link is for keyboard users, so it stays out of the way until it is
+   focused — otherwise it renders as a stray line above the header. */
+.skip-link {
+  position: absolute;
+  inset-inline-start: 12px;
+  top: -60px;
+  z-index: 60;
+  padding: 10px 16px;
+  border-radius: 0 0 10px 10px;
+  background: #101827;
+  color: #eaf0fa;
+  font-size: 14px;
+  text-decoration: none;
+  transition: top 140ms ease;
+}
+.skip-link:focus { top: 0; outline: 2px solid #5b8cff; outline-offset: 2px; }

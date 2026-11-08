@@ -34,6 +34,8 @@ import time
 import uuid
 
 import db as database
+import blog
+import agent
 import site_settings
 from db import connect, init, ROOT, DB_PATH
 from security import (
@@ -597,6 +599,15 @@ class Handler(SimpleHTTPRequestHandler):
                     self.api_get(path, parse_qs(urlparse(self.path).query))
                 else:
                     self.dispatch_write(method)
+            elif method in ('GET', 'HEAD') and path in ('/blog/feed.xml', '/sitemap.xml'):
+                self.serve_feed(path)
+            elif method in ('GET', 'HEAD') and (path == '/blog' or path.startswith('/blog/')
+                                                or path == '/en/blog' or path.startswith('/en/blog/')):
+                # Articles are rendered on the server so a crawler receives the
+                # full text, a real title and structured data in the first
+                # response, without running JavaScript. /en/blog/ is the same
+                # content in the English interface.
+                self.serve_blog(path)
             elif method in ('GET', 'HEAD'):
                 self.serve_static(path)
             else:
@@ -623,6 +634,97 @@ class Handler(SimpleHTTPRequestHandler):
         self.api_write(urlparse(self.path).path, method, d)
 
     # -- static files -------------------------------------------------------- #
+    def serve_feed(self, path):
+        """sitemap.xml and the RSS feed, built from the published articles."""
+        try:
+            db = acquire_db()
+        except Exception:
+            return self._not_found()
+        origin = (os.environ.get('AXIA_ORIGIN') or 'https://axiasoft.example').rstrip('/')
+        base = (os.environ.get('AXIA_BASE_PATH') or '/').rstrip('/')
+        rows = db.execute("SELECT * FROM articles WHERE status='published' "
+                          "ORDER BY COALESCE(published_at, created_at) DESC, id DESC").fetchall()
+        items = [blog.article_out(r) for r in rows]
+        if path == '/sitemap.xml':
+            payload, ctype = blog.render_sitemap(origin, base, items), 'application/xml; charset=utf-8'
+        else:
+            payload, ctype = blog.render_rss(origin, base, items), 'application/rss+xml; charset=utf-8'
+        data = payload.encode('utf-8')
+        self._responded = True
+        self.send_response(200)
+        self.send_header('Content-Type', ctype)
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'public, max-age=600')
+        self.end_headers()
+        if self.command != 'HEAD':
+            self.wfile.write(data)
+
+    def serve_blog(self, path):
+        """Render /blog/ and /blog/<slug> with server-side HTML and SEO tags.
+
+        The /en/blog/ prefix serves the identical articles with the English
+        interface, and each page names the other as its hreflang alternate.
+        """
+        try:
+            db = acquire_db()
+        except Exception:
+            return self.serve_static('/index.html')
+        lang = 'en' if path.startswith('/en/') else 'fa'
+        path = path[3:] if lang == 'en' else path
+        trail = path[len('/blog'):].strip('/')
+        site = database.get_settings(db)
+        origin = (os.environ.get('AXIA_ORIGIN') or 'https://axiasoft.example').rstrip('/')
+        base = (os.environ.get('AXIA_BASE_PATH') or '/').rstrip('/')
+
+        if not trail:
+            rows = db.execute("SELECT * FROM articles WHERE status='published' "
+                              "ORDER BY COALESCE(published_at, created_at) DESC, id DESC").fetchall()
+            items = [blog.article_out(r) for r in rows]
+            if lang == 'en':
+                items = [blog.localised(r, db, target='en') for r in rows]
+                for item in items:
+                    item.pop('body', None)
+            body = blog.render_index(items, site, lang=lang, base=base)
+            fa_url, en_url = f'{origin}{base}/blog/', f'{origin}{base}/en/blog/'
+            head = blog.head_tags(
+                title='AXIASOFT Blog — notes on engineering and product design' if lang == 'en'
+                      else 'وبلاگ AXIASOFT — یادداشت‌های مهندسی و طراحی محصول',
+                description='Articles from Axiasoft on building websites, mobile applications, custom software and digital products.' if lang == 'en'
+                            else 'مقاله‌های آکسیا سافت درباره طراحی وب‌سایت، اپلیکیشن موبایل، نرم‌افزار سفارشی و ساختن محصول دیجیتال.',
+                canonical=en_url if lang == 'en' else fa_url,
+                origin=origin, base=base, kind='blog', items=items, lang=lang,
+                alt_url=fa_url if lang == 'en' else en_url)
+            return self._send_html(body, head, lang=lang, base=base)
+        slug = unquote(trail)[:blog.MAX_SLUG]
+        row = db.execute("SELECT * FROM articles WHERE slug=? AND status='published'", (slug,)).fetchone()
+        if not row:
+            return self.serve_static('/404.html')
+        article = blog.article_page(row, db, lang=lang)
+        body = blog.render_article(article, site, lang=lang, base=base)
+        fa_url = f'{origin}{base}/blog/{article["slug"]}/'
+        en_url = f'{origin}{base}/en/blog/{article["slug"]}/'
+        head = blog.head_tags(
+            title=f"{article['title']} — AXIASOFT",
+            description=article['summary'] or blog.plain_text(article['body'], 160),
+            canonical=en_url if lang == 'en' else fa_url,
+            origin=origin, base=base, kind='article', article=article, lang=lang,
+            alt_url=fa_url if lang == 'en' else en_url)
+        self._send_html(body, head, lang=lang, base=base, slug=article['slug'],
+                        cache='public, max-age=300')
+
+    def _send_html(self, body, head, cache='no-cache', lang='fa', base='', slug=''):
+        payload = blog.shell(head=head, body=body, lang=lang, base=base,
+                             slug=slug).encode('utf-8')
+        self._responded = True
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_header('Cache-Control', cache)
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        if self.command != 'HEAD':
+            self.wfile.write(payload)
+
     def serve_static(self, path):
         if not SAFE_PATH_RE.match(path) or '..' in path or '\\' in path or '\x00' in path:
             return self._not_found()
@@ -727,6 +829,19 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json({'error': 'Product not found'}, 404)
             return
 
+        if p == '/api/articles':
+            # Public blog feed: published posts only, newest first.
+            rows = db.execute("SELECT * FROM articles WHERE status='published' "
+                              "ORDER BY COALESCE(published_at, created_at) DESC, id DESC").fetchall()
+            self._send_json({'articles': [blog.article_out(r) for r in rows]}); return
+
+        if p.startswith('/api/articles/'):
+            slug = unquote(p.rsplit('/', 1)[-1])[:blog.MAX_SLUG]
+            row = db.execute("SELECT * FROM articles WHERE slug=? AND status='published'", (slug,)).fetchone()
+            if not row:
+                self._send_json({'error': 'Article not found'}, 404); return
+            self._send_json(blog.article_out(row, full=True)); return
+
         if p == '/api/me':
             self._send_json({'user': public_user(user) if user else None, 'csrf': user['csrf'] if user else None}); return
 
@@ -767,6 +882,23 @@ class Handler(SimpleHTTPRequestHandler):
         if p.startswith('/api/admin/'):
             if not user or user['role'] != 'admin':
                 self._send_json({'error': 'Administrator access required'}, 403); return
+
+            if p == '/api/admin/agent':
+                self._send_json(agent.status()); return
+
+            if p == '/api/admin/articles':
+                rows = db.execute('SELECT * FROM articles ORDER BY updated_at DESC, id DESC').fetchall()
+                self._send_json({'articles': [blog.article_out(r) for r in rows]}); return
+
+            if p.startswith('/api/admin/articles/'):
+                try:
+                    aid = int(p.rsplit('/', 1)[-1])
+                except ValueError:
+                    self._send_json({'error': 'Article not found'}, 404); return
+                row = db.execute('SELECT * FROM articles WHERE id=?', (aid,)).fetchone()
+                if not row:
+                    self._send_json({'error': 'Article not found'}, 404); return
+                self._send_json(blog.article_out(row, full=True)); return
 
             if p == '/api/admin/overview':
                 counts = {
@@ -898,6 +1030,22 @@ class Handler(SimpleHTTPRequestHandler):
                 db.execute('DELETE FROM sessions WHERE token_hash=?', (token_hash(token),))
             self._session_cookie = 'axia_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'
             self._send_json({'ok': True}); return
+
+        # The support agent is public: a visitor can ask a question before they
+        # ever create an account. It reads only the curated site facts.
+        if p == '/api/agent':
+            # The support agent. Unmetered enough to be usable, but it is a
+            # write-shaped endpoint, so it shares the support budget.
+            if method != 'POST':
+                self._send_json({'error': 'Method not allowed'}, 405); return
+            question = str(d.get('question') or '').strip()
+            if not question:
+                self._send_json({'error': 'Ask a question first.'}, 400); return
+            if len(question) > agent.MAX_QUESTION:
+                self._send_json({'error': 'That question is too long.'}, 400); return
+            history = d.get('history') if isinstance(d.get('history'), list) else []
+            result = agent.answer(question, history)
+            self._send_json(result); return
 
         if not user:
             self._send_json({'error': 'Please sign in first'}, 401); return
@@ -1157,6 +1305,70 @@ class Handler(SimpleHTTPRequestHandler):
                 raise
             self.audit(user, 'customer_access', 'user', uid)
             self._send_json({'ok': True, 'active': bool(active)}); return
+
+        if p == '/api/admin/articles' and method == 'POST':
+            values, errors = blog.clean_article(d)
+            if errors:
+                self._send_json({'error': 'Some article fields need attention.', 'fields': errors}, 400); return
+            if db.execute('SELECT 1 FROM articles WHERE slug=?', (values['slug'],)).fetchone():
+                self._send_json({'error': 'That URL slug is already used.', 'fields': {'slug': 'Already used.'}}, 409); return
+            try:
+                cur = db.execute(
+                    'INSERT INTO articles(slug,title,summary,body,cover,tags,status,language,published_at) '
+                    'VALUES(?,?,?,?,?,?,?,?,CASE WHEN ?=\'published\' THEN CURRENT_TIMESTAMP ELSE NULL END)',
+                    (values['slug'], values['title'], values['summary'], values['body'], values['cover'],
+                     json.dumps(values['tags'], ensure_ascii=False), values['status'], values['language'],
+                     values['status']))
+            except sqlite3.IntegrityError:
+                self._send_json({'error': 'That URL slug is already used.'}, 409); return
+            except sqlite3.OperationalError:
+                self._send_json({'error': 'The service is briefly busy. Please try again.'}, 503); return
+            self.audit(user, 'create', 'article', cur.lastrowid)
+            self._send_json({'id': cur.lastrowid, 'slug': values['slug']}, 201); return
+
+        if p == '/api/admin/articles' and method == 'PUT':
+            try:
+                aid = int(d.get('id'))
+            except (TypeError, ValueError):
+                self._send_json({'error': 'A valid article id is required.'}, 400); return
+            old_row = db.execute('SELECT * FROM articles WHERE id=?', (aid,)).fetchone()
+            if not old_row:
+                self._send_json({'error': 'Article not found'}, 404); return
+            values, errors = blog.clean_article(d, aid)
+            if errors:
+                self._send_json({'error': 'Some article fields need attention.', 'fields': errors}, 400); return
+            clash = db.execute('SELECT 1 FROM articles WHERE slug=? AND id<>?', (values['slug'], aid)).fetchone()
+            if clash:
+                self._send_json({'error': 'That URL slug is already used.', 'fields': {'slug': 'Already used.'}}, 409); return
+            # The publish timestamp is stamped once, the first time an article
+            # goes live, and kept afterwards so URLs and dates stay stable.
+            published_at = old_row['published_at']
+            if values['status'] == 'published' and not published_at:
+                published_at = database.now_string()
+            try:
+                db.execute(
+                    'UPDATE articles SET slug=?,title=?,summary=?,body=?,cover=?,tags=?,status=?,language=?,'
+                    'published_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                    (values['slug'], values['title'], values['summary'], values['body'], values['cover'],
+                     json.dumps(values['tags'], ensure_ascii=False), values['status'], values['language'],
+                     published_at, aid))
+            except sqlite3.IntegrityError:
+                self._send_json({'error': 'That URL slug is already used.'}, 409); return
+            except sqlite3.OperationalError:
+                self._send_json({'error': 'The service is briefly busy. Please try again.'}, 503); return
+            self.audit(user, 'update', 'article', aid)
+            self._send_json({'ok': True, 'slug': values['slug']}); return
+
+        if p == '/api/admin/articles' and method == 'DELETE':
+            try:
+                aid = int(d.get('id'))
+            except (TypeError, ValueError):
+                self._send_json({'error': 'A valid article id is required.'}, 400); return
+            if not db.execute('SELECT 1 FROM articles WHERE id=?', (aid,)).fetchone():
+                self._send_json({'error': 'Article not found'}, 404); return
+            db.execute('DELETE FROM articles WHERE id=?', (aid,))
+            self.audit(user, 'update', 'article_deleted', aid)
+            self._send_json({'ok': True}); return
 
         if p == '/api/admin/settings' and method == 'PUT':
             updated, errors = database.save_settings(db, d)

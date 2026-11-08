@@ -6,8 +6,8 @@ const T=v=>window.AXIA_T?window.AXIA_T(v):v;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const moneyFreeDate=v=>{if(!v)return'—';const d=new Date(String(v).replace(' ','T')+'Z');return Number.isNaN(+d)?esc(v):new Intl.DateTimeFormat(document.documentElement.lang==='fa'?'fa-IR':'en-GB',{dateStyle:'medium',timeStyle:'short'}).format(d)};
 const ordersStatus=['Submitted','Under Review','Requirements Analysis','Quotation Sent','Awaiting Confirmation','In Development','Testing','Ready for Delivery','Delivered','Cancelled'];
-const PAGES=['dashboard','site','orders','products','customers','support','refunds','activity'];
-const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null};
+const PAGES=['dashboard','site','products','articles','orders','customers','support','refunds','activity'];
+const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],articles:[],articleDraft:null,agent:null,settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null};
 async function api(path,{method='GET',body,headers={}}={}){
  const h={'Content-Type':'application/json',...headers};
  if(method!=='GET'&&path!=='/api/login'){if(!state.csrf){const session=await fetch('/api/me',{credentials:'same-origin'}).then(r=>r.json()).catch(()=>({}));state.csrf=session.csrf||null}if(state.csrf)h['X-CSRF-Token']=state.csrf}
@@ -26,8 +26,8 @@ function loginView(error=''){
 }
 function deniedView(){root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt=""></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div></div><div class="eyebrow">Access restricted</div><h1>Administrator access required</h1><p class="muted">This account does not have the required administrator role. The server has denied protected data access.</p><div class="head-actions"><button class="btn btn-quiet" data-act="logout">Sign out</button><a class="btn btn-primary" href="/AxiaPlatform/#/">Return to website</a></div></section></main>`}
 function shell(){
- const nav=[['dashboard','Overview'],['site','Website'],['products','Products'],['orders','Project requests'],['customers','Customers'],['support','Support'],['refunds','Refunds'],['activity','Activity log']];
- root.innerHTML=`<div class="admin-shell"><div class="side-scrim" data-act="close-nav"></div><aside class="sidebar" id="sidebar"><a href="/" class="side-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt=""></span><span><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></span></a><div class="side-label">Workspace</div><nav class="nav-list">${nav.map(([id,label])=>`<button class="side-link ${state.page===id?'active':''}" data-page="${id}"><span class="nav-glyph">${iconFor(id)}</span><span>${label}</span>${id==='refunds'&&state.overview?.counts?.refunds?`<span class="nav-count">${fmtNum(state.overview.counts.refunds)}</span>`:''}${id==='orders'&&state.overview?.counts?.pending?`<span class="nav-count">${fmtNum(state.overview.counts.pending)}</span>`:''}</button>`).join('')}</nav><div class="side-label" style="margin-top:23px">Website</div><a class="side-link" href="/"><span class="nav-glyph">↗</span><span>Open public website</span></a><div class="sidebar-bottom"><div class="sidebar-foot"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min"><strong>${esc(state.me?.name||'Administrator')}</strong><small>${esc(state.me?.email||'')}</small></div><button class="icon-btn" data-act="logout" title="Sign out" aria-label="Sign out">⇥</button></div></div></aside><section class="workspace"><header class="topbar"><div class="top-left"><button class="icon-btn mobile-toggle" data-act="toggle-nav" aria-label="Open navigation">☰</button><div class="crumb">AXIASOFT <span style="color:var(--faint)">/</span> <strong>${nav.find(x=>x[0]===state.page)?.[1]||'Overview'}</strong></div></div><div class="top-right"><button class="language-btn" id="languageToggle" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button><button class="icon-btn" data-act="theme" title="Toggle color theme" aria-label="Toggle color theme">${document.documentElement.dataset.theme==='dark'?'◐':'☼'}</button><button class="icon-btn" data-act="refresh" title="Refresh data" aria-label="Refresh data">↻</button><div class="top-user"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min-top"><strong>${esc(state.me?.name||'Administrator')}</strong><small>Administrator</small></div></div></div></header><main class="content" id="pageContent"><div class="panel" style="height:190px"><div class="skeleton" style="width:170px;margin:14px 0"></div><div class="skeleton" style="width:78%;height:50px;margin:14px 0"></div><div class="skeleton" style="width:55%"></div></div></main></section></div>`;
+ const nav=[['dashboard','Overview'],['site','Website'],['products','Products'],['articles','Blog articles'],['orders','Project requests'],['customers','Customers'],['support','Support'],['refunds','Refunds'],['activity','Activity log']];
+ root.innerHTML=`<div class="admin-shell"><div class="side-scrim" data-act="close-nav"></div><aside class="sidebar" id="sidebar"><a href="/" class="side-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt=""></span><span><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></span></a><div class="side-label">Workspace</div><nav class="nav-list">${nav.map(([id,label])=>`<button class="side-link ${state.page===id?'active':''}" data-page="${id}"><span class="nav-glyph">${iconFor(id)}</span><span>${T(label)}</span>${id==='refunds'&&state.overview?.counts?.refunds?`<span class="nav-count">${fmtNum(state.overview.counts.refunds)}</span>`:''}${id==='orders'&&state.overview?.counts?.pending?`<span class="nav-count">${fmtNum(state.overview.counts.pending)}</span>`:''}</button>`).join('')}</nav><div class="side-label" style="margin-top:23px">Website</div><a class="side-link" href="/"><span class="nav-glyph">↗</span><span>Open public website</span></a><div class="sidebar-bottom"><div class="sidebar-foot"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min"><strong>${esc(state.me?.name||'Administrator')}</strong><small>${esc(state.me?.email||'')}</small></div><button class="icon-btn" data-act="logout" title="Sign out" aria-label="Sign out">⇥</button></div></div></aside><section class="workspace"><header class="topbar"><div class="top-left"><button class="icon-btn mobile-toggle" data-act="toggle-nav" aria-label="Open navigation">☰</button><div class="crumb">AXIASOFT <span style="color:var(--faint)">/</span> <strong>${nav.find(x=>x[0]===state.page)?.[1]||'Overview'}</strong></div></div><div class="top-right"><button class="language-btn" id="languageToggle" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button><button class="icon-btn" data-act="theme" title="Toggle color theme" aria-label="Toggle color theme">${document.documentElement.dataset.theme==='dark'?'◐':'☼'}</button><button class="icon-btn" data-act="refresh" title="Refresh data" aria-label="Refresh data">↻</button><div class="top-user"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min-top"><strong>${esc(state.me?.name||'Administrator')}</strong><small>Administrator</small></div></div></div></header><main class="content" id="pageContent"><div class="panel" style="height:190px"><div class="skeleton" style="width:170px;margin:14px 0"></div><div class="skeleton" style="width:78%;height:50px;margin:14px 0"></div><div class="skeleton" style="width:55%"></div></div></main></section></div>`;
 }
 function chartSvg(rows){
  const months=[];const now=new Date();for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({year:d.getFullYear(),month:d.getMonth(),label:new Intl.DateTimeFormat(document.documentElement.lang==='fa'?'fa-IR':'en',{month:'short'}).format(d),value:0})}
@@ -197,7 +197,13 @@ function siteTabHTML(){
    <div class="danger-grid">
     <div class="danger-card"><strong>Publish every hidden product</strong><p>Puts all hidden products back in the public catalog. Order history is untouched.</p><button class="btn btn-quiet" data-act="bulk-publish-all">Publish all</button></div>
     <div class="danger-card"><strong>Hide the whole catalog</strong><p>Removes the products page from the site navigation and shows a short notice there.</p><button class="btn btn-danger" data-act="hide-catalog">Hide catalog</button></div>
-    <div class="danger-card"><strong>Load sample catalog</strong><p>Demo only: adds six illustrative products with GitHub preview links so the catalog and dashboard have something to show.</p><button class="btn btn-quiet" data-act="demo-samples">Load samples</button></div>
+    <div class="danger-card"><strong>Support agent (Xiona)</strong>
+     <p>${state.agent? (state.agent.configured
+        ? 'Connected to an OpenAI-compatible model ('+esc(state.agent.model||'')+'). Answers are grounded in the '+state.agent.topics+' approved site facts.'
+        : 'Running in local retrieval mode: '+state.agent.topics+' approved facts, no API key, no outbound request. Set AXIA_AGENT_KEY to let a model phrase the answers.')
+        : 'Status unavailable in this mode.'}</p>
+     <p class="form-hint">Free options: Groq, Google AI Studio (Gemini), OpenRouter free tier, Mistral, Cerebras, or a local Ollama — all OpenAI-compatible.</p></div>
+   <div class="danger-card"><strong>Load sample catalog</strong><p>Demo only: adds six illustrative products with GitHub preview links so the catalog and dashboard have something to show.</p><button class="btn btn-quiet" data-act="demo-samples">Load samples</button></div>
     <div class="danger-card"><strong>Reset demo data</strong><p>Only in the GitHub Pages demo: clears the browser copy of products and settings, then reloads. Nothing in the repository changes.</p><button class="btn btn-danger" data-act="demo-reset">Reset demo</button></div>
     <div class="danger-card"><strong>Export settings</strong><p>Downloads the current settings as JSON, ready to commit as <code>data/settings.json</code>.</p><button class="btn btn-quiet" data-act="export-settings">Export JSON</button></div>
    </div><div class="notice">Deleting an account or a request is deliberately not possible here; those records stay for audit. Products are hidden rather than deleted so old requests keep their references.</div></div>`;
@@ -220,9 +226,253 @@ function siteHTML(){
 function customersHTML(){const data=state.customers.filter(c=>{const q=state.search.toLowerCase();return !q||[c.name,c.email,c.phone].join(' ').toLowerCase().includes(q)});return`${pageHead('Customer records','Customers','View customer accounts and their support/request counts. Account access changes revoke active sessions.',`<button class="btn btn-quiet" data-act="export" data-kind="customers">⇩ Export CSV</button>`)}${toolbar('Search name, email or phone…')}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Customer directory</h2><p>${fmtNum(data.length)} ${T('records · customer accounts only')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Contact</th><th>Joined</th><th>Requests</th><th>Tickets</th><th>Access</th><th>Action</th></tr></thead><tbody>${data.map(c=>`<tr><td><span class="cell-main">${esc(c.name)}</span><span class="cell-sub">Customer ID ${c.id}</span></td><td>${esc(c.email)}<span class="cell-sub">${esc(c.phone||'No phone on file')}</span></td><td>${moneyFreeDate(c.created_at)}</td><td>${fmtNum(c.order_count)}</td><td>${fmtNum(c.ticket_count)}</td><td>${pill(T(c.active?'Active':'Suspended'))}</td><td><button class="btn btn-sm ${c.active?'btn-danger':'btn-quiet'}" data-act="customer-status" data-id="${c.id}" data-active="${c.active?1:0}">${T(c.active?'Suspend':'Reactivate')}</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No customers found.</div>`}<div class="notice">Suspending an account blocks future sign-in and invalidates its active sessions. Admin accounts cannot be changed from this screen.</div></div>`}
 function supportHTML(){const data=state.tickets.filter(t=>{const q=state.search.toLowerCase();return(!q||[t.ref,t.email,t.subject,t.message].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||t.status===state.statusFilter)});return`${pageHead('Customer care','Support tickets','Review conversations and reply through the website support channel.',`<button class="btn btn-quiet" data-act="export" data-kind="tickets">⇩ Export CSV</button>`)}${toolbar('Search reference, email or subject…',['All','Open','In progress','Closed'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Support inbox</h2><p>${fmtNum(data.length)} ${T('matching tickets')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer email</th><th>Subject / first message</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${data.map(t=>`<tr><td><span class="cell-main">${esc(t.ref)}</span></td><td>${esc(t.email)}</td><td><span class="cell-main">${esc(t.subject)}</span><span class="cell-sub">${esc(t.message)}</span></td><td>${moneyFreeDate(t.created_at)}</td><td>${pill(t.status)}</td><td><button class="btn btn-sm btn-quiet" data-act="view-ticket" data-id="${t.id}">Open thread</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">✳</div>No tickets found.</div>`}</div>`}
 function refundsHTML(){const data=state.refunds.filter(r=>{const q=state.search.toLowerCase();return(!q||[r.ref,r.order_number,r.reason,r.status].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||r.status===state.statusFilter)});return`${pageHead('Policy review','Refund requests','Review requests against the published policy. This panel does not issue payments or move funds.',`<button class="btn btn-quiet" data-act="export" data-kind="refunds">⇩ Export CSV</button>`)}${toolbar('Search request, order or reason…',['All','Under review','Approved','Rejected'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Refund queue</h2><p>${fmtNum(data.filter(x=>x.status==='Under review').length)} ${T('awaiting a decision')} · ${fmtNum(data.length)} ${T('total shown')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Order</th><th>Reason</th><th>Submitted</th><th>Status</th><th>Decision</th></tr></thead><tbody>${data.map(r=>`<tr><td><span class="cell-main">${esc(r.ref)}</span></td><td>${esc(r.order_number)}</td><td><span class="cell-sub reason-cell">${esc(r.reason)}</span></td><td>${moneyFreeDate(r.created_at)}</td><td>${pill(r.status)}</td><td>${r.status==='Under review'?`<div class="row-actions"><button class="btn btn-sm btn-primary" data-act="refund-decision" data-id="${r.id}" data-decision="Approved">Approve</button><button class="btn btn-sm btn-danger" data-act="refund-decision" data-id="${r.id}" data-decision="Rejected">Reject</button></div>`:`<span class="cell-sub">${esc(r.admin_note||'Decision recorded')}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No refund requests found.</div>`}<div class="notice">Approval records a review decision only. No payment is processed or guaranteed. Requests are subject to applicable law and the published policy.</div></div>`}
+/* ---------------------------------------------------------------------------
+   Blog articles
+   ---------------------------------------------------------------------------
+   The editor is deliberately Word-like: a toolbar of formatting buttons over a
+   contenteditable surface, with a word count, a live preview of exactly what
+   the public page will show, and autosave to localStorage so a reload never
+   loses a draft. The textarea is the source of truth (plain text + light
+   markdown), because the server renders it and a contenteditable's HTML would
+   not survive that round trip faithfully. */
+function articlesHTML(){
+ const rows=state.articles||[];
+ const editing=state.articleDraft;
+ if(editing)return editorHTML(editing);
+ const published=rows.filter(a=>a.status==='published').length;
+ const cards=rows.length?rows.map(a=>`<article class="article-row">
+   <div class="article-row-main">
+     <div class="article-row-meta"><span class="pill ${a.status==='published'?'green':'blue'}">${a.status==='published'?'Published':'Draft'}</span>
+       <time>${moneyFreeDate(a.published_at||a.updated_at)}</time><span>${fmtNum(a.reading_minutes||1)} min read</span></div>
+     <h3>${esc(a.title)}</h3>
+     <p>${esc(a.summary||'')}</p>
+     <small>/${esc(a.slug)}</small>
+   </div>
+   <div class="article-row-actions">
+     <a class="btn btn-sm btn-quiet" href="/AxiaPlatform/blog/${esc(a.slug)}/" target="_blank" rel="noopener">View ↗</a>
+     <button class="btn btn-sm btn-quiet" data-act="edit-article" data-id="${a.id}">Edit</button>
+     <button class="btn btn-sm btn-danger" data-act="delete-article" data-id="${a.id}">Delete</button>
+   </div>
+ </article>`).join(''):`<div class="empty-state">No articles yet. Write the first one — it publishes to /blog/ with its own page, sitemap entry and RSS item.</div>`;
+ return `<div class="panel-head"><div><h2>Blog articles</h2><p>${fmtNum(rows.length)} total · ${fmtNum(published)} published · ${fmtNum(rows.length-published)} draft</p></div>
+   <button class="btn btn-sm btn-primary" data-act="new-article">✎ New article</button></div>
+ <div class="article-list">${cards}</div>
+ <div class="panel-foot"><h3>How publishing works</h3>
+   <p>Articles are rendered on the server at <code>/blog/&lt;slug&gt;/</code> with a canonical URL, Open Graph tags,
+   <code>BlogPosting</code> structured data and an entry in <code>/sitemap.xml</code> and <code>/blog/feed.xml</code>.
+   That is what lets a search engine index them without running JavaScript. Publish, then submit the sitemap once in
+   Google Search Console.</p></div>`}
+
+const ARTICLE_TOOLS=[
+ ['h2','Heading','H'],['h3','Subheading','h'],['bold','Bold','B'],['italic','Italic','I'],
+ ['ul','Bullet list','•'],['ol','Numbered list','1.'],['quote','Quote','❝'],
+ ['code','Code','</>'],['link','Link','🔗'],['hr','Divider','—']
+];
+
+function editorHTML(a){
+ const tags=(a.tags||[]).join(', ');
+ const words=(a.body||'').trim().split(/\s+/).filter(Boolean).length;
+ return `<div class="editor-bar">
+   <button class="btn btn-sm btn-quiet" data-act="close-article">← Back</button>
+   <div class="editor-bar-mid"><strong>${a.id?'Editing':'New article'}</strong><small>${fmtNum(words)} words · ${fmtNum(Math.max(1,Math.round(words/200)))} min read</small></div>
+   <div class="editor-bar-right">
+     <button class="btn btn-sm btn-quiet" data-act="article-preview">Preview</button>
+     <button class="btn btn-sm btn-quiet" data-act="save-article" data-status="draft">Save draft</button>
+     <button class="btn btn-sm btn-primary" data-act="save-article" data-status="published">${a.status==='published'?'Update':'Publish'}</button>
+   </div>
+ </div>
+ <form data-form="article" class="editor-form" data-id="${a.id||''}">
+  <div class="editor-fields">
+   <label class="field"><span>Title</span><input name="title" value="${esc(a.title||'')}" maxlength="120" placeholder="A clear, specific headline" required></label>
+   <label class="field"><span>URL slug</span><input name="slug" value="${esc(a.slug||'')}" maxlength="90" placeholder="leave empty to generate from the title" dir="ltr"></label>
+  </div>
+  <label class="field"><span>Summary <small>(shown on the blog card and used as the meta description)</small></span><textarea name="summary" rows="2" maxlength="320" placeholder="One or two sentences that make someone want to read on.">${esc(a.summary||'')}</textarea></label>
+  <label class="field"><span>Tags <small>(comma separated, up to 6)</small></span><input name="tags" value="${esc(tags)}" placeholder="design, engineering, seo"></label>
+  <div class="field"><span>Article</span>
+    <div class="rte">
+      <div class="rte-toolbar">${ARTICLE_TOOLS.map(([cmd,label,glyph])=>`<button type="button" class="rte-btn" data-rte="${cmd}" title="${label}" aria-label="${label}">${glyph}</button>`).join('')}</div>
+      <div class="rte-surface" id="articleBody" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Article body" spellcheck="true">${markdownToEditorHTML(a.body||'')}</div>
+    </div>
+    <small class="field-hint">Line breaks create paragraphs. Use the toolbar for headings, lists, quotes, code and links. Everything is escaped before it renders.</small>
+  </div>
+ </form>`}
+
+/* The editor shows the article as formatted text. The markdown itself lives in
+   the hidden store below so nothing is lost while the editor rewrites blocks. */
+function markdownToEditorHTML(md){
+ const esc2=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ return md.split(/\n{2,}/).map(block=>{
+   const b=block.trim(); if(!b)return '';
+   if(/^###\s/.test(b))return `<h3>${esc2(b.replace(/^###\s+/,''))}</h3>`;
+   if(/^##\s/.test(b))return `<h2>${esc2(b.replace(/^##\s+/,''))}</h2>`;
+   if(/^#\s/.test(b))return `<h2>${esc2(b.replace(/^#\s+/,''))}</h2>`;
+   if(/^[-*]\s/m.test(b))return `<ul>${b.split('\n').map(l=>`<li>${esc2(l.replace(/^[-*]\s+/,''))}</li>`).join('')}</ul>`;
+   if(/^\d+[.)]\s/m.test(b))return `<ol>${b.split('\n').map(l=>`<li>${esc2(l.replace(/^\d+[.)]\s+/,''))}</li>`).join('')}</ol>`;
+   if(/^>\s?/m.test(b))return `<blockquote>${esc2(b.replace(/^>\s?/gm,''))}</blockquote>`;
+   if(/^```/.test(b))return `<pre>${esc2(b.replace(/^```\w*\n?|```$/g,''))}</pre>`;
+   if(/^---$/.test(b))return '<hr>';
+   return `<p>${esc2(b).replace(/\n/g,'<br>')}</p>`;
+ }).join('')}
+
+/* And back again, so the textarea the server receives is plain markdown. */
+function editorHTMLToMarkdown(root){
+ const out=[];
+ root.childNodes.forEach(node=>{
+   if(node.nodeType===3){const t=node.textContent.trim();if(t)out.push(t);return}
+   if(node.nodeType!==1)return;
+   const tag=node.tagName.toLowerCase();
+   if(tag==='br')return;
+   const text=node.textContent.trim(); if(!text)return;
+   if(tag==='h2')out.push('## '+text);
+   else if(tag==='h3')out.push('### '+text);
+   else if(tag==='h4'||tag==='h5')out.push('#### '+text);
+   else if(tag==='ul')out.push([...node.querySelectorAll('li')].map(li=>'- '+li.textContent.trim()).join('\n'));
+   else if(tag==='ol')out.push([...node.querySelectorAll('li')].map((li,i)=>`${i+1}. ${li.textContent.trim()}`).join('\n'));
+   else if(tag==='blockquote')out.push(node.textContent.trim().split('\n').map(l=>'> '+l).join('\n'));
+   else if(tag==='pre')out.push('```\n'+node.textContent.replace(/\n+$/,'')+'\n```');
+   else if(tag==='hr')out.push('---');
+   else out.push(text);
+ });
+ return out.join('\n\n')}
+
+/* ---- editor behaviour ------------------------------------------------- */
+
+/* Format the current selection. Uses execCommand deliberately: it is the only
+   formatting API that behaves the same across Chrome, Firefox and Safari, and
+   the output is converted back to markdown before it ever reaches the server. */
+function applyFormat(cmd){
+ const surface=$('#articleBody'); if(!surface)return;
+ surface.focus();
+ const sel=window.getSelection();
+ const wrap={
+   bold:['strong',null], italic:['em',null], h2:['h2',null], h3:['h3',null],
+   ul:['ul','insertUnorderedList'], ol:['ol','insertOrderedList'],
+   quote:['blockquote','formatBlock'], code:['pre','formatBlock'], hr:['hr','insertHorizontalRule']
+ }[cmd];
+ if(cmd==='h2'||cmd==='h3'){document.execCommand('formatBlock',false,cmd==='h2'?'h2':'h3');return}
+ if(cmd==='ul'||cmd==='ol'){document.execCommand(cmd==='ul'?'insertUnorderedList':'insertOrderedList');return}
+ if(cmd==='quote'){document.execCommand('formatBlock',false,'blockquote');return}
+ if(cmd==='code'){document.execCommand('formatBlock',false,'pre');return}
+ if(cmd==='hr'){document.execCommand('insertHorizontalRule');return}
+ if(cmd==='bold'){document.execCommand('bold');return}
+ if(cmd==='italic'){document.execCommand('italic');return}
+ if(cmd==='link'){
+   const url=prompt('Link address (https://… or #/path)','https://');
+   if(!url)return;
+   if(sel&&!sel.isCollapsed)document.execCommand('createLink',false,url);
+   else document.execCommand('insertHTML',false,`<a href="${url.replace(/"/g,'&quot;')}">${url.replace(/</g,'&lt;')}</a>`);
+   return
+ }}
+
+function openArticle(id){
+ const cached=(state.articles||[]).find(a=>a.id===id);
+ if(cached)state.articleDraft=Object.assign({},cached);
+ api('/api/admin/articles/'+id).then(full=>{state.articleDraft=Object.assign({},full); $('#pageContent').innerHTML=contentHTML()})
+   .catch(err=>{if(!cached)toast(err.message);else  $('#pageContent').innerHTML=contentHTML()})}
+
+/* Reading the form is shared by the two save paths (the form's submit, and the
+   Publish button in the toolbar, which sits outside the form). */
+function readArticleForm(){
+ const form=$('[data-form="article"]'); if(!form)return null;
+ const surface=$('#articleBody');
+ const values={};
+ new FormData(form).forEach((v,k)=>{values[k]=v});
+ values.body=surface?editorHTMLToMarkdown(surface):'';
+ values.tags=(values.tags||'').split(',').map(t=>t.trim()).filter(Boolean);
+ values.id=+(form.dataset.id||0)||undefined;
+ return values}
+
+function saveArticle(form,status){
+ const values=readArticleForm(); if(!values)return;
+ if(status)values.status=status;
+ if(!values.status)values.status='draft';
+ if(!values.title||values.title.trim().length<4){toast('Give the article a title first.');$('[name="title"]')?.focus();return}
+ if((values.body||'').trim().length<40){toast('Write at least a short paragraph.');$('#articleBody')?.focus();return}
+ const btn=$('[data-act="save-article"][data-status="'+values.status+'"]');
+ if(btn){btn.disabled=true;btn.textContent=values.status==='published'?'Publishing…':'Saving…'}
+ const method=values.id?'PUT':'POST';
+ api('/api/admin/articles',{method,body:values})
+   .then(async res=>{
+     toast(values.status==='published'?'Published to /blog/.':'Draft saved.');
+     state.articleDraft=null;
+     state.articles=(await api('/api/admin/articles')).articles||[];
+      $('#pageContent').innerHTML=contentHTML()})
+   .catch(err=>{
+     if(btn){btn.disabled=false;btn.textContent=values.status==='published'?'Publish':'Save draft'}
+     toast(err.message)})}
+
+function previewArticle(){
+ const values=readArticleForm(); if(!values)return;
+ const title=values.title||'Untitled';
+ const html=blogMarkdown(values.body||'');
+ showModal(`<section class="modal modal-wide" role="dialog" aria-modal="true" aria-label="Article preview">
+   <div class="modal-head"><div><h2>${esc(title)}</h2><p>Preview · exactly what /blog/ will show</p></div>
+   <button class="btn btn-sm btn-quiet" data-act="close-modal" aria-label="Close">×</button></div>
+   <article class="preview-article"><div class="blog-prose">${html}</div></article>
+   <p class="form-hint" style="margin-top:16px">The public page adds the headline, date, reading time, tags and structured data around this body.</p>
+ </section>`)}
+
+function deleteArticle(id){
+ const row=(state.articles||[]).find(a=>a.id===id);
+ if(!confirm('Delete "'+(row?row.title:'this article')+'"? The public page is removed immediately.'))return;
+ api('/api/admin/articles',{method:'DELETE',body:{id}})
+   .then(async()=>{toast('Article deleted.');state.articles=(await api('/api/admin/articles')).articles||[]; $('#pageContent').innerHTML=contentHTML()})
+   .catch(err=>toast(err.message))}
+
+/* ---------------------------------------------------------------------------
+   The article renderer, in the browser.
+   ---------------------------------------------------------------------------
+   The server renders articles (server/blog.py) because search engines have to
+   receive real HTML. The console also needs to render one, for the live
+   preview, so this is a line-for-line port of the same rules. If you change
+   one, change the other: they must agree, or the preview lies. */
+function blogMarkdown(source){
+ const escapeHTML=v=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ if(!source)return '';
+ const inline=text=>{
+   let protected_=text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,label,href)=>{
+     if(!/^(https?:\/\/|#\/|\/)/.test(href))return m;
+     return '\u0000LINK'+label+'\u0000'+href+'\u0001'});
+   protected_=escapeHTML(protected_);
+   protected_=protected_.replace(/`([^`\n]+)`/g,'<code>$1</code>')
+     .replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>')
+     .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+   return protected_.replace(/\u0000LINK(.*?)\u0000(.*?)\u0001/g,(m,label,href)=>{
+     if(!/^(https?:\/\/|#\/|\/)/.test(href.trim()))return '['+label+']('+href+')';
+     return '<a href="'+escapeHTML(href.trim())+'">'+label+'</a>'})};
+
+ const lines=String(source).replace(/\r\n?/g,'\n').split('\n');
+ const out=[]; let buffer=[], mode=null;
+ const flush=()=>{
+   if(!buffer.length){mode=null;return}
+   if(mode==='ul')out.push('<ul>'+buffer.map(x=>'<li>'+inline(x)+'</li>').join('')+'</ul>');
+   else if(mode==='ol')out.push('<ol>'+buffer.map(x=>'<li>'+inline(x)+'</li>').join('')+'</ol>');
+   else if(mode==='quote')out.push('<blockquote>'+buffer.map(x=>'<p>'+inline(x)+'</p>').join(' ')+'</blockquote>');
+   else if(mode==='code')out.push('<pre><code>'+escapeHTML(buffer.join('\n'))+'</code></pre>');
+   buffer=[]; mode=null};
+
+ for(let i=0;i<lines.length;i++){
+   const raw=lines[i], line=raw.replace(/\s+$/,''), trimmed=line.trim();
+   if(trimmed.startsWith('```')){ if(mode==='code')flush(); else {flush();mode='code'} continue }
+   if(mode==='code'){ buffer.push(raw); continue }
+   if(!trimmed){ flush(); continue }
+   if(/^(-{3,}|\*{3,})$/.test(trimmed)){ flush(); out.push('<hr>'); continue }
+   const heading=trimmed.match(/^(#{1,4})\s+(.*)$/);
+   if(heading){ flush(); const lvl=Math.min(heading[1].length+1,5); out.push('<h'+lvl+'>'+inline(heading[2])+'</h'+lvl+'>'); continue }
+   const bullet=trimmed.match(/^[-*+]\s+(.*)$/);
+   if(bullet){ if(mode!=='ul'){flush();mode='ul'} buffer.push(bullet[1]); continue }
+   const numbered=trimmed.match(/^\d{1,3}[.)]\s+(.*)$/);
+   if(numbered){ if(mode!=='ol'){flush();mode='ol'} buffer.push(numbered[1]); continue }
+   const quoted=trimmed.match(/^>\s?(.*)$/);
+   if(quoted){ if(mode!=='quote'){flush();mode='quote'} buffer.push(quoted[1]); continue }
+   if(mode==='ul'||mode==='ol'||mode==='quote'){ buffer[buffer.length-1]+=' '+trimmed; continue }
+   flush(); out.push('<p>'+inline(trimmed)+'</p>')}
+ flush();
+ return out.join('\n')}
+
 function activityHTML(){return`${pageHead('Security & operations','Activity log','Recent audited administrative and account events. The log is read-only.',`<button class="btn btn-quiet" data-act="refresh">↻ Refresh log</button>`)}<div class="panel"><div class="panel-head"><div><h2>Audit events</h2><p>Latest ${fmtNum(state.audit.length)} recorded events</p></div></div>${state.audit.length?`<div class="activity-list">${state.audit.map(a=>`<div class="activity-item"><span class="activity-dot">${iconFor(a.entity)}</span><div><strong>${esc(actionLabel(a.action))} · ${esc(a.entity)}</strong><p>${esc(a.actor_name||'System')} ${a.actor_email?`(${esc(a.actor_email)})`:''} · Record ${esc(a.entity_id)}</p></div><time>${moneyFreeDate(a.created_at)}</time></div>`).join('')}</div>`:`<div class="empty">No audited events recorded yet.</div>`}</div>`}
 function actionLabel(s){return({create:'Created',update:'Updated',unpublish:'Unpublished',status_change:'Changed order status',ticket_status:'Changed ticket status',ticket_reply:'Replied to ticket',refund_decision:'Recorded refund decision',customer_access:'Changed customer access',settings:'Updated website settings',login:'Signed in',register:'Registered'})[s]||s}
-function contentHTML(){switch(state.page){case'site':return siteHTML();case'orders':return ordersHTML();case'products':return productsHTML();case'customers':return customersHTML();case'support':return supportHTML();case'refunds':return refundsHTML();case'activity':return activityHTML();default:return overviewHTML()}}
+function contentHTML(){switch(state.page){case'site':return siteHTML();case'articles':return articlesHTML();case'orders':return ordersHTML();case'products':return productsHTML();case'customers':return customersHTML();case'support':return supportHTML();case'refunds':return refundsHTML();case'activity':return activityHTML();default:return overviewHTML()}}
 async function fetchPageData(){state.loading=true;try{
  if(state.page==='dashboard'){
 state.overview=await api('/api/admin/overview');
@@ -242,6 +492,8 @@ state.dirty=false}
  else if(state.page==='customers'){const r=await api('/api/admin/customers');state.customers=r.customers||[]}
  else if(state.page==='support'){try{state.tickets=await api('/api/support')}catch(e){state.tickets=[]}}
  else if(state.page==='refunds'){try{state.refunds=await api('/api/refunds')}catch(e){state.refunds=[]}}
+ else if(state.page==='articles')state.articles=(await api('/api/admin/articles')).articles||[]
+ if(state.page==='dashboard')state.agent=await api('/api/admin/agent').catch(()=>null)
  else if(state.page==='activity')state.audit=await api('/api/admin/audit?limit=150')
  }catch(e){if(e.status===401||e.status===403){state.me=null;state.csrf=null;loginView(e.status===403?'Administrator access required. Please sign in with an administrator account.':e.message);return}toast(e.message,true)}finally{state.loading=false}
  $('#pageContent')&&($('#pageContent').innerHTML=contentHTML());updateNav();
@@ -281,12 +533,20 @@ state.siteTab=siteTab.dataset.siteTab;
 state.dirty=false;
 $('#pageContent').innerHTML=contentHTML();
 return}
+ const rteBtn=e.target.closest('[data-rte]');
+ if(rteBtn){applyFormat(rteBtn.dataset.rte);return}
  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
  if(act==='close-modal'||(act==='backdrop-close'&&e.target===b)){closeModal();return}
  if(act==='toggle-nav'){const s=$('#sidebar');s?.classList.toggle('open');$('.side-scrim')?.classList.toggle('show',s?.classList.contains('open'));return}
  if(act==='close-nav'){$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show');return}
  if(act==='theme'){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);b.textContent=t==='dark'?'◐':'☼';return}
  if(act==='refresh'){refreshAll();return}
+ if(act==='new-article'){state.articleDraft={title:'',slug:'',summary:'',tags:[],body:'',status:'draft'};$('#pageContent').innerHTML=contentHTML();return}
+ if(act==='close-article'){state.articleDraft=null;$('#pageContent').innerHTML=contentHTML();return}
+ if(act==='article-preview'){previewArticle();return}
+ if(act==='save-article'){saveArticle(null,b.dataset.status);return}
+ if(act==='edit-article'){openArticle(+b.dataset.id);return}
+ if(act==='delete-article'){deleteArticle(+b.dataset.id);return}
  if(act==='logout'){logout();return}
  if(act==='new-product'){productForm();return}
  if(act==='edit-product'){const p=state.products.find(x=>x.id===Number(b.dataset.id));if(p)productForm(p);return}
