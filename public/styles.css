@@ -168,9 +168,13 @@ img{max-width:100%}
 @media(prefers-reduced-motion:reduce){.mobile-nav{transition:none!important;clip-path:none!important;will-change:auto!important}}
 
 /* Requested pointer effects: selected marks/cards get real pointer-driven 3D tilt and a local light spot. */
-.topbar .brand-wordmark{width:46px}
-@media(max-width:650px){.topbar .brand-wordmark{width:48px}}
-@media(max-width:400px){.topbar .brand-wordmark{width:44px}}
+/* The wordmark is 4.74:1, so a width in the 40s renders it about 10px tall —
+   beside a 33px emblem it read as a smudge rather than a name. It is sized to
+   sit at roughly a third of the emblem's height, which is where a wordmark
+   belongs next to a mark. */
+.topbar .brand-wordmark{width:clamp(74px,6.2vw,88px);height:auto}
+@media(max-width:650px){.topbar .brand-wordmark{width:72px}}
+@media(max-width:400px){.topbar .brand-wordmark{width:64px}}
 .hero-logo{animation:none!important;transform-style:preserve-3d}
 .aurion-core.aurion-logo-hover{transform-style:preserve-3d}
 @media(hover:hover) and (pointer:fine){
@@ -433,13 +437,34 @@ html[lang="fa"] .category-card .arrow-link{left:17px;bottom:16px}
   backdrop-filter: blur(6px);
 }
 
-/* The header mark follows the chosen brand. The plate is light for the same
-   reason as the picker: these marks are drawn for a white ground. */
-#brand-mark {
+/* The header plate belongs to a product brand only. Applying it regardless put
+   a pale square behind the AXIASOFT emblem, which is already a colourful mark
+   on transparency — it read as a broken image rather than a logo. */
+html[data-brand] #brand-mark {
   background: #f3f7fd;
   border: 1px solid rgba(30, 74, 130, .16);
+  /* 26px of mark + 3px padding + 1px border must fit the box: at a fixed 33px
+     with border-box sizing the plate clipped the mark on two sides. */
+  width: 34px;
+  height: 34px;
+  padding: 3px;
+  border-radius: 9px;
+  flex: none;
 }
-html[data-brand] #brand-mark img { width: 26px; height: 26px; object-fit: contain; }
+html[data-brand] #brand-mark img { width: 100%; height: 100%; object-fit: contain; }
+/* A brand mark is a bare symbol, so its name has to be set as text beside it. */
+.brand-name {
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1;
+  color: var(--text);
+  white-space: nowrap;
+}
+/* Latin names take a little tracking like the AXIASOFT wordmark; Persian must
+   not — extra letter-spacing opens gaps inside joined letters and makes the
+   script look broken rather than spaced. */
+html[data-lang="en"] .brand-name { text-transform: uppercase; letter-spacing: .06em; }
+html[data-lang="fa"] .brand-name { letter-spacing: 0; font-size: 18px; }
 
 @media (max-width: 860px) {
   .brand-picker-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
