@@ -23,8 +23,10 @@ const EXEC = process.env.CHROME || '/tmp/chromium';
 const browser = await puppeteer.launch({ executablePath: EXEC,
   args:['--no-sandbox','--disable-dev-shm-usage'] });
 
+// The catalog ships empty, so no product slug is assumed here; the product
+// detail layout is covered by products.browser.test.mjs once a product exists.
 const ROUTES = ['#/','#/products','#/services','#/aurion','#/about','#/contact',
-                '#/products/northstar-corporate','#/legal/privacy','#/legal/terms'];
+                '#/account','#/legal/privacy','#/legal/terms'];
 const WIDTHS = [320,360,390,414,540,768,820,1024,1280,1440,1920];
 const LANGS = ['en','fa'];
 

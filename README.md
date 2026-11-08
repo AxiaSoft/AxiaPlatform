@@ -82,8 +82,33 @@ Optional settings: `PORT` (default `8000`) and `AXIA_DB` (database file path). F
 
 GitHub Pages serves static files only, so the published site is the real public interface — design, motion
 layer, catalog, product pages, About/Services/Contact and the policies — with the product data exported from
-the database. Accounts, project requests, support, refunds and the admin console need the Python API, so those
-actions open a clear explanation (and `/admin/` shows a gate page) instead of failing silently.
+the database. Accounts, project requests and refunds need the Python API, so those actions open a clear
+explanation instead of failing silently.
+
+### The catalog starts empty
+
+No products ship with the site. Every product is created in the admin console, and each one carries its own
+**GitHub preview link**, so the "Preview" button on a product card and the "Open preview" button on the detail
+page point at that repository instead of the built-in concept mock-up. A blank link falls back to the built-in
+preview, so the field is optional.
+
+### Trying the admin console on GitHub Pages (demo)
+
+`/admin/` is reachable on the published site and is answered entirely in the browser by `public/demo-backend.js`:
+
+* sign in with **`demo` / `demo`** — these credentials are written in a public file and protect nothing;
+* products you create or edit are stored in **that browser's `localStorage`** and show up in the storefront
+  immediately, so the panel-to-site path can be tried end to end;
+* nothing is written back to GitHub (a static host cannot accept writes). Use **Export CSV** in the panel, or
+  `window.AXIA_DEMO_EXPORT()` in the console, to download `products.json` and commit it to replace
+  `data/products.json`. `window.AXIA_DEMO_RESET()` clears the local demo data;
+* customers, project requests, support, refunds and the audit log are illustrative sample rows only.
+
+The real console is unchanged: it still requires a server-verified administrator session, and `demo-backend.js`
+is never loaded by the Python build.
+
+Preview links are validated twice — on the server before they are stored (`https://` only, no `javascript:` or
+`data:` URLs) and in the storefront before they are rendered — so a hostile value can never become an `href`.
 
 ### How it is published
 

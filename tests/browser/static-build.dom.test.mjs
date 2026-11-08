@@ -36,6 +36,15 @@ const dom2 = new JSDOM(html, {
       addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){}, dispatchEvent(){return false} });
     w.IntersectionObserver = class { constructor(cb){this.cb=cb} observe(el){this.cb([{isIntersecting:true,target:el}],this)} unobserve(){} disconnect(){} };
     w.requestAnimationFrame = fn => setTimeout(()=>fn(performance.now()),0);
+    // The shipped catalog is empty, so plant one product the way the demo admin
+    // console stores them. Doing it before any script runs means the adapter sees
+    // it on its very first /api/products call - no reload needed.
+    w.localStorage.setItem('axia-demo-products-v1', JSON.stringify([{
+      id: 1, slug: 'tutorial-product', title: 'Tutorial Product', category: 'Websites',
+      summary: 'Planted by the test suite.', description: 'Planted by the test suite.',
+      features: ['One'], technologies: ['Python'], status: 'available',
+      price_label: 'Request a quote', github_url: 'https://github.com/AxiaSoft/tutorial-product', published: 1,
+    }]));
     const stub = new Proxy({}, { get:(t,k)=>(k in t?t[k]:()=>{}), set:(t,k,v)=>{t[k]=v;return true} });
     w.HTMLCanvasElement.prototype.getContext = function(){ return stub; };
     // Real network fetch, so the test exercises the actual files and the adapter.
@@ -66,8 +75,11 @@ const ck = (n,c,e='') => results.push([n,!!c,e]);
 ck('no script errors', errors.length === 0, errors.join(' | '));
 ck('adapter installed', window.AXIA_STATIC_ADAPTER === true);
 ck('static config loaded', window.AXIA_STATIC && window.AXIA_STATIC.base === '/AxiaPlatform/');
-ck('snapshot products present', Array.isArray(window.AXIA_STATIC.products) && window.AXIA_STATIC.products.length === 6,
-   String(window.AXIA_STATIC && window.AXIA_STATIC.products && window.AXIA_STATIC.products.length));
+// The shipped catalog is empty by design: products are created in the admin
+// console. The snapshot must therefore still be a valid array, and the catalog
+// route must render its empty state rather than a broken grid.
+ck('snapshot products is an array', Array.isArray(window.AXIA_STATIC.products),
+   String(window.AXIA_STATIC && window.AXIA_STATIC.products));
 const appHtml = document.getElementById('app').innerHTML;
 ck('home page rendered', appHtml.length > 2000, String(appHtml.length));
 ck('hero visible markup', !!document.querySelector('.hero .headline'));
@@ -76,16 +88,20 @@ ck('hero visible markup', !!document.querySelector('.hero .headline'));
 window.location.hash = '#/products';
 await new Promise(r => setTimeout(r, 800));
 const catalogHtml = document.getElementById('app').innerHTML;
-const cards = document.querySelectorAll('.product-card').length;
 ck('catalog route rendered', /product-grid/.test(catalogHtml));
-ck('all published products rendered from snapshot', cards === 5, `cards=${cards}`);
-ck('product titles come from the catalog', /Northstar Corporate/.test(catalogHtml) && /Fieldwork Mobile/.test(catalogHtml));
-ck('aurion excluded from catalog grid', cards === 5);
+const cards = document.querySelectorAll('.product-card').length;
+ck('product from the demo store is rendered', cards === 1, `cards=${cards}`);
+ck('product links to its GitHub preview',
+   !!document.querySelector('.product-card') &&
+   /href="https:\/\/github\.com\/AxiaSoft\/tutorial-product"/.test(document.querySelector('.product-card').innerHTML),
+   'card markup');
 
 // Detail page via hash route (uses the in-memory list, no network)
-window.location.hash = '#/products/northstar-corporate';
-await new Promise(r => setTimeout(r, 500));
-ck('product detail renders', /Northstar Corporate/.test(document.getElementById('app').innerHTML));
+window.location.hash = '#/products/tutorial-product';
+await new Promise(r => setTimeout(r, 700));
+const detailHtml = document.getElementById('app').innerHTML;
+ck('product detail renders', /Tutorial Product/.test(detailHtml));
+ck('detail page offers the GitHub preview', /Open preview/i.test(detailHtml));
 
 // Account action must explain, not silently fail
 window.location.hash = '#/';

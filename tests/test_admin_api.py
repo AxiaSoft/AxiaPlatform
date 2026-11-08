@@ -28,7 +28,15 @@ class AdminApiTests(unittest.TestCase):
                      ('Test Customer', 'customer@example.test', app.hash_password('customer test password'), 'customer'))
         conn.commit()
         cls.customer_id = conn.execute("SELECT id FROM users WHERE email='customer@example.test'").fetchone()['id']
-        cls.product_id = conn.execute("SELECT id FROM products WHERE slug='northstar-corporate'").fetchone()['id']
+        # The shipped catalog is empty by design, so the fixture creates the
+        # product it needs (including a preview link) instead of assuming a seed.
+        cur_product = conn.execute(
+            "INSERT INTO products(slug,title,category,summary,description,features,technologies,github_url) "
+            "VALUES(?,?,?,?,?,?,?,?)",
+            ('northstar-corporate', 'Northstar Corporate', 'Websites',
+             'A confident digital home for ambitious teams.', 'Test description.',
+             '["Responsive pages"]', '["Next.js"]', 'https://github.com/AxiaSoft/northstar'))
+        cls.product_id = cur_product.lastrowid
         cur = conn.execute('INSERT INTO orders(number,user_id,product_id,name,email,phone,description) VALUES(?,?,?,?,?,?,?)',
                            ('AX-TEST-123456', cls.customer_id, cls.product_id, 'Test Customer', 'customer@example.test', '+4900000000', 'A test project request with sufficient detail.'))
         cls.order_id = cur.lastrowid
@@ -109,6 +117,35 @@ class AdminApiTests(unittest.TestCase):
         updated = next(p for p in products if p['id'] == self.product_id)
         self.assertEqual(updated['features'], ['One', 'Two'])
         self.assertEqual(updated['technologies'], ['Python'])
+
+    def test_github_preview_link_is_validated_and_published(self):
+        base = {'title': 'Preview Product', 'slug': 'preview-product', 'category': 'Websites',
+                'summary': 'Summary', 'description': 'A description long enough to pass.',
+                'status': 'available', 'features': [], 'technologies': [], 'published': True}
+
+        # Anything that is not a plain https URL must be refused outright.
+        for bad in ('javascript:alert(1)', 'data:text/html,<script>alert(1)</script>',
+                    'http://insecure.example.test', '//protocol-relative.example.test',
+                    'example.test/no-scheme'):
+            payload = dict(base, github_url=bad)
+            status, body = self.request(self.admin, '/api/admin/products', 'POST', payload, self.csrf)
+            self.assertEqual(status, 400, f'{bad} should be rejected, got {status} {body}')
+
+        # A real link is stored and handed back to the storefront.
+        payload = dict(base, github_url='https://github.com/AxiaSoft/preview-product')
+        status, body = self.request(self.admin, '/api/admin/products', 'POST', payload, self.csrf)
+        self.assertEqual(status, 201, body)
+        created = next(p for p in self.request(self.admin, '/api/admin/overview')[1]['products']
+                       if p['slug'] == 'preview-product')
+        self.assertEqual(created['github_url'], 'https://github.com/AxiaSoft/preview-product')
+        guest = build_opener(HTTPCookieProcessor(CookieJar()))
+        public = next(p for p in self.request(guest, '/api/products')[1]
+                      if p['slug'] == 'preview-product')
+        self.assertEqual(public['github_url'], 'https://github.com/AxiaSoft/preview-product')
+
+        # Blank is allowed - the storefront then shows its built-in preview.
+        payload = dict(base, slug='no-link-product', github_url='')
+        self.assertEqual(self.request(self.admin, '/api/admin/products', 'POST', payload, self.csrf)[0], 201)
 
     def test_customer_suspension_revokes_sessions_and_is_audited(self):
         status, data = self.request(self.admin, '/api/admin/customers/status', 'PUT',

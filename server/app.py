@@ -110,6 +110,18 @@ IMMUTABLE_DIRS = ('/fonts/', '/brand/')
 
 EMAIL_RE = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 SLUG_RE = re.compile(r'[a-z0-9-]{3,100}')
+# Preview links are opened in a new tab by the storefront, so only plain https
+# URLs on a real host are accepted. This blocks javascript:/data: payloads and
+# anything the browser would have to guess about.
+GITHUB_URL_RE = re.compile(r'^https://(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d{2,5})?(?:/[^\s<>"]*)?$', re.I)
+
+
+def clean_github_url(value, limit=300):
+    """Return a validated preview URL, or '' when the input is blank/unsafe."""
+    url = clean(value, limit)
+    if not url:
+        return ''
+    return url if GITHUB_URL_RE.match(url) else None
 SAFE_PATH_RE = re.compile(r'^/[a-z0-9._/-]*$', re.IGNORECASE)
 
 
@@ -1021,22 +1033,25 @@ class Handler(SimpleHTTPRequestHandler):
             cover = clean(d.get('cover'), 120)
             features = d.get('features', [])
             technologies = d.get('technologies', [])
+            github_url = clean_github_url(d.get('github_url'))
             if (not SLUG_RE.fullmatch(slug) or not title or cat not in ('Websites', 'Applications', 'Aurion')
                     or status not in ('available', 'showcase') or not summary or not description
                     or not isinstance(features, list) or not isinstance(technologies, list)
                     or len(features) > 20 or len(technologies) > 20):
                 self._send_json({'error': 'Check required product fields, category, status and feature lists.'}, 400); return
+            if github_url is None:
+                self._send_json({'error': 'The preview link must be a full https:// URL.'}, 400); return
             if db.execute('SELECT 1 FROM products WHERE slug=?', (slug,)).fetchone():
                 self._send_json({'error': 'Slug already exists or product is invalid.'}, 409); return
             features = [clean(x, 100) for x in features if clean(x, 100)]
             technologies = [clean(x, 100) for x in technologies if clean(x, 100)]
             try:
                 cur = db.execute(
-                    'INSERT INTO products(slug,title,category,summary,description,cover,status,price_label,features,technologies,published) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                    'INSERT INTO products(slug,title,category,summary,description,cover,status,price_label,features,technologies,github_url,published) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
                     (slug, title, cat, summary, description, cover, status,
                      clean(d.get('price_label'), 80) or 'Request a quote',
                      json.dumps(features, ensure_ascii=False), json.dumps(technologies, ensure_ascii=False),
-                     1 if d.get('published', True) in (True, 1, 'true', '1') else 0))
+                     github_url, 1 if d.get('published', True) in (True, 1, 'true', '1') else 0))
             except sqlite3.IntegrityError:
                 self._send_json({'error': 'Slug already exists or product is invalid.'}, 409); return
             except sqlite3.OperationalError:
@@ -1063,19 +1078,23 @@ class Handler(SimpleHTTPRequestHandler):
             status = clean(d.get('status', old['status']), 20)
             features = d.get('features', json.loads(old['features']))
             technologies = d.get('technologies', json.loads(old['technologies']))
+            github_url = clean_github_url(d.get('github_url', old['github_url']))
             if (not SLUG_RE.fullmatch(slug) or not title or not summary or not description
                     or cat not in ('Websites', 'Applications', 'Aurion') or status not in ('available', 'showcase')
                     or not isinstance(features, list) or not isinstance(technologies, list)
                     or len(features) > 20 or len(technologies) > 20):
                 self._send_json({'error': 'Check required product fields, slug, category, status and feature lists.'}, 400); return
+            if github_url is None:
+                self._send_json({'error': 'The preview link must be a full https:// URL.'}, 400); return
             features = [clean(x, 100) for x in features if clean(x, 100)]
             technologies = [clean(x, 100) for x in technologies if clean(x, 100)]
             published = 1 if d.get('published', old['published']) in (True, 1, 'true', '1') else 0
             try:
                 db.execute(
-                    'UPDATE products SET slug=?,title=?,summary=?,description=?,price_label=?,category=?,cover=?,status=?,features=?,technologies=?,published=? WHERE id=?',
+                    'UPDATE products SET slug=?,title=?,summary=?,description=?,price_label=?,category=?,cover=?,status=?,features=?,technologies=?,github_url=?,published=? WHERE id=?',
                     (slug, title, summary, description, price, cat, cover, status,
-                     json.dumps(features, ensure_ascii=False), json.dumps(technologies, ensure_ascii=False), published, pid))
+                     json.dumps(features, ensure_ascii=False), json.dumps(technologies, ensure_ascii=False),
+                     github_url, published, pid))
             except sqlite3.IntegrityError:
                 self._send_json({'error': 'Slug already exists or product is invalid.'}, 409); return
             except sqlite3.OperationalError:

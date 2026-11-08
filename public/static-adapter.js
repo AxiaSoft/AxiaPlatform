@@ -75,10 +75,29 @@
     return Promise.resolve(fallbackResponse(body, code));
   }
 
+  /* The admin console on this static build writes its products to
+     localStorage (see demo-backend.js). Those edits are the newest truth, so
+     they take precedence over the shipped snapshot - that is what makes a
+     product added in the demo panel appear on the public site immediately. */
+  var DEMO_STORE_KEY = 'axia-demo-products-v1';
+
+  function demoProducts() {
+    var raw = null;
+    try { raw = localStorage.getItem(DEMO_STORE_KEY); } catch (err) { return null; }
+    if (!raw) return null;
+    try {
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch (err) { return null; }
+  }
+
   function loadSnapshot() {
     if (!productsPromise) {
-      // The script tag in index.html normally wins; fetch covers the rest.
-      if (Array.isArray(window.AXIA_STATIC && window.AXIA_STATIC.products)) {
+      var edited = demoProducts();
+      if (edited) {
+        productsPromise = Promise.resolve(edited);
+      } else if (Array.isArray(window.AXIA_STATIC && window.AXIA_STATIC.products)) {
+        // The script tag in index.html normally wins; fetch covers the rest.
         productsPromise = Promise.resolve(window.AXIA_STATIC.products);
       } else {
         productsPromise = fetch(snapshotUrl, { credentials: 'same-origin' })
@@ -101,25 +120,65 @@
     document.body.style.removeProperty('overflow');
   }
 
-  function explain(title, body) {
+  /* The modal is built as markup, so the text swapper in i18n.js cannot see it
+     coming and will not translate it. Build it in the active language instead. */
+  var COPY = {
+    en: {
+      close: 'Close',
+      eyebrow: 'Static preview',
+      got: 'Got it',
+      browse: 'Browse the catalog',
+      title: 'This action needs the live server',
+      body: 'The GitHub Pages build is <strong>static preview</strong> only: it shows the real design and the ' +
+            'product catalog, but it cannot create accounts, take project requests, store support tickets or ' +
+            'open the admin console, because those are written to a database by the Python API.<br><br>' +
+            'To use ' + '{action}' + ', run the site locally with <code dir="ltr" style="unicode-bidi:isolate">./run_local.sh</code> (the full app) or ' +
+            'deploy the container to any Python host.'
+    },
+    fa: {
+      close: 'بستن',
+      eyebrow: 'پیش‌نمایش استاتیک',
+      got: 'متوجه شدم',
+      browse: 'دیدن کاتالوگ',
+      title: 'این کار به سرور زنده نیاز دارد',
+      body: 'نسخهٔ گیت‌هاب پیجز فقط یک <strong>پیش‌نمایش استاتیک</strong> است: طراحی واقعی و کاتالوگ محصولات را ' +
+            'نشان می‌دهد، اما نمی‌تواند حساب بسازد، درخواست پروژه ثبت کند، تیکت پشتیبانی ذخیره کند یا پنل مدیریت ' +
+            'را باز کند؛ چون این موارد توسط API پایتون در پایگاه داده نوشته می‌شوند.<br><br>' +
+            'برای استفاده از ' + '{action}' + '، سایت را به‌صورت محلی با <code dir="ltr" style="unicode-bidi:isolate">./run_local.sh</code> اجرا کنید ' +
+            '(نسخهٔ کامل) یا کانتینر را روی هر میزبان پایتون مستقر کنید.'
+    }
+  };
+
+  function isPersian() {
+    return document.documentElement.lang === 'fa';
+  }
+
+  function explain(title, body, actionText) {
+    var resolved = actionText === undefined ? body : actionText;
     var root = document.getElementById('modal-root');
     if (!root) {
-      window.alert(title + '\n\n' + body);
+      window.alert(title + '\n\n' + String(resolved).replace(/<[^>]+>/g, ''));
       return;
     }
+    var copy = isPersian() ? COPY.fa : COPY.en;
     root.innerHTML =
       '<div class="modal-overlay" role="presentation">' +
         '<section class="modal" role="dialog" aria-modal="true" aria-labelledby="static-modal-title">' +
-          '<button class="close-button" aria-label="Close" data-static-close>&times;</button>' +
-          '<div class="eyebrow">Static preview</div>' +
-          '<h2 id="static-modal-title">' + title + '</h2>' +
-          '<p class="form-hint" style="line-height:1.8;font-size:12px">' + body + '</p>' +
+          '<button class="close-button" aria-label="' + copy.close + '" data-static-close>&times;</button>' +
+          '<div class="eyebrow">' + copy.eyebrow + '</div>' +
+          '<h2 id="static-modal-title">' + (isPersian() ? copy.title : title) + '</h2>' +
+          '<p class="form-hint" style="line-height:1.8;font-size:12px"></p>' +
           '<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:22px">' +
-            '<button class="button button-primary" data-static-close>Got it</button>' +
-            '<a class="button button-quiet" href="#/products">Browse the catalog</a>' +
+            '<button class="button button-primary" data-static-close>' + copy.got + '</button>' +
+            '<a class="button button-quiet" href="#/products">' + copy.browse + '</a>' +
           '</div>' +
         '</section>' +
       '</div>';
+    // The body is a template with {action}; fill it in and keep the markup.
+    var note = root.querySelector('.form-hint');
+    if (note) {
+      note.innerHTML = copy.body.replace('{action}', resolved);
+    }
     root.querySelectorAll('[data-static-close]').forEach(function (el) {
       el.addEventListener('click', closeModal);
     });
@@ -133,15 +192,20 @@
     if (focusable) focusable.focus();
   }
 
+  // Human-readable names for the actions the adapter blocks, in both languages.
+  var ACTIONS = {
+    'sign-in': { en: 'sign-in', fa: 'ورود به حساب' },
+    'an account': { en: 'an account', fa: 'ساخت حساب' },
+    'project requests': { en: 'project requests', fa: 'ثبت درخواست پروژه' },
+    'a support request': { en: 'a support request', fa: 'ثبت درخواست پشتیبانی' },
+    'the admin console': { en: 'the admin console', fa: 'پنل مدیریت' },
+    'your account': { en: 'your account', fa: 'حساب کاربری' }
+  };
+
   function serverMessage(action) {
-    explain(
-      'This action needs the live server',
-      'The GitHub Pages build is a <strong>static preview</strong>: it shows the real design and the ' +
-      'product catalog, but it cannot create accounts, take project requests, store support tickets or ' +
-      'open the admin console, because those are written to a database by the Python API.<br><br>' +
-      'To use ' + action + ', run the site locally with <code>./run_local.sh</code> (the full app) or ' +
-      'deploy the container to any Python host.'
-    );
+    var known = ACTIONS[action];
+    var label = known ? (isPersian() ? known.fa : known.en) : action;
+    explain('This action needs the live server', '', label);
   }
 
   /* --------------------------------------------------------------- fetch */
@@ -158,13 +222,17 @@
     }
 
     if (isProducts(path) && method === 'GET') {
-      return loadSnapshot().then(function (products) { return json(products); });
+      return loadSnapshot().then(function (products) {
+        return json(products.filter(function (p) { return p.published === undefined || p.published; }));
+      });
     }
 
     if (isProduct(path) && method === 'GET') {
       var slug = decodeURIComponent(path.split('/').pop());
       return loadSnapshot().then(function (products) {
-        var found = products.filter(function (p) { return p.slug === slug; })[0];
+        var found = products.filter(function (p) {
+          return p.slug === slug && (p.published === undefined || p.published);
+        })[0];
         return found ? json(found) : json({ error: 'Product not found' }, 404);
       });
     }
@@ -203,7 +271,9 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       if (MODE === 'demo') {
-        explain('Catalog demo', 'Project requests are switched off in this demo build.');
+        explain(isPersian() ? 'نمایش کاتالوگ' : 'Catalog demo',
+                isPersian() ? 'درخواست پروژه در این نسخهٔ نمایشی غیرفعال است.'
+                            : 'Project requests are switched off in this demo build.');
       } else {
         serverMessage('project requests');
       }
@@ -225,12 +295,4 @@
   // Reset transient UI on route changes so a stale modal never blocks the page.
   window.addEventListener('hashchange', closeModal);
 
-  // Tell anyone opening the console that it lives in the server build.
-  if (/\/admin\/?$/.test(location.pathname)) {
-    document.addEventListener('DOMContentLoaded', function () {
-      explain('The admin console needs the server',
-        'This static build only publishes the public interface. Run <code>python3 provision_admin.py</code> ' +
-        'from the <code>server</code> directory against a local or hosted instance to use the console.');
-    });
-  }
 })();

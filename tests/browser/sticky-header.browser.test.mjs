@@ -27,7 +27,10 @@ import puppeteer from 'puppeteer-core';
 const BASE = process.env.SITE || 'http://127.0.0.1:8000/AxiaPlatform/';
 const EXEC = process.env.CHROME || '/tmp/chromium';
 
-const ROUTES = ['#/', '#/products', '#/services', '#/aurion', '#/about', '#/contact'];
+const ROUTES = ['#/', '#/products', '#/services', '#/aurion', '#/about', '#/contact',
+                '#/products/tutorial-product'];
+// tutorial-product is planted by plantProduct() below, so the product-detail
+// layout keeps its sticky-header coverage even though the shipped catalog is empty.
 const VIEWPORTS = [
   ['desktop 1440', 1440, 900, false],
   ['desktop 1024', 1024, 800, false],
@@ -35,6 +38,26 @@ const VIEWPORTS = [
   ['phone 390', 390, 844, true],
   ['small phone 320', 320, 700, true],
 ];
+
+/* The catalog ships empty (products are created in the admin console), but these
+   checks need real product cards to exercise. Planting one through the demo
+   store makes the run cover the same UI regardless of the shipped catalog. */
+const TUTORIAL_PRODUCT = {
+  id: 1, slug: 'tutorial-product', title: 'Tutorial Product', category: 'Websites',
+  summary: 'A representative product used by the browser test suite.',
+  description: 'A representative product used by the browser test suite.',
+  cover: 'web', features: ['One', 'Two'], technologies: ['Python'],
+  status: 'available', price_label: 'Request a quote',
+  github_url: 'https://github.com/AxiaSoft/tutorial-product', published: 1,
+};
+
+async function plantProduct(page) {
+  await page.evaluateOnNewDocument((product) => {
+    try {
+      localStorage.setItem('axia-demo-products-v1', JSON.stringify([product]));
+    } catch (err) { /* storage blocked: the catalog simply stays empty */ }
+  }, TUTORIAL_PRODUCT);
+}
 
 const browser = await puppeteer.launch({
   executablePath: EXEC,
@@ -46,6 +69,7 @@ let checks = 0;
 
 for (const [label, width, height, touch] of VIEWPORTS) {
   const page = await browser.newPage();
+  await plantProduct(page);
   await page.setViewport({ width, height, isMobile: touch, hasTouch: touch });
 
   for (const route of ROUTES) {

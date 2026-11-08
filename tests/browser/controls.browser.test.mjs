@@ -36,6 +36,26 @@ const ROUTES = ['#/', '#/products', '#/services', '#/contact'];
 const ringVisible = (style) =>
   style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
 
+/* The catalog ships empty (products are created in the admin console), but these
+   checks need real product cards to exercise. Planting one through the demo
+   store makes the run cover the same UI regardless of the shipped catalog. */
+const TUTORIAL_PRODUCT = {
+  id: 1, slug: 'tutorial-product', title: 'Tutorial Product', category: 'Websites',
+  summary: 'A representative product used by the browser test suite.',
+  description: 'A representative product used by the browser test suite.',
+  cover: 'web', features: ['One', 'Two'], technologies: ['Python'],
+  status: 'available', price_label: 'Request a quote',
+  github_url: 'https://github.com/AxiaSoft/tutorial-product', published: 1,
+};
+
+async function plantProduct(page) {
+  await page.evaluateOnNewDocument((product) => {
+    try {
+      localStorage.setItem('axia-demo-products-v1', JSON.stringify([product]));
+    } catch (err) { /* storage blocked: the catalog simply stays empty */ }
+  }, TUTORIAL_PRODUCT);
+}
+
 const browser = await puppeteer.launch({
   executablePath: EXEC,
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
@@ -69,6 +89,7 @@ for (const [label, viewport, touch] of [
   ['small phone 320', { width: 320, height: 700 }, true],
 ]) {
   const page = await browser.newPage();
+  await plantProduct(page);
   await page.setViewport({ ...viewport, isMobile: touch, hasTouch: touch });
 
   for (const route of ROUTES) {
@@ -114,6 +135,7 @@ for (const [label, viewport, touch] of [
 // --- keyboard focus must still be clearly visible -------------------------
 {
   const page = await browser.newPage();
+  await plantProduct(page);
   await page.setViewport({ width: 1280, height: 900 });
   await page.goto(BASE + '#/products', { waitUntil: 'networkidle0' });
   await new Promise((resolve) => setTimeout(resolve, 600));

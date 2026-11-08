@@ -31,7 +31,7 @@ SCHEMA = '''
 PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE COLLATE NOCASE, phone TEXT DEFAULT '', password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'customer' CHECK(role IN ('customer','admin')), active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, csrf TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, slug TEXT UNIQUE NOT NULL, title TEXT NOT NULL, category TEXT NOT NULL, summary TEXT NOT NULL, description TEXT NOT NULL, cover TEXT NOT NULL DEFAULT '', features TEXT NOT NULL DEFAULT '[]', technologies TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'available', price_label TEXT NOT NULL DEFAULT 'Request a quote', published INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, slug TEXT UNIQUE NOT NULL, title TEXT NOT NULL, category TEXT NOT NULL, summary TEXT NOT NULL, description TEXT NOT NULL, cover TEXT NOT NULL DEFAULT '', features TEXT NOT NULL DEFAULT '[]', technologies TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'available', price_label TEXT NOT NULL DEFAULT 'Request a quote', github_url TEXT NOT NULL DEFAULT '', published INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY, number TEXT UNIQUE NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), product_id INTEGER NOT NULL REFERENCES products(id), name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT NOT NULL, description TEXT NOT NULL, requirements TEXT NOT NULL DEFAULT '', contact_method TEXT NOT NULL DEFAULT 'Email', status TEXT NOT NULL DEFAULT 'Submitted', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS order_history(id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE, status TEXT NOT NULL, note TEXT DEFAULT '', actor_id INTEGER REFERENCES users(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS tickets(id INTEGER PRIMARY KEY, ref TEXT UNIQUE NOT NULL, user_id INTEGER REFERENCES users(id), email TEXT NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Open', priority TEXT NOT NULL DEFAULT 'Normal', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -46,14 +46,22 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
 '''
 
-SEED_PRODUCTS = [
-    ('northstar-corporate', 'Northstar Corporate', 'Websites', 'A confident digital home for ambitious teams.', 'A responsive corporate website designed to clarify your value and turn visits into conversations. Includes an editorial-ready page system and a polished contact journey.', 'web', '["Responsive pages","CMS-ready structure","Accessibility-minded","Lead capture"]', '["Next.js","TypeScript","PostgreSQL"]', 'available', 'Request a quote'),
-    ('atelier-store', 'Atelier Commerce', 'Websites', 'A considered storefront built for modern retail.', 'A conversion-focused commerce experience with product storytelling, clear navigation and an extensible foundation. Scope and integrations are confirmed during discovery.', 'shopping-bag', '["Product discovery","Mobile-first checkout design","Catalog structure","Analytics-ready"]', '["React","Node.js","PostgreSQL"]', 'available', 'Request a quote'),
-    ('care-clinic', 'Careline Clinic', 'Websites', 'A calmer, more accessible patient experience.', 'A clean healthcare website concept with service information, provider profiles and a booking journey designed around clarity.', 'heart-pulse', '["Service directory","Appointment inquiry","Accessible UI","Privacy-aware forms"]', '["Next.js","TypeScript"]', 'available', 'Request a quote'),
-    ('fieldwork-app', 'Fieldwork Mobile', 'Applications', 'Keep field teams connected and work moving.', 'A cross-platform mobile product concept for task coordination, updates and field operations. Final feature scope is agreed with your team.', 'smartphone', '["Team task flows","Status updates","Offline-first planning","Role-aware screens"]', '["React Native","TypeScript","API"]', 'available', 'Request a quote'),
-    ('orbit-booking', 'Orbit Booking', 'Applications', 'A friction-light booking experience for services.', 'A mobile booking application concept with service discovery, schedule selection and clear customer communication.', 'calendar-days', '["Booking flow","Availability interface","Customer profile","Notifications-ready"]', '["Flutter","REST API"]', 'available', 'Request a quote'),
-    ('aurion', 'AURION', 'Aurion', 'A symbolic showcase for MetaTrader companion software.', 'AURION is presented as a product concept for working with trading robots in the MetaTrader environment. No trading, broker connection, license generation, activation or payment is available in this showcase.', 'orbit', '["MetaTrader-oriented concept","Package presentation","Demo-only experience","No live trading"]', '["Product showcase"]', 'showcase', 'Presentation only'),
-]
+# The shipped catalog is intentionally empty: products are created from the admin
+# console, each pointing at its own GitHub preview link.
+SEED_PRODUCTS = []
+
+
+def migrate(db):
+    """Add columns introduced after a database was first created.
+
+    ``CREATE TABLE IF NOT EXISTS`` never alters an existing table, so a database
+    created before ``github_url`` existed would raise on every product query.
+    Adding the column here keeps old installations working.
+    """
+    cols = {row[1] for row in db.execute('PRAGMA table_info(products)').fetchall()}
+    if 'github_url' not in cols:
+        db.execute("ALTER TABLE products ADD COLUMN github_url TEXT NOT NULL DEFAULT ''")
+
 
 
 def connect():
@@ -97,6 +105,7 @@ def init():
     with connection() as db:
         db.execute('PRAGMA journal_mode=WAL')
         db.executescript(SCHEMA)
+        migrate(db)
         if db.execute('SELECT count(*) FROM products').fetchone()[0] == 0:
             db.executemany(
                 'INSERT INTO products(slug,title,category,summary,description,cover,features,technologies,status,price_label) VALUES(?,?,?,?,?,?,?,?,?,?)',

@@ -30,6 +30,15 @@ class ApiFlowTests(unittest.TestCase):
         conn = db.connect()
         conn.execute('INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,?)',
                      ('Flow Administrator', 'admin@flow.test', app.hash_password('flow admin password'), 'admin'))
+        # The shipped catalog is empty by design (products come from the admin
+        # console), so the journey test's own fixtures are created here.
+        conn.executemany(
+            'INSERT INTO products(slug,title,category,summary,description,features,technologies,status,price_label,github_url) '
+            'VALUES(?,?,?,?,?,?,?,?,?,?)',
+            [('flow-website', 'Flow Website', 'Websites', 'Summary', 'Description', '[]', '[]',
+              'available', 'Request a quote', 'https://github.com/AxiaSoft/flow-website'),
+             ('flow-aurion', 'Flow AURION', 'Aurion', 'Summary', 'Description', '[]', '[]',
+              'showcase', 'Presentation only', '')])
         conn.close()
         cls.servers = []
         cls.server = app.AxiServer(('127.0.0.1', 0), app.Handler)

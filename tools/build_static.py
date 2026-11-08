@@ -49,7 +49,9 @@ DIST = ROOT / 'dist'
 TEXT_SUFFIXES = {'.html', '.css', '.js', '.xml', '.txt', '.webmanifest', '.json', '.svg'}
 OVERRIDES = ROOT / 'tools' / 'static-overrides'
 # Files served by the server build but meaningless (or misleading) when static.
-STATIC_OMIT = {'admin/admin.js', 'admin/admin.css', 'static-config.js'}
+# static-config.js is generated below, never copied. The admin console is copied
+# too: GitHub Pages builds serve it backed by public/demo-backend.js.
+STATIC_OMIT = {'static-config.js'}
 
 # Root-relative references that must become base-aware. Bindings and protocol
 # URLs are handled separately so "//" sequences are never touched.
@@ -309,6 +311,20 @@ def main() -> int:
         f'window.AXIA_STATIC.generatedAt = window.AXIA_STATIC.generatedAt || {json.dumps(generated)};\n'
     )
     (out / 'static-config.js').write_text(config_js, encoding='utf-8')
+
+    # ---- demo backend for the admin console -------------------------------- #
+    # The static build has no Python server, so the console is answered in the
+    # browser by public/demo-backend.js. It is injected ONLY here, never in the
+    # server build, so the real console keeps its server-verified sessions.
+    admin_path = out / 'admin' / 'index.html'
+    if admin_path.is_file():
+        admin_html = admin_path.read_text(encoding='utf-8')
+        demo_tag = f'<script src="{base}demo-backend.js?v=static-1" defer></script>'
+        if 'demo-backend.js' not in admin_html:
+            admin_html = admin_html.replace(
+                f'<script src="{base}admin/admin.js',
+                demo_tag + '\n  <script src="' + base + 'admin/admin.js')
+        admin_path.write_text(admin_html, encoding='utf-8')
 
     # ---- SEO files --------------------------------------------------------- #
     (out / 'sitemap.xml').write_text(build_sitemap(origin, base), encoding='utf-8')

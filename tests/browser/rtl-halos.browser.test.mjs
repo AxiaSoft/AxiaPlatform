@@ -26,7 +26,7 @@ const BASE = process.env.SITE || 'http://127.0.0.1:8000/AxiaPlatform/';
 const EXEC = process.env.CHROME || '/tmp/chromium';
 
 const ROUTES = ['#/', '#/products', '#/services', '#/aurion', '#/about',
-                '#/contact', '#/products/northstar-corporate', '#/legal/privacy'];
+                '#/contact', '#/account', '#/legal/privacy'];
 const HALO_WIDTHS = [320, 360, 390, 414, 540, 768, 820, 1024, 1280, 1440, 1920];
 
 // Text that legitimately stays latin in the Persian build.

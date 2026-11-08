@@ -18,3 +18,12 @@ html[lang="fa"] body,html[lang="fa"] body *{font-family:Vazirmatn,Tahoma,"Segoe 
 :root[data-theme="light"] .sidebar{background:rgba(255,255,255,.88)}
 .logo-mark{padding:3px}.logo-mark img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 3px 7px rgba(41,130,240,.28))}
 .setup-command{font-size:9px;color:var(--faint);line-height:1.7;margin:18px 0 0}.setup-command code{color:var(--blue);border:1px solid var(--line);background:var(--surface3);padding:2px 5px;border-radius:5px;direction:ltr;unicode-bidi:isolate}
+
+/* ---------------------------------------------------------------- demo mode */
+/* Only present in the GitHub Pages build (public/demo-backend.js adds it). */
+.demo-chip{position:fixed;z-index:60;inset-inline-start:14px;bottom:14px;padding:7px 12px;border-radius:99px;
+  font-size:10px;letter-spacing:.02em;color:#0b1220;background:linear-gradient(120deg,#ffd479,#ffc457);
+  box-shadow:0 8px 24px rgba(0,0,0,.28);pointer-events:none;max-width:calc(100vw - 28px)}
+html[lang="fa"] .demo-chip{letter-spacing:0}
+@media(prefers-reduced-motion:no-preference){.demo-chip{animation:demoIn .35s ease both}}
+@keyframes demoIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
