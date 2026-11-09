@@ -33,6 +33,12 @@
     '/api/admin/'
   ];
 
+  /* The assistant runs in the browser on this build (public/xiona.js), so
+     /api/agent has no server to reach. Answering 501 here is honest: the app
+     already has a real answer from the local engine and only asks the server
+     to improve on it. */
+  function isAgent(url) { return url === '/api/agent'; }
+
   // Storefront settings edited in the demo console live next to the products.
   var SETTINGS_KEY = 'axia-demo-settings-v1';
 
@@ -272,6 +278,10 @@
        validates writes), so the adapter only fills in for the storefront. */
     if (path === '/api/site' && !window.AXIA_DEMO_BACKEND) {
       return json({ settings: demoSettings() });
+    }
+
+    if (isAgent(path)) {
+      return json({ error: 'This build answers in the browser.', engine: 'on-site' }, 501);
     }
 
     if (needsBackend(path)) {

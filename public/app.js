@@ -121,44 +121,100 @@ function applyChrome(){
 }
 function render(){let raw=decodeURIComponent(location.hash.slice(1)||'/');let [path,query]=raw.split('?');currentPath=path;if(path==='/products'&&!visible('show_catalog')){app.innerHTML=sectionOff('catalog');return}if(path==='/products'){let params=new URLSearchParams(query||'');productFilter=params.get('category')||productFilter;app.innerHTML=catalog();bindFilters();return}
 if(path==='/'){productFilter='All';app.innerHTML=home();return}if(path==='/about'){app.innerHTML=visible('show_about')?about():sectionOff('about');return}if(path==='/services'){app.innerHTML=visible('show_services')?services():sectionOff('services');return}if(path==='/contact'){app.innerHTML=visible('show_contact')?contact():sectionOff('contact');return}if(path==='/aurion'){app.innerHTML=visible('show_aurion')?aurion():sectionOff('aurion');return}if(path==='/account'){account();return}if(path==='/admin'){location.assign('/admin/');return}if(path==='/privacy'||path==='/terms'||path==='/refunds-policy'){app.innerHTML=policy(path.slice(1));return}if(path.startsWith('/products/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){api('/api/products/'+encodeURIComponent(slug)).then(x=>{products.push(x);app.innerHTML=detail(x)}).catch(()=>{app.innerHTML='<div class="container page-head"><h1>Product not found</h1><a href="#/products">Return to products</a></div>'});return}app.innerHTML=detail(p);return}if(path.startsWith('/preview/')){let p=products.find(x=>x.slug===path.split('/')[2]);app.innerHTML=p?`<div class="container page-head"><a class="back-link" href="#/products/${esc(p.slug)}">← Back to product</a><h1>${esc(p.title)} preview</h1><p>This is a clearly identified concept demonstration, not a live production deployment.</p>${detail(p)}</div>`:'<div class="container page-head"><h1>Preview not found</h1></div>';return}app.innerHTML=home()}
-$('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();loadSite().then(async()=>{applyChrome();applyThemePreference();await loadProducts();await refresh();render();applyChrome()}).catch(async()=>{await loadProducts();await refresh();render();applyChrome()});window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}let btn=e.target.closest('[data-order]');if(btn)orderModal(btn.dataset.order);if(e.target.closest('[data-open-auth]'))openAuth();if(e.target.closest('[data-aurion-presentation]'))toast('AURION is a symbolic showcase; purchasing is not enabled.');const cardEl=e.target.closest('[data-open-product]');if(cardEl&&!e.target.closest('a,button,[data-order]')){location.hash='#/products/'+cardEl.dataset.openProduct}});
+$('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();loadSite().then(async()=>{applyChrome();applyThemePreference();await loadProducts();await refresh();render();applyChrome();teachXiona()}).catch(async()=>{await loadProducts();await refresh();render();applyChrome();teachXiona()});window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();teachXiona();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}let btn=e.target.closest('[data-order]');if(btn)orderModal(btn.dataset.order);if(e.target.closest('[data-open-auth]'))openAuth();if(e.target.closest('[data-aurion-presentation]'))toast('AURION is a symbolic showcase; purchasing is not enabled.');const cardEl=e.target.closest('[data-open-product]');if(cardEl&&!e.target.closest('a,button,[data-order]')){location.hash='#/products/'+cardEl.dataset.openProduct}});
 /* Keyboard parity: a card is focusable and responds to Enter/Space. */
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const cardEl=e.target.closest&&e.target.closest('[data-open-product]');if(!cardEl||e.target.closest('a,button'))return;e.preventDefault();location.hash='#/products/'+cardEl.dataset.openProduct});
-// Small, grounded help layer. It uses only approved static guidance and creates a server-side ticket for human escalation.
+/* Xiona — the assistant behind the launcher.
+
+   It is self-contained: public/xiona.js builds a searchable knowledge base in
+   the browser out of what this site publishes, and answers from it. No key, no
+   outbound request, no model download. The server build uses the same scoring
+   via /api/agent; on the static build this is the only path, and it is enough.
+
+   The knowledge grows as the site grows: every render teaches Xiona the page
+   the visitor is looking at, and the snapshot carries the catalog and the
+   articles. Nothing here reads orders, accounts or payments. */
 const launcher=$('#chat-launcher');launcher.onclick=toggleChat;
 /* The launcher changes shape with the panel: a circle invites a question, the
    pill says who the visitor is already talking to. */
-function syncLauncher(){const l=$('#chat-launcher');if(!l)return;l.classList.toggle('is-open',chatOpen);l.setAttribute('aria-expanded',String(chatOpen));l.setAttribute('aria-label',chatOpen?'Close the Xiona assistant':'Open the Xiona AI assistant')}
-function toggleChat(){chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · AI assistant</strong><small>Answers from this site · human support on request</small></div><button class="close-button" aria-label="Close support">×</button></div><div class="chat-messages" id="chat-messages"><div class="chat-msg">Hello${me?', '+esc(me.name.split(' ')[0]):''}. I can share approved information about AXIASOFT, products and the order process. For account-specific help or a human, I can create a support request.</div></div><div class="chat-chips"><button class="chat-chip">How do I start a project?</button><button class="chat-chip">Tell me about AURION</button><button class="chat-chip">Talk to a person</button></div><div class="chat-disclaimer">This guide does not access orders, change statuses, quote custom prices or confirm payments.</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="Ask a question…" maxlength="500" required><button>Send</button></form>`;document.body.append(panel);$('.close-button',panel).onclick=toggleChat;$$('.chat-chip',panel).forEach(b=>b.onclick=()=>sendChat(b.textContent));$('#chat-form',panel).onsubmit=e=>{e.preventDefault();let input=$('#chat-input');sendChat(input.value);input.value=''}}
+function syncLauncher(){const l=$('#chat-launcher');if(!l)return;l.classList.toggle('is-open',chatOpen);l.setAttribute('aria-expanded',String(chatOpen));l.setAttribute('aria-label',chatOpen?'Close the Xiona assistant':'Open the Xiona assistant')}
+
+/* One engine for the session. It is built lazily on first use so the launcher
+   costs nothing until someone asks something. */
+let xiona=null,xionaPagesSeen={};
+function xionaEngine(){
+  if(xiona)return xiona;
+  if(!window.Xiona){xiona=null;return null}
+  xiona=new window.Xiona.Engine().learnSite({document:document,window:window});
+  return xiona;
+}
+/* Every render re-teaches the assistant the page in front of the visitor, so a
+   post published from the console is answerable without a redeploy. */
+function teachXiona(){
+  const engine=xionaEngine(); if(!engine)return;
+  const source=window.Xiona.readSite({document:document,window:window,path:location.hash});
+  const page=source.pages[0]; if(!page||xionaPagesSeen[page.route])return;
+  xionaPagesSeen[page.route]=true;
+  engine.learn(source);
+}
+
+function toggleChat(){chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · on-site assistant</strong><small>Learns this site · answers on its own · no outside service</small></div><button class="close-button" aria-label="Close support">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">Xiona answers only from what this site publishes. It cannot see orders, payments or your account.</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="Ask about products, services or the process…" maxlength="500" required><button>Send</button></form>`;document.body.append(panel);$('.close-button',panel).onclick=toggleChat;$('#chat-form',panel).onsubmit=e=>{e.preventDefault();let input=$('#chat-input');sendChat(input.value);input.value=''};
+ /* Open with a real answer, not a fixed greeting: the engine names what it can
+    actually answer, which on an empty catalog is honestly "not much yet". */
+ const engine=xionaEngine();
+ const fa=document.documentElement.lang==='fa';
+ const hello=engine?engine.answer(fa?'سلام':'hello').text:(fa?'سلام. من Xiona هستم؛ دستیار همین سایت.':'Hi, I am Xiona, this site\'s assistant.');
+ addChat(hello,'bot');
+ const chips=$('.chat-chips',panel);
+ [fa?'محصولات را معرفی کن':'What products do you offer?',fa?'فرایند سفارش چطور است؟':'How do I start a project?',fa?'AURION چیست؟':'What is AURION?'].forEach(label=>{const b=document.createElement('button');b.className='chat-chip';b.textContent=label;b.onclick=()=>sendChat(label);chips.append(b)});
+ teachXiona();
+}
 function addChat(text,who='bot',thinking=false){let box=$('#chat-messages');if(!box)return null;let node=document.createElement('div');node.className='chat-msg '+(who==='user'?'user':'')+(thinking?' chat-thinking':'');node.textContent=text;box.append(node);box.scrollTop=box.scrollHeight;return node}
-/* Ask the agent. The local keyword answers stay as an offline fallback so the
-   assistant still responds on the static build, where there is no server. */
 const chatHistory=[];
+/* A citation is the one bit of markup the answer carries: a link to the page it
+   came from, so a claim can be checked instead of trusted. */
+function addCitations(list){
+  const box=$('#chat-messages'); if(!box||!list||!list.length)return;
+  const seen={}; const links=[];
+  list.forEach(c=>{ if(!c.route||seen[c.route])return; seen[c.route]=true; links.push(c) });
+  if(!links.length)return;
+  const row=document.createElement('div'); row.className='chat-cites';
+  const fa=document.documentElement.lang==='fa';
+  const label=document.createElement('span'); label.textContent=(fa?'منبع: ':'Source: '); row.append(label);
+  links.slice(0,3).forEach(c=>{
+    const a=document.createElement('a'); a.href=c.route; a.textContent=c.title;
+    a.onclick=()=>{ if(chatOpen)toggleChat() };
+    row.append(a);
+  });
+  box.append(row); box.scrollTop=box.scrollHeight;
+}
+/* Ask the agent. The browser engine is asked first: it is instant, works with
+   no network, and is the same knowledge the server has. /api/agent is used when
+   a model is configured server-side, because a model can phrase an answer
+   better than retrieval can — but it never replaces the local answer, and a
+   failure falls back to it. */
 async function sendChat(text){
  text=String(text||'').trim(); if(!text)return;
  addChat(text,'user'); chatHistory.push({role:'user',text});
  const thinking=addChat('…','bot',true);
- let reply=null;
- try{
-   const res=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},
-     credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6)})});
-   if(res.ok){const data=await res.json();reply=data.answer}
- }catch(e){ /* offline or static build */ }
- if(!reply)reply=offlineAnswer(text);
+ const engine=xionaEngine();
+ const answer=engine?engine.answer(text):null;
+ let reply=answer&&answer.source==='knowledge'?answer.text:null;
+ /* The server is asked only when the local engine has nothing: on the static
+    build there is no server, and on the server build a model can add nothing
+    to an answer the site already contains. */
+ if(!reply){
+   try{
+     const res=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},
+       credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6)})});
+     if(res.ok){const data=await res.json(); if(data&&data.answer)reply=data.answer}
+   }catch(e){ /* static build: the local engine's answer stands */ }
+ }
+ if(!reply)reply=answer?answer.text:'I could not reach my knowledge just now.';
  thinking.remove();
- addChat(reply,'bot'); chatHistory.push({role:'bot',text:reply})}
-
-/* The static build has no /api/agent, so the same curated answers ship as text. */
-function offlineAnswer(text){
- const low=String(text||'').toLowerCase();
- const fa=document.documentElement.lang==='fa';
- const t=(en,faText)=>fa?faText:en;
- if(/aurion|ترید|معامله|آوریون/.test(low))return t("AURION is a concept showcase for software intended to work in the MetaTrader environment. It does not connect to a broker, place trades or activate licences, and nothing about it is financial advice.","AURION یک نمایش مفهومی برای نرم‌افزاری است که قرار است در محیط MetaTrader کار کند. به بروکر وصل نمی‌شود، معامله انجام نمی‌دهد و مجوز فعال نمی‌کند. هیچ بخشی از آن توصیهٔ مالی نیست.");
- if(/price|cost|time|when|delivery|قیمت|هزینه|زمان|تحویل|چقدر/.test(low))return t("Timing and price follow scope, so I cannot quote before the work is understood. Send a request and the team agrees scope and any quotation separately.","زمان و قیمت به دامنهٔ کار بستگی دارد، پس پیش از شناخت کار نمی‌توانم عدد بدهم. درخواست بفرستید تا دامنه و پیش‌فاکتور جداگانه توافق شود.");
- if(/refund|بازپرداخت|لغو/.test(low))return t("A refund can be requested within 14 calendar days of the applicable purchase date, subject to the published terms. Requests are reviewed by a person.","بازپرداخت تا ۱۴ روز تقویمی از تاریخ خرید قابل درخواست است، مشروط به شرایط منتشرشده. درخواست‌ها توسط یک فرد بررسی می‌شوند.");
- if(/human|person|agent|support|انسان|پشتیبان|پشتیبانی/.test(low))return t("Sign in and I can open a support request, or use the Contact page to reach a person directly.","وارد شوید تا درخواست پشتیبانی ثبت کنم، یا از صفحهٔ تماس مستقیم با یک فرد در ارتباط باشید.");
- if(/order|project|start|سفارش|پروژه|شروع/.test(low))return t("Open a product, choose Request this product, and share what you are building. You get a reference number straight away.","یک محصول را باز کنید، «درخواست این محصول» را بزنید و بنویسید چه می‌سازید. بلافاصله شمارهٔ پیگیری می‌گیرید.");
- return t("I do not have an approved answer for that yet. I can help with products, the order process, timing, refunds, AURION, or reaching a person.","هنوز پاسخ تأییدشده‌ای برای این ندارم. می‌توانم دربارهٔ محصولات، روند سفارش، زمان‌بندی، بازپرداخت، AURION یا ارتباط با یک فرد کمک کنم.");}
+ addChat(reply,'bot');
+ if(answer&&answer.citations)addCitations(answer.citations);
+ chatHistory.push({role:'bot',text:reply})}
 // Responsive mobile navigation.
 const mobileMenuButton=$('.mobile-menu');mobileMenuButton.setAttribute('aria-expanded','false');mobileMenuButton.onclick=()=>{if($('.mobile-nav'))return;const rect=mobileMenuButton.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,w=window.innerWidth,h=window.innerHeight,radius=Math.ceil(Math.max(Math.hypot(x,y),Math.hypot(w-x,y),Math.hypot(x,h-y),Math.hypot(w-x,h-y))*1.08);let nav=document.createElement('nav');nav.className='mobile-nav';nav.setAttribute('aria-label','Mobile navigation');nav.style.setProperty('--menu-x',`${x}px`);nav.style.setProperty('--menu-y',`${y}px`);nav.style.setProperty('--menu-radius',`${radius}px`);nav.innerHTML=`<button class="close-button close-mobile" aria-label="Close menu">×</button><a href="#/products">Products</a><a href="#/services">Services</a><a href="#/aurion">AURION</a><a href="#/about">About</a><a href="#/contact">Start a project</a>`;document.body.append(nav);mobileMenuButton.setAttribute('aria-expanded','true');const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:440;let closing=false;const closeMenu=()=>{if(closing)return;closing=true;nav.classList.remove('is-open');mobileMenuButton.setAttribute('aria-expanded','false');window.setTimeout(()=>{nav.remove();mobileMenuButton.focus()},duration)};$('.close-mobile',nav).onclick=closeMenu;$$('a',nav).forEach(a=>a.onclick=closeMenu);nav.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});requestAnimationFrame(()=>{nav.classList.add('is-open');requestAnimationFrame(()=>$('a',nav)?.focus())})};
 window.openAuth=openAuth;

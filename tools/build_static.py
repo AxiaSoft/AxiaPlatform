@@ -168,6 +168,53 @@ def rewrite_references(text: str, base: str) -> str:
     return CSS_URL_RE.sub(replace_url, text)
 
 
+def load_articles(out, DB_PATH=None) -> list[dict]:
+    """Published articles, for the blog pages and for Xiona's knowledge base.
+
+    The same list feeds both, so the assistant can never cite a post the site
+    does not show, or miss one it does.
+    """
+    import sys
+    sys.path.insert(0, str(ROOT / 'server'))
+    try:
+        import blog as blog_module  # noqa: WPS433 - the build stays standalone
+    except Exception:
+        blog_module = None
+
+    # data/articles.json is the source of truth for the static build: it is
+    # committed, so a checkout with no database still publishes the same
+    # articles. A database is only consulted when that file is absent (a local
+    # build straight from the console's data).
+    articles = []
+    source = ROOT / 'data' / 'articles.json'
+    if not source.is_file():
+        source = out / 'data' / 'articles.json'
+    if source.is_file():
+        try:
+            articles = json.loads(source.read_text(encoding='utf-8')) or []
+        except Exception:
+            articles = []
+    if not articles and blog_module is not None:
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(DB_PATH))
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM articles WHERE status='published' "
+                                "ORDER BY COALESCE(published_at, created_at) DESC, id DESC").fetchall()
+            articles = [blog_module.article_out(r, full=True) for r in rows]
+            conn.close()
+        except Exception:
+            articles = []
+    if not articles:
+        try:
+            fallback = out / 'data' / 'articles.json'
+            if fallback.is_file() and fallback != source:
+                articles = json.loads(fallback.read_text(encoding='utf-8')) or []
+        except Exception:
+            articles = []
+    return articles
+
+
 def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
     """Render /blog/ (and any exported articles) as static HTML."""
     import sys
@@ -375,6 +422,108 @@ def unclosed_scripts(html: str) -> list[str]:
     return dangling
 
 
+XIONA_PAGES = [
+    # (function in app.js, route, title, policy key, aliases)
+    # The aliases are the words a visitor actually types, in both languages.
+    # The page copy is English, so a Persian question needs these to reach it.
+    ('services', '#/services', 'Services', None,
+     'خدمات سرویس طراحی توسعه وب اپلیکیشن نرم‌افزار services development design'),
+    ('about', '#/about', 'About AXIASOFT', None,
+     'درباره شرکت تیم ما آکسیا سافت about company team who are you'),
+    ('contact', '#/contact', 'Start a project', None,
+     'تماس سفارش درخواست پروژه شروع ثبت contact order request project start quote'),
+    ('policy', '#/privacy', 'Privacy policy', 'privacy',
+     'حریم خصوصی داده اطلاعات privacy data'),
+    ('policy', '#/terms', 'Terms and conditions', 'terms',
+     'قوانین شرایط استفاده terms conditions'),
+    ('policy', '#/refunds-policy', 'Refund and return policy', 'refunds-policy',
+     'بازپرداخت لغو استرداد refund cancellation'),
+]
+
+# The page copy lives inside template strings in app.js, so the build renders
+# those functions in a tiny JS sandbox and stores the text. Xiona then learns the
+# same sentences a visitor reads - there is no second copy of the copy.
+XIONA_RENDERER = r"""
+const fs = require('fs');
+const vm = require('vm');
+const src = fs.readFileSync(process.argv[2], 'utf8');
+const products = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+const settings = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
+const pages = JSON.parse(process.argv[5]);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+  (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const wanted = [...new Set(pages.map((p) => p[0]))];
+let code = '';
+for (const fn of wanted) {
+  const at = src.indexOf('function ' + fn + '(');
+  if (at < 0) continue;
+  let end = src.length;
+  for (const marker of ['\nfunction ', '\n/*']) {
+    const hit = src.indexOf(marker, at + 1);
+    if (hit > 0 && hit < end) end = hit;
+  }
+  code += src.slice(at, end) + '\n';
+}
+const sandbox = {products, site: settings, esc, AXIA_T: (s) => s,
+  document: {documentElement: {lang: 'fa'}}, location: {hash: '#/'}, console};
+vm.createContext(sandbox);
+vm.runInContext(code + '\nthis.__pages = {' + wanted.map((fn) => fn + ': typeof ' + fn + " === 'function' ? " + fn + ' : null').join(', ') + '};', sandbox);
+const out = [];
+for (const [fn, route, title, key, aliases] of pages) {
+  const callable = sandbox.__pages[fn];
+  if (!callable) continue;
+  let html;
+  try { html = key ? callable(key) : callable(); } catch (e) { continue; }
+  // Block-level tags must become a separator, not nothing: replacing them with
+  // '' glues a heading to the paragraph after it ('support AURION is...').
+  // </p> and friends separate sentences; <br> only separates lines, and inside
+  // a headline it splits a phrase ('From first idea / to ready to grow').
+  const text = String(html)
+    .replace(/<\/(p|h[1-6]|li|div|section|article|td|th|tr)>/gi, '. ')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\.\s*\.+/g, '.')
+    .replace(/(^|[\.!?]\s*)\.+/g, '$1')
+    .trim();
+  if (text.length > 80) out.push({topic: key || fn, route, title, text, aliases: aliases || ''});
+}
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+def xiona_pages(out, base: str, settings_path: Path) -> list[dict]:
+    """Render the SPA's page copy and return it as knowledge chunks.
+
+    The assistant must be able to answer "how does a refund work?" on a static
+    build, where no page has been rendered yet. Rather than duplicate the site
+    copy in a second file, the build evaluates the same functions the browser
+    runs and keeps their text.
+    """
+    import subprocess
+    script = ROOT / 'tools' / '_xiona_pages.js'
+    script.write_text(XIONA_RENDERER, encoding='utf-8')
+    try:
+        result = subprocess.run(
+            ['node', str(script), str(PUBLIC / 'app.js'),
+             str(out / 'data' / 'products.json'), str(settings_path),
+             json.dumps(XIONA_PAGES)],
+            capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            print(f'  xiona : page copy skipped ({result.stderr.strip()[:120]})', file=sys.stderr)
+            return []
+        pages = json.loads(result.stdout or '[]')
+    except Exception as exc:
+        print(f'  xiona : page copy skipped ({type(exc).__name__})', file=sys.stderr)
+        return []
+    finally:
+        script.unlink(missing_ok=True)
+    # Routes are stored root-relative with a hash; the site is a hash router, so
+    # they work unchanged under any sub-path.
+    print(f'  xiona : {len(pages)} page(s) of site copy indexed')
+    return pages
+
+
 def inject_adapter(html: str, base: str) -> str:
     """Insert the static adapter just before the app bundle."""
     tag = f'<script src="{base}static-adapter.js?v=static-1" defer></script>'
@@ -484,6 +633,7 @@ def main() -> int:
         print(f'  gated  : {overrides} static override(s) applied (admin console)')
 
     # ---- static catalog snapshot ------------------------------------------ #
+    _xiona_articles = load_articles(out, Path(getattr(args, 'db', '') or ''))
     # Covers are stored root-absolute ('/brand/arya-logo.png'). On Pages the app
     # lives under a sub-path, so the browser has to ask for
     # '/AxiaPlatform/brand/...'. Prefixing here keeps the stored data unchanged
@@ -499,21 +649,11 @@ def main() -> int:
                 product['cover'] = prefix + cover
     data_dir = out / 'data'
     data_dir.mkdir(exist_ok=True)
-    (data_dir / 'products.json').write_text(
-        json.dumps(products, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    generated = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    snapshot_js = (
-        '/* Generated by tools/build_static.py — static catalog snapshot. */\n'
-        'window.AXIA_STATIC = window.AXIA_STATIC || {};\n'
-        f'window.AXIA_STATIC.generatedAt = "{generated}";\n'
-        f'window.AXIA_STATIC.products = {json.dumps(products, ensure_ascii=False)};\n'
-    )
-    (data_dir / 'products.js').write_text(snapshot_js, encoding='utf-8')
-
     # ---- storefront settings snapshot ------------------------------------- #
     # The browser build has no API, so the settings the admin console edits are
     # shipped alongside the products. The same document answers GET /api/site in
     # the Python server, so the storefront has one shape to read in both builds.
+    # Written first because Xiona renders the page copy with these settings.
     try:
         sys.path.insert(0, str(ROOT / 'server'))
         import site_settings as settings_module
@@ -522,6 +662,28 @@ def main() -> int:
         settings = {}
     (data_dir / 'settings.json').write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    (data_dir / 'products.json').write_text(
+        json.dumps(products, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    # The page copy is rendered from the same products.json the storefront
+    # loads, so it is read after that file exists.
+    _xiona_pages = xiona_pages(out, base, data_dir / 'settings.json')
+    generated = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    snapshot_js = (
+        '/* Generated by tools/build_static.py — static catalog snapshot. */\n'
+        'window.AXIA_STATIC = window.AXIA_STATIC || {};\n'
+        f'window.AXIA_STATIC.generatedAt = "{generated}";\n'
+        f'window.AXIA_STATIC.products = {json.dumps(products, ensure_ascii=False)};\n'
+    )
+    # Xiona learns from the same snapshot the storefront renders, so an answer
+    # can never cite a product or post the visitor cannot open.
+    snapshot_js += (
+        f'window.AXIA_STATIC.articles = '
+        f'{json.dumps(_xiona_articles, ensure_ascii=False)};\n'
+        f'window.AXIA_STATIC.pages = '
+        f'{json.dumps(_xiona_pages, ensure_ascii=False)};\n'
+    )
+    (data_dir / 'products.js').write_text(snapshot_js, encoding='utf-8')
+
     # ---- blog ------------------------------------------------------------- #
     # The published site is static, so there is no article database here. If the
     # source tree carries published articles (data/articles.json, written by the
