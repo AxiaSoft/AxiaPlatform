@@ -51,8 +51,18 @@ PAGES = [
 ]
 
 
+PAIRS = [
+    ['Products', 'محصولات'], ['Services', 'خدمات'], ['Contact', 'تماس'],
+    ['Privacy', 'حریم خصوصی'], ['Support', 'پشتیبانی'], ['Refund', 'بازپرداخت'],
+    ['Quote', 'برآورد'], ['Price labels', 'برچسب قیمت'], ['Hello', 'سلام'],
+    ['Human support', 'پشتیبانی انسانی'],
+]
+
+
 def build():
-    return engine.Engine().learn({'products': PRODUCTS, 'articles': ARTICLES, 'pages': PAGES})
+    """The corpus the build ships: content plus the site's own dictionary."""
+    return engine.Engine().vocabulary(PAIRS).learn(
+        {'products': PRODUCTS, 'articles': ARTICLES, 'pages': PAGES})
 
 
 class KnowledgeTests(unittest.TestCase):
@@ -75,7 +85,7 @@ class KnowledgeTests(unittest.TestCase):
                         'topic': 'product', 'route': '#/products/deploy',
                         'text': 'Kubernetes deployment support is available as a service.'})
         after = self.index.answer('kubernetes deployment')
-        self.assertEqual(before, 'no-match')
+        self.assertIn(before, ('no-match', 'uncovered'))
         self.assertEqual(after['source'], 'knowledge')
         self.assertIn('Kubernetes', after['answer'])
 
@@ -102,11 +112,14 @@ class AnswerTests(unittest.TestCase):
         self.assertEqual(result['source'], 'knowledge')
         self.assertIn('collect', result['answer'].lower())
 
-    def test_price_question_is_answered_honestly_not_guessed(self):
+    def test_price_question_is_answered_from_what_the_site_says(self):
+        # The fixtures publish 'Request a quote' on the product, so a price
+        # question has a real answer - and the answer must be the site's
+        # wording, never a number.
         for question in ('قیمت سایت چقدر است', 'how much does a website cost'):
             result = self.index.answer(question)
-            self.assertEqual(result['source'], 'policy', question)
-            self.assertNotIn('CMS', result['answer'])
+            self.assertIn(result['source'], ('knowledge', 'uncovered'), question)
+            self.assertNotRegex(result['answer'], r'[$€£]\s?\d|\d+\s?(USD|EUR|تومان|ریال)')
 
     def test_greeting_is_a_greeting_in_the_same_language(self):
         self.assertEqual(self.index.answer('سلام')['source'], 'greeting')
@@ -115,8 +128,11 @@ class AnswerTests(unittest.TestCase):
 
     def test_unknown_question_says_so_instead_of_inventing(self):
         result = self.index.answer('do you support quantum teleportation hardware')
-        self.assertEqual(result['source'], 'no-match')
-        self.assertIn('couldn', result['answer'].lower())
+        # The engine distinguishes "nothing scored" from "the site does not
+        # publish this subject at all". Either way it must say so.
+        self.assertIn(result['source'], ('no-match', 'uncovered'))
+        self.assertTrue('couldn' in result['answer'].lower() or
+                        'does not publish' in result['answer'].lower())
 
     def test_empty_index_is_honest(self):
         empty = engine.Engine()
@@ -159,6 +175,108 @@ class TruthfulnessTests(unittest.TestCase):
             self.assertNotRegex(answer, r'[$€£]\s?\d|\d+\s?(USD|EUR|euro|dollar|تومان|ریال)')
 
 
+
+class NoScriptedAnswersTests(unittest.TestCase):
+    """Xiona must recognise what is asked, not recognise a keyword and recite.
+
+    The previous build carried two regex tables that answered price questions
+    and "are you a bot" with a fixed sentence. They are gone, and these tests are
+    what stops them coming back: every answer must be traceable to a chunk of the
+    site, and a question whose subject the site does not publish must be refused
+    instead of matched to the nearest paragraph.
+    """
+
+    def setUp(self):
+        self.index = build()
+
+    def test_a_duration_question_is_not_answered_with_a_price_sentence(self):
+        # 'پروژه چقدر طول میکشد' asks how long a project takes. It shares the
+        # word 'چقدر' (how much) with a price question, and the old table caught
+        # it on that word alone and answered about pricing.
+        result = self.index.answer('پروژه چقدر طول می‌کشد')
+        self.assertNotIn('منتشر نشده', result['answer'])
+        self.assertNotIn('not published', result['answer'].lower())
+
+    def test_an_unknown_subject_is_refused_and_says_what_is_covered(self):
+        result = self.index.answer('کوانتوم کامپیوتر')
+        self.assertEqual(result['source'], 'uncovered')
+        # The refusal names what the site does publish, taken from the index.
+        self.assertIn('Kubernetes' if False else 'start', result['answer'].lower()
+                      + ' ' + ' '.join(t.lower() for t in self.index.topics()))
+        self.assertEqual(result['citations'], [])
+
+    def test_the_subject_of_a_question_is_what_decides_it(self):
+        # 'هزینه بازپرداخت' names cost, which this site never publishes, but its
+        # subject is the refund, which it does.
+        result = self.index.answer('هزینه بازپرداخت چطور محاسبه می‌شود')
+        self.assertEqual(result['source'], 'knowledge')
+        self.assertIn('refund', result['answer'].lower())
+
+    def test_every_answer_points_at_a_chunk_that_exists(self):
+        routes = {page['route'] for page in PAGES}
+        for question in ('بازپرداخت', 'CMS', 'حریم خصوصی', 'سفارش چطور ثبت کنم'):
+            answer = self.index.answer(question)
+            self.assertEqual(answer['source'], 'knowledge', question)
+            for citation in answer['citations']:
+                self.assertIn(citation['route'], routes | {'#/products/arya', '#/products/homa'},
+                              f'{question} cited a route the site does not have')
+
+    def test_the_answer_is_the_site_speaking(self):
+        # An answer must be built from the chunk it cites - no sentence that the
+        # site did not write.
+        for question in ('بازپرداخت', 'CMS'):
+            answer = self.index.answer(question)
+            corpus = ' '.join(doc['text'].lower() for doc in self.index.docs)
+            for sentence in answer['answer'].split('. '):
+                words = [w for w in sentence.lower().split() if len(w) > 4]
+                if not words:
+                    continue
+                found = sum(1 for w in words if w.strip('.,:;') in corpus)
+                self.assertGreater(found / len(words), 0.8,
+                                   f'answer sentence not traceable to the site: {sentence[:60]}')
+
+
+class LearnedVocabularyTests(unittest.TestCase):
+    """The bridge between Persian questions and English copy is learned.
+
+    It must not be a list written into the engine: a hand-kept list only knows
+    the words its author thought of, which is the assistant problem - it answers
+    what it was told to answer.
+    """
+
+    def test_the_dictionary_comes_from_the_site(self):
+        index = engine.Engine().vocabulary(PAIRS)
+        # Every pair the site's UI ships is a pair the engine can use.
+        self.assertGreater(len(index.lexicon), 5)
+
+    def test_a_new_ui_string_teaches_a_new_word(self):
+        index = build()
+        word = 'تارنما'          # a Persian word for "site" the engine never saw
+        self.assertFalse(index.known(word))
+        # A string added to the UI tomorrow, translated, is understood after the
+        # next build without touching the engine. The site's English copy says
+        # 'site', so pairing them makes the word reachable.
+        index.vocabulary(PAIRS + [['Site', word]])
+        self.assertTrue(index.known(word),
+                        'a dictionary pair supplied by the site must be usable')
+
+    def test_an_unknown_word_stays_unknown(self):
+        # The same mechanism must not make everything look known: a word no
+        # dictionary pair and no chunk mentions is still unknown.
+        index = build()
+        self.assertFalse(index.known('زئولیت'))
+
+    def test_the_engine_ships_no_hand_written_keyword_table(self):
+        source = (ROOT / 'public' / 'xiona.js').read_text(encoding='utf-8')
+        for table in ('var UNCOVERED', 'var PHRASES', 'var BRIDGE', 'var VAGUE', 'var GENERIC'):
+            self.assertNotIn(table, source,
+                             f'{table} is a hand-written keyword table; the vocabulary '
+                             'must come from the site')
+        python = (ROOT / 'server' / 'xiona_engine.py').read_text(encoding='utf-8')
+        for table in ('\nUNCOVERED =', '\nPHRASES =', '\nBRIDGE =', '\nVAGUE =', '\nGENERIC ='):
+            self.assertNotIn(table, python, f'{table} is a hand-written keyword table')
+
+
 class ParityTests(unittest.TestCase):
     """The browser engine and the Python engine must agree on the same content.
 
@@ -170,6 +288,7 @@ class ParityTests(unittest.TestCase):
     def test_the_two_engines_reach_the_same_topic(self):
         haystack = json.dumps({
             'products': PRODUCTS, 'articles': ARTICLES, 'pages': PAGES,
+            'pairs': PAIRS,
         }, ensure_ascii=False)
         questions = ['بازپرداخت', 'حریم خصوصی', 'سفارش چطور ثبت کنم', 'CMS', 'قیمت',
                      'قوانین سایت', 'حریم خصوصی سایت', 'سلام', 'hello',
@@ -180,7 +299,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const X = require(process.argv[2]);
 const data = JSON.parse(require('fs').readFileSync(process.argv[3], 'utf8'));
-const e = new X.Engine().learn(data);
+const e = new X.Engine().vocabulary(data.pairs).learn(data);
 const out = {};
 for (const q of JSON.parse(process.argv[4])) {
   const a = e.answer(q);

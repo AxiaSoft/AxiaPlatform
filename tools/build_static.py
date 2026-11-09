@@ -491,6 +491,44 @@ for (const [fn, route, title, key, aliases] of pages) {
 process.stdout.write(JSON.stringify(out));
 """
 
+def xiona_dictionary(source: Path) -> list[list[str]]:
+    """The site's own Persian/English dictionary, as word-pair candidates.
+
+    Xiona answers a Persian question against English page copy. The words that
+    translate one into the other are not written into the assistant: the UI
+    already ships a dictionary (public/i18n.js) so a Persian reader can use the
+    same product, and that dictionary is the site's own statement about what
+    means what. Handing it over means a string added to the UI tomorrow is
+    understood by the assistant after the next build, with no code change here
+    and no list to keep in step.
+
+    Only the pairs are extracted; the alignment into a word lexicon happens in
+    the engine, once, on both sides (JS and Python).
+    """
+    if not source.exists():
+        return []
+    text = source.read_text(encoding='utf-8')
+    try:
+        start = text.index('const fa={') + len('const fa={')
+        end = text.index('\n};', start)
+    except ValueError:
+        return []
+    block = text[start:end]
+    pairs, seen = [], set()
+    for left, right in re.findall(r"""['"]([^'"]*)['"]\s*:\s*['"]([^'"]*)['"]""", block):
+        left = left.strip()
+        right = right.strip()
+        if not left or not right or left == right:
+            continue
+        if not re.search(r'[\u0600-\u06FF]', right):
+            continue
+        key = (left.lower(), right)
+        if key in seen:
+            continue
+        seen.add(key)
+        pairs.append([left, right])
+    return pairs
+
 
 def xiona_pages(out, base: str, settings_path: Path) -> list[dict]:
     """Render the SPA's page copy and return it as knowledge chunks.
@@ -676,11 +714,14 @@ def main() -> int:
     )
     # Xiona learns from the same snapshot the storefront renders, so an answer
     # can never cite a product or post the visitor cannot open.
+    _xiona_pairs = xiona_dictionary(PUBLIC / 'i18n.js')
     snapshot_js += (
         f'window.AXIA_STATIC.articles = '
         f'{json.dumps(_xiona_articles, ensure_ascii=False)};\n'
         f'window.AXIA_STATIC.pages = '
         f'{json.dumps(_xiona_pages, ensure_ascii=False)};\n'
+        f'window.AXIA_STATIC.pairs = '
+        f'{json.dumps(_xiona_pairs, ensure_ascii=False)};\n'
     )
     (data_dir / 'products.js').write_text(snapshot_js, encoding='utf-8')
 
