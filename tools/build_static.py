@@ -73,10 +73,18 @@ SITEMAP_ROUTES = [
 # The adapter must be registered before app.js, so it is inserted immediately
 # before the app bundle's script tag.
 def app_script_re(base: str) -> re.Pattern:
-    return re.compile(r'(\s*)<script src="' + re.escape(base) + r'app\.js[^"]*" defer></script>')
+    """Match the app bundle tag with or without the base prefix applied yet.
+
+    inject_adapter() runs on the shell before rewrite_references(), so src is
+    still '/app.js' at that point. Matching only the prefixed form silently fell
+    through to the end-of-body fallback - which put the adapter *after* the app
+    bundle, the one order that cannot work.
+    """
+    return re.compile(
+        r'(\s*)<script src="(?:' + re.escape(base) + r'|/)?app\.js[^"]*" defer></script>')
 
 
-def read_catalog(db_path: Path) -> list[dict]:
+def read_catalog(db_path: Path, base: str = '/') -> list[dict]:
     """Return published products, falling back to the bundled seed data."""
     rows: list[dict] = []
     if db_path.is_file():
@@ -93,7 +101,24 @@ def read_catalog(db_path: Path) -> list[dict]:
             finally:
                 conn.close()
         except sqlite3.Error as exc:
-            print(f'  database not readable ({exc}); using seed catalog', file=sys.stderr)
+            print(f'  database not readable ({exc}); using the committed catalog', file=sys.stderr)
+    if not rows:
+        # The database is gitignored, so a clean checkout has no catalog. The
+        # published build at the repo root is committed, and its snapshot is
+        # what the live site currently serves - reuse it rather than shipping an
+        # empty catalog. Undo the base prefix the previous build added, so the
+        # next build re-applies it once instead of stacking it.
+        published = ROOT / 'data' / 'products.json'
+        if published.is_file():
+            try:
+                rows = json.loads(published.read_text(encoding='utf-8')) or []
+            except Exception:
+                rows = []
+            prefix = base.rstrip('/')
+            for row in rows:
+                cover = row.get('cover')
+                if isinstance(cover, str) and prefix and cover.startswith(prefix + '/'):
+                    row['cover'] = cover[len(prefix):]
     if not rows:
         try:
             sys.path.insert(0, str(ROOT / 'server'))
@@ -334,6 +359,22 @@ def build_404(base: str) -> str:
     return rewrite_references(source.read_text(encoding='utf-8'), base)
 
 
+def unclosed_scripts(html: str) -> list[str]:
+    """Return <script src> tags that no </script> ever closes.
+
+    An unclosed <script> swallows every tag after it as raw text, so one missing
+    </script> in the shell silently kills the next bundle - that is exactly how
+    the static adapter once vanished from an otherwise green build.
+    """
+    tags = list(re.finditer(r'<script\b[^>]*\bsrc="([^"]+)"[^>]*>', html))
+    dangling: list[str] = []
+    for index, tag in enumerate(tags):
+        stop = tags[index + 1].start() if index + 1 < len(tags) else len(html)
+        if '</script>' not in html[tag.end():stop]:
+            dangling.append(tag.group(1))
+    return dangling
+
+
 def inject_adapter(html: str, base: str) -> str:
     """Insert the static adapter just before the app bundle."""
     tag = f'<script src="{base}static-adapter.js?v=static-1" defer></script>'
@@ -341,7 +382,10 @@ def inject_adapter(html: str, base: str) -> str:
         return html
     match = app_script_re(base).search(html)
     if match:
-        return html[:match.start()] + match.group(1) + tag + html[match.start():]
+        # Insert after the tag's indentation but before the tag itself, so the
+        # adapter still runs first: match.start() is the whitespace, not the tag.
+        at = match.start(1) + len(match.group(1))
+        return html[:at] + tag + html[at:]
     # Fall back to the end of the body so the adapter still runs.
     return html.replace('</body>', f'  {tag}\n</body>')
 
@@ -388,7 +432,7 @@ def main() -> int:
     print(f'  base   : {base}')
     print(f'  output : {out}')
 
-    products = read_catalog(Path(args.db))
+    products = read_catalog(Path(args.db), base)
     print(f'  catalog: {len(products)} published product(s)')
 
     # ---- static-only overrides (e.g. the admin gate page) ------------------ #
@@ -440,6 +484,19 @@ def main() -> int:
         print(f'  gated  : {overrides} static override(s) applied (admin console)')
 
     # ---- static catalog snapshot ------------------------------------------ #
+    # Covers are stored root-absolute ('/brand/arya-logo.png'). On Pages the app
+    # lives under a sub-path, so the browser has to ask for
+    # '/AxiaPlatform/brand/...'. Prefixing here keeps the stored data unchanged
+    # and means the page never has to second-guess a product image path.
+    # Idempotent: the build is run with --out . so the committed root build is
+    # the input of the next one. Prefixing twice would bake in
+    # '/AxiaPlatform/AxiaPlatform/...' and break every product image.
+    prefix = base.rstrip('/')
+    for product in products:
+        cover = product.get('cover')
+        if isinstance(cover, str) and cover.startswith('/') and not cover.startswith('//'):
+            if prefix and not cover.startswith(prefix + '/'):
+                product['cover'] = prefix + cover
     data_dir = out / 'data'
     data_dir.mkdir(exist_ok=True)
     (data_dir / 'products.json').write_text(
@@ -497,6 +554,13 @@ def main() -> int:
     html = inject_adapter(html, base)
     snapshot_tag = f'<script src="{base}static-config.js?v=static-1" defer></script>\n  '
     html = html.replace('<script src="' + base + 'data/products.js', snapshot_tag + '<script src="' + base + 'data/products.js')
+    # A missing </script> in the shell silently disables every bundle after it.
+    # Fail the build instead of shipping a page whose adapter never runs.
+    dangling = unclosed_scripts(html)
+    if dangling:
+        raise SystemExit(
+            'index.html has unclosed <script src> tag(s): ' + ', '.join(dangling)
+            + ' - an unclosed tag swallows the tags after it as text.')
     index_path.write_text(html, encoding='utf-8')
 
     config_js = (

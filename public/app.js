@@ -121,7 +121,7 @@ function applyChrome(){
 }
 function render(){let raw=decodeURIComponent(location.hash.slice(1)||'/');let [path,query]=raw.split('?');currentPath=path;if(path==='/products'&&!visible('show_catalog')){app.innerHTML=sectionOff('catalog');return}if(path==='/products'){let params=new URLSearchParams(query||'');productFilter=params.get('category')||productFilter;app.innerHTML=catalog();bindFilters();return}
 if(path==='/'){productFilter='All';app.innerHTML=home();return}if(path==='/about'){app.innerHTML=visible('show_about')?about():sectionOff('about');return}if(path==='/services'){app.innerHTML=visible('show_services')?services():sectionOff('services');return}if(path==='/contact'){app.innerHTML=visible('show_contact')?contact():sectionOff('contact');return}if(path==='/aurion'){app.innerHTML=visible('show_aurion')?aurion():sectionOff('aurion');return}if(path==='/account'){account();return}if(path==='/admin'){location.assign('/admin/');return}if(path==='/privacy'||path==='/terms'||path==='/refunds-policy'){app.innerHTML=policy(path.slice(1));return}if(path.startsWith('/products/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){api('/api/products/'+encodeURIComponent(slug)).then(x=>{products.push(x);app.innerHTML=detail(x)}).catch(()=>{app.innerHTML='<div class="container page-head"><h1>Product not found</h1><a href="#/products">Return to products</a></div>'});return}app.innerHTML=detail(p);return}if(path.startsWith('/preview/')){let p=products.find(x=>x.slug===path.split('/')[2]);app.innerHTML=p?`<div class="container page-head"><a class="back-link" href="#/products/${esc(p.slug)}">← Back to product</a><h1>${esc(p.title)} preview</h1><p>This is a clearly identified concept demonstration, not a live production deployment.</p>${detail(p)}</div>`:'<div class="container page-head"><h1>Preview not found</h1></div>';return}app.innerHTML=home()}
-$('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();loadSite().then(async()=>{applyChrome();applyThemePreference();await loadProducts();await refresh();render()}).catch(async()=>{await loadProducts();await refresh();render()});window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}let btn=e.target.closest('[data-order]');if(btn)orderModal(btn.dataset.order);if(e.target.closest('[data-open-auth]'))openAuth();if(e.target.closest('[data-aurion-presentation]'))toast('AURION is a symbolic showcase; purchasing is not enabled.');const cardEl=e.target.closest('[data-open-product]');if(cardEl&&!e.target.closest('a,button,[data-order]')){location.hash='#/products/'+cardEl.dataset.openProduct}});
+$('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();loadSite().then(async()=>{applyChrome();applyThemePreference();await loadProducts();await refresh();render();applyChrome()}).catch(async()=>{await loadProducts();await refresh();render();applyChrome()});window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}let btn=e.target.closest('[data-order]');if(btn)orderModal(btn.dataset.order);if(e.target.closest('[data-open-auth]'))openAuth();if(e.target.closest('[data-aurion-presentation]'))toast('AURION is a symbolic showcase; purchasing is not enabled.');const cardEl=e.target.closest('[data-open-product]');if(cardEl&&!e.target.closest('a,button,[data-order]')){location.hash='#/products/'+cardEl.dataset.openProduct}});
 /* Keyboard parity: a card is focusable and responds to Enter/Space. */
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const cardEl=e.target.closest&&e.target.closest('[data-open-product]');if(!cardEl||e.target.closest('a,button'))return;e.preventDefault();location.hash='#/products/'+cardEl.dataset.openProduct});
 // Small, grounded help layer. It uses only approved static guidance and creates a server-side ticket for human escalation.
@@ -219,6 +219,23 @@ function brandName(brand) {
 /* Applying a brand is deliberately limited to presentation: the logo, the
    accent variables and the document title. Nothing about the product data, the
    order flow or the account changes. */
+/* Asset URLs must keep whatever prefix the site is served under. GitHub Pages
+   serves this build from /AxiaPlatform/, so a hard-coded "/brand/x.png" 404s
+   there — which is exactly what happened to the header logo. */
+function assetUrl(path) {
+  const clean = String(path || '').replace(/^\//, '');
+  const base = (window.AXIA_STATIC && window.AXIA_STATIC.base)
+    || document.currentScript?.dataset?.base
+    || '';
+  if (base) return base.replace(/\/$/, '') + '/' + clean;
+  // Fall back to the deployed sub-path, derived from this page's own address.
+  const marker = '/blog/';
+  const here = location.pathname;
+  if (here.includes('/admin/')) return here.slice(0, here.indexOf('/admin/') + 1) + clean;
+  if (here.includes(marker)) return here.slice(0, here.indexOf(marker) + 1) + clean;
+  return '/' + clean;
+}
+
 function applyBrand() {
   const brand = currentBrand();
   const root = document.documentElement;
@@ -227,9 +244,11 @@ function applyBrand() {
     root.style.removeProperty('--brand-accent');
     root.style.removeProperty('--brand-accent-soft');
     const mark = $('#brand-mark img');
-    if (mark) mark.src = '/brand/axiasoft-original.png';
+    if (mark) mark.src = assetUrl('brand/axiasoft-original.png');
     const word = $('#brand-wordmark');
     if (word) word.hidden = false;
+    const name = $('#brand-name');
+    if (name) { name.hidden = true; name.textContent = ''; }
     const label = $('.brand-eyebrow');
     if (label) label.textContent = 'AXIASOFT';
     document.title = 'AXIASOFT — ' + AXIA_T('Thoughtful software. Built for what comes next.');
@@ -239,11 +258,14 @@ function applyBrand() {
   root.style.setProperty('--brand-accent', brand.accent);
   root.style.setProperty('--brand-accent-soft', brand.accentSoft);
   const mark = $('#brand-mark img');
-  if (mark && !mark.src.endsWith(brand.mark)) mark.src = '/' + brand.mark;
-  // The brand's own lockup already carries its wordmark, so the AXIASOFT one
-  // would be a second, competing name in the same header.
+  if (mark && !mark.src.endsWith(brand.mark)) mark.src = assetUrl(brand.mark);
+  // The brand marks are bare symbols (no lettering), so the AXIASOFT wordmark
+  // is swapped for the brand's own name rather than simply hidden — hiding it
+  // left a header with a bird and no company name at all.
   const word = $('#brand-wordmark');
   if (word) word.hidden = true;
+  const name = $('#brand-name');
+  if (name) { name.hidden = false; name.textContent = brandName(brand); }
   const label = $('.brand-eyebrow');
   if (label) label.textContent = brandName(brand);
   document.title = brandName(brand) + ' — ' + AXIA_T('Thoughtful software. Built for what comes next.');
@@ -307,7 +329,7 @@ function brandStrip() {
     return `<button class="brand-pick${isActive ? ' is-active' : ''}" type="button"
               data-brand-pick="${esc(b.id)}" aria-pressed="${isActive ? 'true' : 'false'}"
               title="${esc(fa ? b.taglineFa : b.tagline)}">
-        <span class="brand-pick-logo"><img src="/${esc(b.logo)}" alt="${esc(fa ? b.nameFa : b.name)}" draggable="false"></span>
+        <span class="brand-pick-logo"><img src="${esc(assetUrl(b.logo))}" alt="${esc(fa ? b.nameFa : b.name)}" draggable="false"></span>
         <span class="brand-pick-copy">
           <strong>${esc(fa ? b.nameFa : b.name)}</strong>
           <small>${esc(fa ? b.taglineFa : b.tagline)}</small>
