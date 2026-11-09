@@ -66,15 +66,31 @@ class CoverPathTests(unittest.TestCase):
         cover = '/brand/arya-logo.png'
         self.assertEqual(base.rstrip('/') + cover, '/AxiaPlatform/brand/arya-logo.png')
 
-    def test_committed_catalog_covers_stay_root_absolute(self):
+    def test_prefixing_twice_never_doubles_the_base(self):
+        # The published build is committed to the repo root and rebuilt in
+        # place, so the prefix step must be safe to run on its own output.
+        # Otherwise covers become /AxiaPlatform/AxiaPlatform/brand/... and every
+        # product image 404s - which is exactly what happened once.
+        base = '/AxiaPlatform/'
+        prefix = base.rstrip('/')
+        cover = '/brand/arya-logo.png'
+        once = prefix + cover
+        twice = once if once.startswith(prefix + '/') else prefix + once
+        self.assertEqual(twice, '/AxiaPlatform/brand/arya-logo.png')
+        self.assertEqual(twice.count('/AxiaPlatform'), 1)
+
+    def test_published_catalog_covers_carry_the_prefix_exactly_once(self):
+        # data/products.json is a build output that is committed at the repo
+        # root, so the published copy legitimately carries the prefix. What must
+        # never happen is the prefix stacking up on a rebuild.
         import json
         data = json.loads((ROOT / 'data' / 'products.json').read_text(encoding='utf-8'))
         for product in data:
             cover = product.get('cover') or ''
             if cover:
                 self.assertTrue(cover.startswith('/'), f'{product["slug"]} cover must be root-absolute')
-                self.assertFalse(cover.startswith('/AxiaPlatform/'),
-                                 f'{product["slug"]} cover must not hard-code the Pages sub-path')
+                self.assertLessEqual(cover.count('/AxiaPlatform/'), 1,
+                                     f'{product["slug"]} cover has a doubled base prefix: {cover}')
 
 
 if __name__ == '__main__':

@@ -84,7 +84,7 @@ def app_script_re(base: str) -> re.Pattern:
         r'(\s*)<script src="(?:' + re.escape(base) + r'|/)?app\.js[^"]*" defer></script>')
 
 
-def read_catalog(db_path: Path) -> list[dict]:
+def read_catalog(db_path: Path, base: str = '/') -> list[dict]:
     """Return published products, falling back to the bundled seed data."""
     rows: list[dict] = []
     if db_path.is_file():
@@ -103,16 +103,22 @@ def read_catalog(db_path: Path) -> list[dict]:
         except sqlite3.Error as exc:
             print(f'  database not readable ({exc}); using the committed catalog', file=sys.stderr)
     if not rows:
-        # The database is gitignored, so a clean checkout — and the CI build —
-        # has no catalog at all. data/products.json is committed for exactly
-        # that case: it is what the live site last published, so a rebuild
-        # reproduces it instead of silently shipping an empty catalog.
-        committed = ROOT / 'data' / 'products.json'
-        if committed.is_file():
+        # The database is gitignored, so a clean checkout has no catalog. The
+        # published build at the repo root is committed, and its snapshot is
+        # what the live site currently serves - reuse it rather than shipping an
+        # empty catalog. Undo the base prefix the previous build added, so the
+        # next build re-applies it once instead of stacking it.
+        published = ROOT / 'data' / 'products.json'
+        if published.is_file():
             try:
-                rows = json.loads(committed.read_text(encoding='utf-8')) or []
+                rows = json.loads(published.read_text(encoding='utf-8')) or []
             except Exception:
                 rows = []
+            prefix = base.rstrip('/')
+            for row in rows:
+                cover = row.get('cover')
+                if isinstance(cover, str) and prefix and cover.startswith(prefix + '/'):
+                    row['cover'] = cover[len(prefix):]
     if not rows:
         try:
             sys.path.insert(0, str(ROOT / 'server'))
@@ -426,7 +432,7 @@ def main() -> int:
     print(f'  base   : {base}')
     print(f'  output : {out}')
 
-    products = read_catalog(Path(args.db))
+    products = read_catalog(Path(args.db), base)
     print(f'  catalog: {len(products)} published product(s)')
 
     # ---- static-only overrides (e.g. the admin gate page) ------------------ #
@@ -482,10 +488,15 @@ def main() -> int:
     # lives under a sub-path, so the browser has to ask for
     # '/AxiaPlatform/brand/...'. Prefixing here keeps the stored data unchanged
     # and means the page never has to second-guess a product image path.
+    # Idempotent: the build is run with --out . so the committed root build is
+    # the input of the next one. Prefixing twice would bake in
+    # '/AxiaPlatform/AxiaPlatform/...' and break every product image.
+    prefix = base.rstrip('/')
     for product in products:
         cover = product.get('cover')
         if isinstance(cover, str) and cover.startswith('/') and not cover.startswith('//'):
-            product['cover'] = base.rstrip('/') + cover
+            if prefix and not cover.startswith(prefix + '/'):
+                product['cover'] = prefix + cover
     data_dir = out / 'data'
     data_dir.mkdir(exist_ok=True)
     (data_dir / 'products.json').write_text(
