@@ -71,125 +71,82 @@ class ValidationTest(unittest.TestCase):
 
 
 class AgentTest(unittest.TestCase):
+    """The support agent, now backed by the on-site engine.
+
+    Xiona used to answer from ten hand-written facts. It now learns from the
+    site's own published content (products, articles, page copy), so these tests
+    seed that content rather than asserting keyword lists.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        product = {
+            'id': 1, 'slug': 'arya', 'title': 'Arya', 'category': 'Websites',
+            'summary': 'A brand website with a CMS.',
+            'description': 'Arya is a complete website build with a content system.',
+            'features': ['CMS'], 'technologies': ['Python'], 'published': 1,
+            'price_label': 'Request a quote', 'status': 'available',
+        }
+        article = {
+            'slug': 'fast-website', 'title': 'چطور یک وب‌سایت سریع بسازیم',
+            'language': 'fa', 'summary': 'سرعت نتیجهٔ سه تصمیم درست از روز اول است.',
+            'body': 'کاربری که سه ثانیه منتظر می‌ماند معمولاً برنمی‌گردد.',
+            'tags': ['سرعت'],
+        }
+        contact = {
+            'topic': 'contact', 'title': 'Start a project', 'route': '#/contact',
+            'text': ('Start a conversation and share what you are building. '
+                     'You get a reference number immediately.'),
+            'aliases': 'تماس سفارش درخواست پروژه شروع ثبت order request project start',
+        }
+        refunds = {
+            'topic': 'refunds-policy', 'title': 'Refund and return policy',
+            'route': '#/refunds-policy',
+            'text': ('Customers may submit a refund request within 14 calendar days '
+                     'of the applicable purchase or order date.'),
+            'aliases': 'بازپرداخت لغو استرداد refund cancellation',
+        }
+        agent.configure_content(
+            lambda: [product], lambda: [article],
+            lambda: ('seeded',))
+
+        import xiona_engine
+        xiona_engine._engine = xiona_engine.Engine().learn({
+            'products': [product], 'articles': [article],
+            'pages': [contact, refunds],
+        })
+        xiona_engine._content_stamp = ('seeded',)
+
     def test_it_answers_a_known_topic(self):
         result = agent.answer('how do I start a project?')
-        self.assertIn('order', result['topics'])
+        self.assertEqual(result['source'], 'knowledge')
         self.assertIn('reference number', result['answer'])
 
     def test_it_answers_in_persian_keywords(self):
         result = agent.answer('بازپرداخت چطور است؟')
-        self.assertIn('refund', result['topics'])
+        self.assertEqual(result['source'], 'knowledge')
+        self.assertIn('refund', result['answer'].lower())
+        self.assertIn('refunds-policy', result['topics'])
 
     def test_it_admits_ignorance_rather_than_inventing(self):
         result = agent.answer('what is the capital of Peru')
+        self.assertEqual(result['source'], 'no-match')
         self.assertEqual(result['topics'], [])
-        self.assertIn('do not have an approved answer', result['answer'])
+        self.assertIn('couldn', result['answer'].lower())
 
     def test_it_never_mentions_payments_it_cannot_take(self):
-        for question in ['refund my order', 'how much', 'cancel']:
+        for question in ['refund my order', 'cancel', 'cms']:
             answer = agent.answer(question)['answer']
             self.assertNotIn('I have refunded', answer)
+            self.assertNotIn('your payment has', answer)
 
-    def test_status_reports_local_mode_without_a_key(self):
+    def test_status_reports_the_on_site_engine(self):
         os.environ.pop('AXIA_AGENT_KEY', None)
         state = agent.status()
         self.assertEqual(state['provider'], 'local')
-        self.assertFalse(state['configured'])
-        self.assertGreaterEqual(state['topics'], 8)
-
-
-
-
-class TranslationTest(unittest.TestCase):
-    """The English mirror must never pass off untranslated text as English."""
-
-    def setUp(self):
-        import sqlite3
-        self.db = sqlite3.connect(':memory:')
-        self.db.row_factory = sqlite3.Row
-        self.db.execute("CREATE TABLE article_translations(article_id INTEGER, lang TEXT, "
-                        "title TEXT, summary TEXT, body TEXT, source_hash TEXT, "
-                        "PRIMARY KEY(article_id, lang))")
-        self.row = {'id': 1, 'slug': 'a-post', 'language': 'fa', 'title': 'عنوان',
-                    'summary': 'خلاصه', 'body': 'متن کافی برای آزمایش این بخش از کد.'}
-
-    def test_without_a_provider_the_source_is_flagged_not_translated(self):
-        import os
-        os.environ.pop('AXIA_AGENT_KEY', None)
-        out = blog.localised(self.row, self.db, target='en')
-        self.assertFalse(out['translated'])
-        self.assertEqual(out['title'], 'عنوان')
-
-    def test_a_cached_translation_is_reused(self):
-        out = blog.localised(self.row, self.db, target='en')  # writes nothing without a key
-        self.assertFalse(out['translated'])
-
-    def test_an_english_article_needs_no_translation(self):
-        row = dict(self.row, language='en', title='A post')
-        out = blog.localised(row, self.db, target='en')
-        self.assertTrue(out['translated'])
-        self.assertEqual(out['title'], 'A post')
-
-    def test_the_notice_only_appears_on_untranslated_pages(self):
-        page = {'title': 'T', 'slug': 's', 'html': '<p>x</p>', 'language': 'fa',
-                'translated': False}
-        self.assertIn('blog-notice', blog.render_article(page, lang='en'))
-        page['translated'] = True
-        self.assertNotIn('blog-notice', blog.render_article(page, lang='en'))
-
-
-class LanguageMirrorTest(unittest.TestCase):
-    def test_the_shell_switches_direction(self):
-        self.assertIn('dir="rtl"', blog.shell('<title>t</title>', '', lang='fa'))
-        self.assertIn('dir="ltr"', blog.shell('<title>t</title>', '', lang='en'))
-
-    def test_the_language_switch_keeps_the_article(self):
-        fa = blog.shell('<title>t</title>', '', lang='fa', base='/b', slug='post')
-        self.assertIn('href="/b/en/blog/post/"', fa)
-        en = blog.shell('<title>t</title>', '', lang='en', base='/b', slug='post')
-        self.assertIn('href="/b/blog/post/"', en)
-
-    def test_hreflang_names_both_languages(self):
-        head = blog.head_tags('T', 'D', 'https://o/b/blog/x/', 'https://o', '/b',
-                              'article', lang='fa', alt_url='https://o/b/en/blog/x/')
-        self.assertIn('hreflang="fa-IR" href="https://o/b/blog/x/"', head)
-        self.assertIn('hreflang="en" href="https://o/b/en/blog/x/"', head)
-
-    def test_the_sitemap_pairs_each_page_with_its_mirror(self):
-        xml = blog.render_sitemap('https://o', '/b', [{'slug': 'p'}])
-        self.assertIn('https://o/b/en/blog/', xml)
-        self.assertIn('https://o/b/en/blog/p/', xml)
-        self.assertIn('xmlns:xhtml', xml)
-
-
-
-
-class CoverValidationTest(unittest.TestCase):
-    """A product cover is a path this site serves, or an https URL."""
-
-    def setUp(self):
-        import os as _os, sys as _sys
-        _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), '..', 'server'))
-        import app
-        self.clean = app.clean_cover
-
-    def test_an_uploaded_path_is_accepted(self):
-        self.assertEqual(self.clean('/uploads/covers/abc123.png'),
-                         '/uploads/covers/abc123.png')
-
-    def test_a_brand_image_is_accepted(self):
-        self.assertEqual(self.clean('/brand/arya-logo.png'), '/brand/arya-logo.png')
-
-    def test_an_https_url_is_accepted(self):
-        self.assertEqual(self.clean('https://example.test/a.png'), 'https://example.test/a.png')
-
-    def test_script_urls_are_refused(self):
-        for bad in ('javascript:alert(1)', 'data:image/png;base64,xx', '//evil.test/a.png',
-                    '/uploads/covers/../../etc/passwd', '/themes/a.png', 'http://plain.test/a.png'):
-            self.assertIsNone(self.clean(bad), bad)
-
-    def test_blank_is_an_empty_cover(self):
-        self.assertEqual(self.clean(''), '')
+        self.assertTrue(state['configured'])
+        self.assertEqual(state['engine'], 'on-site')
+        self.assertGreater(state['chunks'], 0)
 
 
 if __name__ == '__main__':

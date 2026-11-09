@@ -36,6 +36,7 @@ import uuid
 import db as database
 import blog
 import agent
+import xiona_engine
 import uploads
 import site_settings
 from db import connect, init, ROOT, DB_PATH
@@ -189,6 +190,68 @@ def clean(s, n=5000):
 
 def public_user(row):
     return {'id': row['id'], 'name': row['name'], 'email': row['email'], 'role': row['role'], 'phone': row['phone']}
+
+
+# --------------------------------------------------------------------------- #
+# Xiona's knowledge
+# --------------------------------------------------------------------------- #
+# The assistant learns from what the site publishes. These readers are the one
+# definition of "published": the same query the catalog and the blog use, so the
+# assistant can never cite something a visitor cannot open.
+
+def _xiona_products():
+    conn = database.connect()
+    try:
+        rows = conn.execute('SELECT * FROM products WHERE published=1 ORDER BY id').fetchall()
+    finally:
+        conn.close()
+    out = []
+    for row in rows:
+        product = dict(row)
+        try:
+            product['features'] = json.loads(product.get('features') or '[]')
+            product['technologies'] = json.loads(product.get('technologies') or '[]')
+        except (TypeError, json.JSONDecodeError):
+            product['features'] = product['technologies'] = []
+        out.append(product)
+    return out
+
+
+def _xiona_articles():
+    conn = database.connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM articles WHERE status='published' ORDER BY id").fetchall()
+    finally:
+        conn.close()
+    return [blog.article_out(row, full=True) for row in rows]
+
+
+def _xiona_stamp():
+    """Cheap fingerprint of the published content.
+
+    Rebuilding the index on every question would be wasteful; never rebuilding
+    it would answer from a catalog the administrator already changed. A count
+    plus the newest update is enough to notice both an edit and a new row.
+    """
+    conn = database.connect()
+    try:
+        # products has no updated_at column; an edit changes the title or the
+        # body text, so fold the mutable fields into the stamp instead.
+        products = conn.execute(
+            "SELECT count(*), COALESCE(max(created_at), ''), "
+            "COALESCE(sum(length(title) + length(summary) + length(description) "
+            "+ length(cover) + length(price_label)), 0) "
+            "FROM products WHERE published=1").fetchone()
+        articles = conn.execute(
+            "SELECT count(*), COALESCE(max(COALESCE(updated_at, published_at, created_at)), '') "
+            "FROM articles WHERE status='published'").fetchone()
+    finally:
+        conn.close()
+    return (tuple(products or (0, '')), tuple(articles or (0, '')))
+
+
+agent.configure_content(_xiona_products, _xiona_articles, _xiona_stamp)
 
 
 def product_out(r):
