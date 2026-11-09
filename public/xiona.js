@@ -41,6 +41,9 @@
     '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9'
   };
 
+  /* Function words. These carry no subject, so they are dropped before scoring -
+     otherwise 'چرا سرعت مهم است' is a question about the word 'است'.
+     They are the grammar of the language, not knowledge about the site. */
   var STOPWORDS = {
     fa: ['و', 'در', 'به', 'از', 'که', 'این', 'را', 'با', 'است', 'برای', 'آن',
       'یک', 'خود', 'تا', 'کرد', 'بر', 'هم', 'نیز', 'یا', 'شد', 'شده', 'های',
@@ -49,7 +52,11 @@
       'شما', 'ما', 'من', 'او', 'آنها', 'همه', 'بیشتر', 'خیلی', 'چیست', 'چیه',
       'چرا', 'آیا', 'باید', 'توانم', 'توانید', 'می‌توانم', 'می‌توانید', 'هست',
       'هستند', 'هستم', 'نیست', 'بوده', 'دارند', 'لطفا', 'لطفاً', 'بگو',
-      'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم'],
+      'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم', 'دهید', 'دهد',
+      'کن', 'شد', 'کرده', 'دار', 'است؟', 'انجام', 'طور', 'مورد', 'پس',
+      // copula and question fragments, as they arrive after stemming
+      'هست', 'نیست', 'بودن', 'باش', 'باشه', 'شده', 'کردن', 'دادن', 'گفتن',
+      'لازم', 'لطف', 'عزیز', 'بله', 'نه'],
     en: ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'do', 'does', 'did',
       'how', 'what', 'when', 'where', 'who', 'why', 'can', 'could', 'would',
       'should', 'i', 'you', 'we', 'they', 'it', 'of', 'to', 'in', 'on', 'for',
@@ -58,138 +65,14 @@
       'there', 'about', 'tell', 'please', 'want', 'need', 'get', 'got']
   };
 
-  /* The site publishes its page copy in English and much of its catalog copy in
-     Persian. A visitor asks in one language; the answer may only exist in the
-     other. This bridge is small and hand-checked on purpose: it maps the words
-     a visitor actually uses to the words the site uses, so a Persian question
-     reaches English text. It is a lexicon, not a translator - it never produces
-     prose, only search terms. */
-  var BRIDGE = {
-    // fa -> en
-    'محصول': ['product', 'products', 'catalog'],
-    'محصولات': ['product', 'products', 'catalog'],
-    'کاتالوگ': ['catalog', 'products'],
-    'سفارش': ['order', 'request', 'project'],
-    'درخواست': ['request', 'order'],
-    'پروژه': ['project', 'work'],
-    'ثبت': ['place', 'submit'],
-    'سفارش_ثبت': ['place an order', 'start a project', 'request'],
-    'شروع': ['start', 'begin', 'request'],
-    'قیمت': ['price', 'cost', 'quote'],
-    'هزینه': ['cost', 'price', 'quote'],
-    'پیش‌فاکتور': ['quote', 'quotation'],
-    'زمان': ['time', 'timing', 'delivery'],
-    'تحویل': ['delivery', 'deliver'],
-    'بازپرداخت': ['refund', 'cancellation'],
-    'لغو': ['cancel', 'cancellation'],
-    'خدمات': ['services', 'service'],
-    'پشتیبانی': ['support', 'help'],
-    'حریم': ['privacy', 'data'],
-    'خصوصی': ['privacy'],
-    'قوانین': ['terms', 'conditions'],
-    'شرایط': ['terms', 'conditions'],
-    'درباره': ['about', 'company'],
-    'شرکت': ['company', 'about'],
-    'تیم': ['team', 'about'],
-    'تماس': ['contact', 'email'],
-    'ارتباط': ['contact'],
-    'وب‌سایت': ['website', 'web', 'site'],
-    'وبسایت': ['website', 'web', 'site'],
-    'سایت': ['website', 'site'],
-    'صفحه': ['page', 'section'],
-    'اپلیکیشن': ['application', 'app', 'mobile'],
-    'نرم‌افزار': ['software'],
-    'طراحی': ['design', 'development'],
-    'توسعه': ['development', 'develop'],
-    'مقاله': ['article', 'blog', 'post'],
-    'مقالات': ['articles', 'blog'],
-    'بلاگ': ['blog', 'article'],
-    'وبلاگ': ['blog', 'article'],
-    'سرعت': ['speed', 'fast', 'performance'],
-    'امنیت': ['security', 'secure'],
-    'پرداخت': ['payment', 'pay'],
-    'حساب': ['account'],
-    'کاربر': ['user', 'account'],
-    'شخص': ['person', 'human'],
-    'انسان': ['human', 'person'],
-    // en -> fa
-    'product': ['محصول'], 'products': ['محصولات'], 'order': ['سفارش'],
-    'request': ['درخواست'], 'project': ['پروژه'], 'price': ['قیمت'],
-    'cost': ['هزینه'], 'refund': ['بازپرداخت'], 'services': ['خدمات'],
-    'support': ['پشتیبانی'], 'privacy': ['حریم'], 'terms': ['قوانین'],
-    'about': ['درباره'], 'contact': ['تماس'], 'website': ['وب‌سایت'],
-    'article': ['مقاله'], 'blog': ['وبلاگ'], 'speed': ['سرعت'],
-    'security': ['امنیت'], 'payment': ['پرداخت'], 'account': ['حساب']
-  };
-
-  // Words that limit *what* is being asked ("which products", "how much"). They
-  // are worth searching for but must not decide relevance on their own.
-  /* Words that describe the setting rather than the subject. 'قوانین سایت' is a
-     question about the terms, not about websites. */
-  var VAGUE = ['website', 'web', 'site', 'page', 'section', 'company', 'about',
-    'product', 'products', 'service', 'services'];
-
-  var GENERIC = {
-    fa: ['محصول', 'محصولات', 'کاتالوگ', 'خدمات'],
-    en: ['product', 'products', 'service', 'services', 'catalog']
-  };
-
-  /* Phrase-level bridges: a visitor does not ask about a verb, they ask about a
-     task. "سفارش ثبت کنم" is "place an order", not "register" + "request", and
-     matching the phrase is what keeps a refund page from answering it. */
-  /* A site with no prices on it cannot answer a price question. Saying so is
-     the correct answer, and it is better than a nearby paragraph about
-     websites. These topics are refused explicitly instead of being scored. */
-  var UNCOVERED = [
-    [/قیمت|هزینه|چقدر|تعرفه|price|cost|pricing|how much/i, {
-      fa: 'قیمت‌ها روی این سایت منتشر نشده‌اند. دامنه و هزینه پس از بررسی درخواست شما توافق می‌شود؛ می‌توانید از صفحهٔ تماس درخواست بفرستید.',
-      en: 'Prices are not published on this site. Scope and cost are agreed after your request is reviewed — the Start a project page is the way in.'
-    }],
-    [/ربات|هوش مصنوعی هستی|are you (an? )?(ai|bot|robot)|who made you|چه کسی تو را ساخت/i, {
-      fa: 'من Xiona هستم، دستیار همین سایت. کاملاً داخل مرورگر شما اجرا می‌شوم؛ از محتوای منتشرشدهٔ AXIASOFT یاد می‌گیرم و به هیچ سرویس بیرونی وصل نیستم.',
-      en: "I'm Xiona, this site's assistant. I run entirely in your browser, learn from what AXIASOFT publishes, and am not connected to any outside service."
-    }]
-  ];
-
-  var PHRASES = [
-    [/(سفارش|درخواست).*(ثبت|بدم|بدهم|کنم)|چطور.*(سفارش|درخواست)/, ['place an order', 'start a project', 'request', 'order']],
-    [/بازپرداخت|پس دادن پول|استرداد/, ['refund', 'cancellation']],
-    [/حریم خصوصی|اطلاعات من/, ['privacy', 'data protection']],
-    [/قوانین|شرایط استفاده/, ['terms', 'conditions']],
-    [/با انسان|پشتیبان انسانی|آدم واقعی/, ['human', 'support', 'person']],
-    [/قیمت|هزینه|چقدر/, ['price', 'cost', 'quote']],
-    [/محصولات|چه چیزی می‌فروشید/, ['products', 'catalog']]
-  ];
-
-  /* Expand a question's terms across languages so a Persian question can reach
-     English text and the other way round. Original terms come first and are
-     weighted by the caller; bridged terms only add reach. */
-  function expand(terms, language, question) {
-    var out = terms.slice();
-    var extra = [];
-    var folded = fold(String(question || '')).toLowerCase();
-    for (var k = 0; k < PHRASES.length; k++) {
-      if (!PHRASES[k][0].test(folded)) continue;
-      var words = PHRASES[k][1];
-      for (var w = 0; w < words.length; w++) {
-        if (out.indexOf(words[w]) === -1 && extra.indexOf(words[w]) === -1) extra.push(words[w]);
-      }
-    }
-    for (var i = 0; i < terms.length; i++) {
-      var mapped = BRIDGE[terms[i]];
-      if (!mapped) continue;
-      for (var j = 0; j < mapped.length; j++) {
-        var word = mapped[j];
-        if (out.indexOf(word) === -1 && extra.indexOf(word) === -1) extra.push(word);
-      }
-    }
-    return { terms: out, bridged: extra };
-  }
-
   // Persian suffixes that carry little meaning on their own. Stripping them is
-  // the difference between 'محصولات' and 'محصول' matching, and they not matching.
+  // the difference between 'محصولات' and 'محصول' matching, and them not matching.
+  /* Suffixes, longest first. 'تر' is deliberately absent: it is the comparative
+     ending ('سریع‌تر') but also the last two letters of ordinary nouns, and
+     stripping it turns 'کامپیوتر' into 'کامپیو'. A stemmer that mangles the
+     word it was given is worse than one that keeps a plural. */
   var FA_SUFFIXES = ['هایشان', 'هایمان', 'هایتان', 'هایش', 'هایم', 'هایت',
-    'های', 'هایی', 'ها', 'تر', 'ترین', 'شان', 'مان', 'تان', 'یی', 'یم', 'ید',
+    'های', 'هایی', 'ها', 'ترین', 'شان', 'مان', 'تان', 'یی', 'یم', 'ید',
     'ند', 'هاست', 'ای', 'ی'];
 
   function isPersian(text) {
@@ -198,24 +81,22 @@
 
   function fold(text) {
     var out = '';
-    var src = String(text || '');
-    for (var i = 0; i < src.length; i++) {
-      var ch = src.charAt(i);
+    var input = String(text || '');
+    for (var i = 0; i < input.length; i++) {
+      var ch = input.charAt(i);
       out += FOLD[ch] || ch;
     }
-    // Persian diacritics (fathatan .. sukun) and the ZWNJ carry no meaning for
-    // matching, and ZWNJ in particular splits words the user did not split.
-    // \u061F (Arabic question mark) and \u060C (comma) live inside the Arabic
-    // block, so a naive token regex keeps them glued to the word: 'چیست؟'
-    // stays one token and never matches 'چیست'.
-    return out.replace(/[\u064B-\u0652\u0670\u0640\u200c\u200f\u200e\u061F\u060C\u061B]/g, ' ');
+    // ZWNJ joins the halves of a Persian compound ('وب‌سایت') and the reader
+    // sees one word, but the Python twin splits on it, and a tokenizer that
+    // disagrees makes the two engines answer differently. It becomes a space on
+    // both sides, so 'وب‌سایت' is 'وب' + 'سایت' either way.
+    return out.replace(/\u200c/g, ' ').replace(/\u200f|\u200e/g, '');
   }
 
   function stripSuffix(word) {
-    if (!isPersian(word) || word.length <= 3) return word;
     for (var i = 0; i < FA_SUFFIXES.length; i++) {
       var suffix = FA_SUFFIXES[i];
-      if (word.length - suffix.length >= 3 && word.slice(-suffix.length) === suffix) {
+      if (word.length > suffix.length + 2 && word.slice(-suffix.length) === suffix) {
         return word.slice(0, -suffix.length);
       }
     }
@@ -224,9 +105,10 @@
 
   function lightStem(word) {
     if (!isPersian(word)) {
-      // English: enough stemming for 'pricing'/'prices'/'priced' to meet.
-      return word.replace(/(ies)$/, 'y').replace(/(ses|xes|ches|shes)$/, 's')
-                 .replace(/(ing|ed|es|s)$/, '');
+      if (word.length > 4 && /ies$/.test(word)) return word.slice(0, -3) + 'y';
+      if (word.length > 4 && /es$/.test(word)) return word.slice(0, -2);
+      if (word.length > 3 && /s$/.test(word) && !/ss$/.test(word)) return word.slice(0, -1);
+      return word;
     }
     return stripSuffix(word);
   }
@@ -241,8 +123,191 @@
       var word = raw[i];
       if (stops.indexOf(word) !== -1) continue;
       var stem = lightStem(word);
+      // The suffix stripper can turn a content-free word into one that is on the
+      // list ('هستید' -> 'هست'), so the stem is tested too.
+      if (stem !== word && stops.indexOf(stem) !== -1) continue;
       if (stem.length < 2) continue;
       out.push(stem);
+    }
+    return out;
+  }
+
+  /* --------------------------------------------------------------- lexicon
+
+     A visitor types Persian; most of what this site publishes is English. The
+     bridge between them is NOT a list written by hand here - a hand-kept list
+     only knows the words its author thought of, which is exactly the assistant
+     problem: it answers what it was told to answer.
+
+     Instead the site teaches its own vocabulary. The UI ships a Persian/English
+     dictionary (public/i18n.js) so a Persian reader can use the same product;
+     the build hands those pairs to Xiona, and they are aligned into a word
+     lexicon here. If a new UI string is added with a translation, the
+     assistant understands it after the next build - no code change.
+
+     Only unambiguous pairs are used: one English word against one Persian
+     word. A phrase pair ('Request a quote' / 'درخواست برآورد') does not say
+     which word maps to which, so guessing would invent a translation - and an
+     invented translation is an invented answer. */
+
+  function buildLexicon(pairs) {
+    var enToFa = {};
+    var faToEn = {};
+    function bump(map, key, value) {
+      if (!key || !value || key === value) return;
+      if (map[key] === undefined) map[key] = {};
+      map[key][value] = (map[key][value] || 0) + 1;
+    }
+    function surface(text) {
+      return fold(text).toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]+/g, ' ').trim();
+    }
+    for (var i = 0; i < (pairs || []).length; i++) {
+      var pair = pairs[i] || [];
+      var left = String(pair[0] || '');
+      var right = String(pair[1] || '');
+      if (!left || !right) continue;
+      var english = tokenize(left);
+      var persian = tokenize(right);
+      // One word each side, and the sides must actually be different languages.
+      if (english.length !== 1 || persian.length !== 1) continue;
+      if (isPersian(english[0]) === isPersian(persian[0])) continue;
+      bump(enToFa, english[0], persian[0]);
+      bump(faToEn, persian[0], english[0]);
+      // The question is tokenized the same way, but a visitor may type the
+      // surface form ('پشتیبانی') where the dictionary stores the stem
+      // ('پشتیبان'), or the other way round. Both keys point at one entry.
+      var enSurface = surface(left);
+      var faSurface = surface(right);
+      if (enSurface && enSurface.indexOf(' ') === -1) {
+        bump(enToFa, enSurface, persian[0]);
+        bump(faToEn, persian[0], enSurface);
+      }
+      if (faSurface && faSurface.indexOf(' ') === -1) {
+        bump(faToEn, faSurface, english[0]);
+        bump(enToFa, english[0], faSurface);
+      }
+    }
+    /* A phrase pair does not say which word translates to which - but it does
+       say the two sides are about the same thing. That is enough to know a
+       Persian word is part of the site's subject matter, which is what the
+       coverage test needs, without inventing a word-for-word translation. */
+    var seen = {};
+    for (var p = 0; p < (pairs || []).length; p++) {
+      var row = pairs[p] || [];
+      var en = tokenize(row[0] || '');
+      var fa = tokenize(row[1] || '');
+      if (!en.length || !fa.length) continue;
+      for (var f = 0; f < fa.length; f++) {
+        if (!seen[fa[f]]) seen[fa[f]] = {};
+        for (var q = 0; q < en.length; q++) {
+          if (!en[q] || en[q].length < 3) continue;
+          seen[fa[f]][en[q]] = (seen[fa[f]][en[q]] || 0) + 1;
+        }
+      }
+    }
+    // Rank partners by how many of the site's strings contain them: the word
+    // that keeps company with 'قیمت' across several strings is the better
+    // search term than one that appeared beside it once.
+    var known = {};
+    for (var key in seen) {
+      if (!Object.prototype.hasOwnProperty.call(seen, key)) continue;
+      known[key] = Object.keys(seen[key]).sort(function (a, b) {
+        return seen[key][b] - seen[key][a];
+      });
+    }
+
+    // Keep the strongest partner for each word: the dictionary repeats some
+    // concepts, and the most frequent translation is the one the site means.
+    function strongest(map) {
+      var out = {};
+      for (var key in map) {
+        if (!Object.prototype.hasOwnProperty.call(map, key)) continue;
+        var best = null;
+        var bestCount = 0;
+        for (var value in map[key]) {
+          if (!Object.prototype.hasOwnProperty.call(map[key], value)) continue;
+          if (map[key][value] > bestCount) {
+            best = value;
+            bestCount = map[key][value];
+          }
+        }
+        if (best) out[key] = best;
+      }
+      return out;
+    }
+    return { en: strongest(enToFa), fa: strongest(faToEn), known: known, size: 0 };
+  }
+
+  /* Expand a question's terms into the other language, using the site's own
+     dictionary. Returns the original terms first (the caller weights those
+     higher) and the translated ones after. */
+  /* Is this word one the site uses as a label - a page or product title, or a
+     section topic - rather than only inside a sentence? A site names the things
+     it publishes; incidental words live in prose. */
+  Engine.prototype.labelled = function (word) {
+    for (var i = 0; i < this.docs.length; i++) {
+      var label = fold(this.docs[i].title + ' ' + this.docs[i].topic).toLowerCase();
+      if (label.indexOf(word) !== -1) return true;
+    }
+    return false;
+  };
+
+  /* How common a word is across the corpus, needed to rank fallback partners
+     before they are used as search terms. */
+  Engine.prototype.rarity = function (word) {
+    var total = this.docs.length || 1;
+    var hits = 0;
+    for (var i = 0; i < this.docs.length; i++) {
+      if (this.docs[i].tokens.indexOf(word) !== -1) hits++;
+    }
+    return 1 - hits / total;
+  };
+
+  function expandWith(lexicon, terms, rarityOf, labelOf) {
+    var out = [];
+    function push(word) {
+      if (word && out.indexOf(word) === -1 && terms.indexOf(word) === -1) out.push(word);
+    }
+    for (var i = 0; i < terms.length; i++) {
+      var term = terms[i];
+      var candidates = [term];
+      // 'servic' (from 'services') and 'service' are the same word to a reader;
+      // try the singular too so a stem on either side still lines up.
+      if (/[a-z]s$/.test(term) === false && /[a-z]{4,}$/.test(term)) candidates.push(term + 's');
+      if (/[a-z]{5,}s$/.test(term) === false && /[a-z]{4,}e$/.test(term)) candidates.push(term.slice(0, -1));
+      for (var c = 0; c < candidates.length; c++) {
+        push((lexicon.fa && lexicon.fa[candidates[c]]) ||
+             (lexicon.en && lexicon.en[candidates[c]]));
+      }
+      /* No one-to-one translation: fall back to the words the site's own
+         dictionary associates with this one. They are weaker evidence - a
+         phrase may mention several things - so they are only search terms, and
+         the caller weights them below a real translation. */
+      if (!(lexicon.fa && lexicon.fa[term]) && (!rarityOf || rarityOf(term) >= 1)) {
+        /* Only when the word itself is missing from the corpus. The partners
+           are already ordered by how many of the site's own
+           strings pair them with this word - the site's own testimony about
+           what belongs together. Take the leading few that the corpus actually
+           contains, skipping function words, and let BM25 decide from there.
+           Rarity is deliberately not used: it favours a word that happens to
+           appear once off-topic ('indicative' in a paragraph about trading)
+           over the word the site repeats when it means this thing. */
+        /* One good partner, not the whole phrase. A phrase pair lists every
+           content word on both sides, so taking several turns a question about
+           price into a question about orders, scope and delivery as well - and
+           those everyday words then outrank 'price' in the sentences that
+           matter. The site's first partner is its strongest statement of what
+           this word is about; two is the most that stays precise. */
+        var partners = (lexicon.known && lexicon.known[term]) || [];
+        var used = 0;
+        for (var k = 0; k < partners.length && used < 2; k++) {
+          var word = partners[k];
+          if (rarityOf && rarityOf(word) >= 1) continue;
+          if (STOPWORDS.en.indexOf(word) !== -1) continue;
+          push(word);
+          used++;
+        }
+      }
     }
     return out;
   }
@@ -342,7 +407,27 @@
     this.maxResults = opts.maxResults || 3;
     // A noise floor only: the real gate is coverage, in _judge().
     this.minScore = opts.minScore || 0.05;
+    // The site's own Persian/English dictionary, paired by the build.
+    this.lexicon = buildLexicon([]);
+    this.vocabulary(pairsOf(opts.pairs));
   }
+
+  function pairsOf(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  /* Teach the assistant the site's own vocabulary. Called with the dictionary
+     pairs the UI already ships, so a word the site can show a Persian reader is
+     a word the assistant can understand - with no list here to keep in step. */
+  Engine.prototype.vocabulary = function (pairs) {
+    if (!Array.isArray(pairs) || !pairs.length) return this;
+    this.lexicon = buildLexicon(pairs);
+    this.lexiconSize = 0;
+    for (var a in this.lexicon.fa) {
+      if (Object.prototype.hasOwnProperty.call(this.lexicon.fa, a)) this.lexiconSize++;
+    }
+    return this;
+  };
 
   Engine.prototype.add = function (doc) {
     if (!doc || !doc.text) return this;
@@ -379,6 +464,8 @@
   // ship is simply absent — there is no list to keep in sync by hand.
   Engine.prototype.learn = function (source) {
     var site = source || {};
+    // Vocabulary first: every later step translates through it.
+    this.vocabulary(pairsOf(site.pairs));
     var self = this;
     var docIndex = 0;
     var nextId = function (topic, index) { return topic + '-' + index; };
@@ -505,18 +592,39 @@
     var pool = (language === 'any') ? this.docs : (this.corpus[language] || []);
     if (!pool.length) pool = this.docs;
 
-    // The question's own words, plus their counterparts in the other language.
-    var expanded = expand(base, language, question);
-    var terms = expanded.terms;
-    var bridged = expanded.bridged;
-    var generic = GENERIC[language] || [];
-    // Coverage is judged on the words that carry the question. 'سایت' is where
-    // the visitor is, not what they are asking about.
-    var vagueOwn = 0;
-    for (var v = 0; v < terms.length; v++) {
-      if (VAGUE.indexOf(terms[v]) !== -1 || generic.indexOf(terms[v]) !== -1) vagueOwn++;
+    // The question's words, plus the site's own translation of each of them.
+    var terms = base;
+    var engine = this;
+    var bridged = expandWith(this.lexicon, terms,
+      function (w) { return engine.rarity(w); },
+      function (w) { return engine.labelled(w); });
+
+    /* Which of the visitor's words carry the question?
+
+       A word the site mentions everywhere ('website') cannot distinguish one
+       page from another: 'قوانین سایت' is a question about the terms, and the
+       word 'site' is the setting it was asked in. Rather than naming such words
+       in a list, measure them: a term whose matches are spread across most of
+       the corpus carries no information, so it is left out of the coverage test.
+       The measure comes from the site's own text, so it stays right as the
+       content grows. */
+    var informative = [];
+    for (var w = 0; w < terms.length; w++) {
+      // How far this one word spreads, counting only its own translation.
+      var direct = (this.lexicon.fa && this.lexicon.fa[terms[w]]) ||
+                   (this.lexicon.en && this.lexicon.en[terms[w]]);
+      var reach = this.reach(terms[w], direct ? [direct] : []);
+      if (reach === 0) {
+        // Absent from the text. It is still the subject if the site's
+        // dictionary knows the word - the English page copy just cannot
+        // contain it. Otherwise it is a word the site never says.
+        if (this.known(terms[w])) informative.push(terms[w]);
+      } else if (reach < 0.6 * this.docs.length) {
+        informative.push(terms[w]);
+      }
+      // reach >= 60% of the corpus: background vocabulary, not the subject.
     }
-    var meaningful = Math.max(1, terms.length - vagueOwn);
+    var meaningful = Math.max(1, informative.length);
 
     var phrase = fold(String(question)).toLowerCase().replace(/\s+/g, ' ').trim();
     var ranked = [];
@@ -531,33 +639,61 @@
       var matched = 0;
       var ownMatched = 0;
       var strongMatched = 0;
-      function add(term, weight) {
+
+      // Which search words this chunk contains, and which of the visitor's
+      // words each of them stands for. A translation counts as reaching the
+      // visitor's word: the chunk answers 'قیمت' by talking about price.
+      var covered = [];
+      var sum = 0;
+      function weigh(term, weight) {
         var freq = counts[term];
         if (!freq) return false;
         var norm = doc.length / (this.avgLength[doc.language] || 1);
-        score += weight * idf(this, doc.language, term) *
+        sum += weight * idf(this, doc.language, term) *
           ((freq * (this.k1 + 1)) / (freq + this.k1 * (1 - this.b + this.b * norm)));
         return true;
       }
       var self = this;
+
       for (var t = 0; t < terms.length; t++) {
-        // A word the visitor typed outranks a word the bridge supplied.
-        if (add.call(self, terms[t], 1)) {
+        // A word the visitor typed outranks a word the dictionary supplied.
+        if (weigh.call(self, terms[t], 1)) {
           matched++;
           ownMatched++;
-          if (generic.indexOf(terms[t]) === -1) strongMatched++;
+          strongMatched++;
+          if (covered.indexOf(terms[t]) === -1) covered.push(terms[t]);
         }
       }
       for (var b = 0; b < bridged.length; b++) {
-        // A bridged word that names a section ('terms', 'privacy') is specific;
-        // one that names the medium ('website') is not. Weight accordingly.
-        var weight = VAGUE.indexOf(bridged[b]) === -1 ? 0.85 : 0.45;
-        if (add.call(self, bridged[b], weight)) {
-          matched++;
-          if (generic.indexOf(bridged[b]) === -1 && VAGUE.indexOf(bridged[b]) === -1) strongMatched++;
+        var word = bridged[b];
+        if (!weigh.call(self, word, 0.85)) continue;
+        matched++;
+        strongMatched++;
+        // Attribute the hit to every visitor word this translation stands for.
+        for (var a = 0; a < terms.length; a++) {
+          var mapped = (self.lexicon.fa && self.lexicon.fa[terms[a]]) ||
+                       (self.lexicon.en && self.lexicon.en[terms[a]]);
+          var partnerHit = mapped === word;
+          if (!partnerHit && self.lexicon.known && self.lexicon.known[terms[a]]) {
+            partnerHit = self.lexicon.known[terms[a]].indexOf(word) !== -1;
+          }
+          if (partnerHit && covered.indexOf(terms[a]) === -1) covered.push(terms[a]);
         }
       }
+      score = sum;
+
+      var ownHits = 0;
+      for (var c = 0; c < informative.length; c++) {
+        if (covered.indexOf(informative[c]) !== -1) ownHits++;
+      }
+
       if (!matched) continue;
+      /* A chunk that contains a translation but none of the visitor's own words
+         is weaker evidence than one that contains what they typed. Keep it, but
+         demote it, so a fallback translation can never outrank a direct hit:
+         'AURION' must reach the passage that says AURION, not one that only
+         happens to share a translated word with the question. */
+      if (ownMatched === 0) score *= 0.35;
 
       var total = terms.length + bridged.length;
       score *= 1 + 0.45 * (matched / total);
@@ -580,11 +716,62 @@
         doc: doc, score: score, matched: matched,
         ownMatched: ownMatched,
         strongMatched: strongMatched,
-        coverage: Math.min(1, strongMatched / meaningful)
+        // Coverage is about the visitor's own words: a translation is evidence
+        // that the site can talk about the subject, not that this chunk
+        // answered this question.
+        coverage: Math.min(1, ownHits / meaningful)
       });
     }
     ranked.sort(function (left, right) { return right.score - left.score; });
     return ranked.slice(0, opts.limit || this.maxResults);
+  };
+
+  /* How much of the corpus a word reaches, counting its translation. Used to
+     tell the subject of a question from the setting it was asked in. */
+  Engine.prototype.reach = function (term, bridged) {
+    var seen = {};
+    var total = 0;
+    var words = [term];
+    for (var b = 0; b < (bridged || []).length; b++) {
+      if (words.indexOf(bridged[b]) === -1) words.push(bridged[b]);
+    }
+    for (var i = 0; i < this.docs.length; i++) {
+      var doc = this.docs[i];
+      var hit = false;
+      for (var w = 0; w < words.length; w++) {
+        if (doc.tokens.indexOf(words[w]) === -1) continue;
+        hit = true;
+        break;
+      }
+      if (!hit) continue;
+      seen[doc.id] = true;
+      total++;
+    }
+    return total;
+  };
+
+  /* Is this word part of the site's subject matter at all?
+
+     Two kinds of evidence, both from the site: the word appears in something it
+     publishes, or the site's own dictionary pairs it with something that does.
+     'قیمت' never appears in the English page copy, but the site's dictionary
+     translates price strings containing it, and the catalog says 'Request a
+     quote' - so price is a subject this site covers, and a price question
+     deserves an answer from the terms page rather than a claim of ignorance. */
+  Engine.prototype.known = function (term) {
+    // The word itself, or the site's one-to-one translation of it.
+    var direct = (this.lexicon.fa && this.lexicon.fa[term]) ||
+                 (this.lexicon.en && this.lexicon.en[term]);
+    if (this.reach(term, direct ? [direct] : []) > 0) return true;
+    var self = this;
+    /* A phrase pair is weaker: the site says both sides describe the same
+       thing, so a word that shares a phrase with something the corpus contains
+       is plausibly part of the site's subject. Used only to decide whether to
+       search, never to claim coverage - and limited to the top partner, because
+       a long phrase full of ordinary words would make anything look known. */
+    var partners = this.lexicon.known && this.lexicon.known[term];
+    if (!partners || !partners.length) return false;
+    return this.reach(partners[0], []) > 0;
   };
 
   /* Is the best hit strong enough to answer with?
@@ -646,6 +833,24 @@
       .trim();
   }
 
+  /* The translations of a question that a given chunk actually contains. Used
+     to rank the chunk's own sentences when the visitor's language is not the
+     language the page is written in. */
+  function matchedWords(doc, terms, engine, bridged) {
+    var out = [];
+    function take(word) {
+      if (word && out.indexOf(word) === -1 && doc.tokens.indexOf(word) !== -1) out.push(word);
+    }
+    for (var i = 0; i < terms.length; i++) take(terms[i]);
+    /* The words the search actually used. For a Persian question about English
+       copy those are the translations - including the ones the site's phrase
+       evidence supplied rather than a clean one-to-one mapping. Ranking the
+       chunk's sentences on the visitor's words alone finds nothing to rank. */
+    var all = (bridged || []).slice(0);
+    for (var b = 0; b < all.length; b++) take(all[b]);
+    return out;
+  }
+
   // Pick the sentences of a chunk that actually carry the answer, so a long
   // AURION paragraph does not arrive whole when only one line was asked for.
   function focus(text, terms, budget) {
@@ -657,12 +862,25 @@
     });
     if (!parts.length) return tidy(text);
     if (parts.length === 1) return tidy(parts[0]);
+    /* Rank the sentences of the chunk. Counting which search words each one
+       contains is not enough: 'Scope, price and milestones' and 'a fixed-price
+       contract' both contain 'price', so the tie falls to whichever came first.
+       A sentence that mentions the rare word the question is actually about is
+       the better lead, so a term's weight is its rarity inside this chunk. */
+    var weight = {};
+    for (var t = 0; t < terms.length; t++) {
+      var seen = 0;
+      for (var c = 0; c < parts.length; c++) {
+        if (tokenize(parts[c]).indexOf(terms[t]) !== -1) seen++;
+      }
+      weight[terms[t]] = seen ? 1 / seen : 0;
+    }
     var scored = [];
     for (var i = 0; i < parts.length; i++) {
       var tokens = tokenize(parts[i]);
       var hits = 0;
-      for (var t = 0; t < terms.length; t++) {
-        if (tokens.indexOf(terms[t]) !== -1) hits++;
+      for (var t2 = 0; t2 < terms.length; t2++) {
+        if (tokens.indexOf(terms[t2]) !== -1) hits += weight[terms[t2]] || 0;
       }
       scored.push({ index: i, hits: hits });
     }
@@ -689,26 +907,112 @@
     return tidy(keep.map(function (index) { return parts[index]; }).join(' '));
   }
 
+  /* The words of a question that appear nowhere in the corpus. A question made
+     entirely of such words is about something this site does not publish. */
+  Engine.prototype.absentTerms = function (terms) {
+    var out = [];
+    for (var i = 0; i < terms.length; i++) {
+      if (this.known(terms[i])) continue;
+      if (out.indexOf(terms[i]) === -1) out.push(terms[i]);
+    }
+    return out;
+  };
+
+  /* Does a word the site knows actually answer this question, or is it only the
+     frame around an unknown subject? 'ربات' is unknown, and 'شما'/'هستید' carry
+     nothing, so the question is about a robot and the site has no robot to
+     describe beyond the panel text it publishes. */
+  /* Is an unknown word accounted for by a word the question also contains?
+     'هزینه بازپرداخت': the refund page explains what a refund costs, so the
+     cost word is answered by the refund word. 'بودجه شروع': nothing on this site
+     connects a budget to starting, so the budget stands unexplained. */
+  Engine.prototype.explained = function (word, terms, absent) {
+    for (var i = 0; i < terms.length; i++) {
+      var other = terms[i];
+      if (other === word || absent.indexOf(other) !== -1) continue;
+      // Do the two occur together anywhere in the site's own strings?
+      var pairs = this.lexicon.known && this.lexicon.known[other];
+      if (pairs && pairs.length && this.lexicon.known[word]) {
+        var mine = this.lexicon.known[word];
+        for (var p = 0; p < mine.length; p++) {
+          if (pairs.indexOf(mine[p]) !== -1) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  Engine.prototype.carriesQuestion = function (terms, absent) {
+    var known = [];
+    for (var i = 0; i < terms.length; i++) {
+      if (absent.indexOf(terms[i]) === -1) known.push(terms[i]);
+    }
+    if (!known.length) return false;
+    // A known word answers only if the site has real text behind it - more than
+    // a single incidental mention.
+    for (var k = 0; k < known.length; k++) {
+      var direct = (this.lexicon.fa && this.lexicon.fa[known[k]]) ||
+                   (this.lexicon.en && this.lexicon.en[known[k]]);
+      var scope = this.reach(known[k], direct ? [direct] : []);
+      if (scope >= 1) return true;
+    }
+    return false;
+  };
+
+  /* The subjects the index actually covers, taken from the documents themselves
+     rather than a list here. Used when the assistant has to say what it can
+     talk about, so that sentence is always true. */
+  Engine.prototype.topics = function () {
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < this.docs.length; i++) {
+      var doc = this.docs[i];
+      if (!doc.title) continue;
+      if (doc.topic === 'article') continue;
+      if (seen[doc.topic]) continue;
+      seen[doc.topic] = true;
+      out.push(doc.title);
+    }
+    return out;
+  };
+
   var LABELS = {
     fa: {
       from: 'از',
       more: 'بیشتر بخوانید',
       ask: 'سؤال دیگری بپرسید',
-      unsure: 'پاسخ تأییدشده‌ای برای این سؤال پیدا نکردم. Xiona فقط از محتوای همین سایت پاسخ می‌دهد؛ می‌توانم دربارهٔ محصولات، خدمات، فرایند سفارش، AURION، مقالات یا قوانین بازپرداخت کمک کنم.',
+      unsure: 'پاسخ تأییدشده‌ای برای این سؤال پیدا نکردم.',
       nodocs: 'هنوز دانشی برای پاسخ دادن ندارم. وقتی محصول یا مقاله‌ای منتشر شود، Xiona آن را می‌خواند و پاسخ می‌دهد.',
-      greeting: 'سلام. من Xiona هستم؛ دستیار همین سایت. از محتوای منتشرشدهٔ AXIASOFT یاد می‌گیرم و مستقیم پاسخ می‌دهم — دربارهٔ محصولات، خدمات، فرایند سفارش، AURION، مقالات یا سیاست‌ها بپرسید.',
+      greeting: 'سلام. من Xiona هستم؛ دستیار همین سایت.',
       html: 'این سایت در مرحلهٔ توسعه است.'
     },
     en: {
       from: 'From',
       more: 'Read more',
       ask: 'Ask something else',
-      unsure: "I couldn't find an approved answer to that. Xiona answers only from what this site publishes — try asking about products, services, the order process, AURION, articles, or the refund policy.",
+      unsure: "I couldn't find an answer to that on this site.",
       nodocs: "I have no knowledge yet. Once a product or article is published, Xiona reads it and can answer from it.",
-      greeting: "Hi, I'm Xiona — this site's own assistant. I learn from what AXIASOFT publishes and answer directly. Ask me about products, services, the order process, AURION, articles, or the policies.",
+      greeting: "Hi, I'm Xiona — this site's own assistant.",
       html: 'This site is in development.'
     }
   };
+
+  /* Say plainly that the site does not cover a subject, and name what it does
+     cover - from the index, so the sentence cannot go stale. */
+  function uncoveredText(absent, language, topics) {
+    var join = language === 'fa' ? '، ' : ', ';
+    var subject = absent.join(join);
+    var list = topics.slice(0, 5).join(join);
+    if (language === 'fa') {
+      return 'این سایت دربارهٔ «' + subject + '» چیزی منتشر نکرده است، پس پاسخ تأییدشده‌ای ندارم.' +
+             (list ? ' آنچه منتشر شده: ' + list + '.' : '') +
+             ' می‌توانید پرسش خود را از صفحهٔ «شروع پروژه» مطرح کنید.';
+    }
+    return 'This site does not publish anything about "' + subject +
+           '", so I have no answer for it.' +
+           (list ? ' What it does publish: ' + list + '.' : '') +
+           ' You can raise it on the Start a project page.';
+  }
 
   Engine.prototype.answer = function (question, options) {
     var opts = options || {};
@@ -724,16 +1028,79 @@
     if (GREETING.test(query) && tokenize(query).length <= 2) {
       return { text: labels.greeting, source: 'greeting', language: language, citations: [] };
     }
-    // A topic this site genuinely does not cover: answer it directly instead of
-    // matching a nearby sentence and sounding confident about the wrong thing.
-    for (var u = 0; u < UNCOVERED.length; u++) {
-      if (UNCOVERED[u][0].test(query)) {
-        return { text: UNCOVERED[u][1][language], source: 'policy',
-                 language: language, citations: [] };
-      }
-    }
 
     var terms = tokenize(query);
+
+    /* Before searching, establish what the visitor is asking about and whether
+       this site has anything to say on it.
+
+       There used to be two regex tables here - one matching price wording, one
+       matching "are you a bot" - that returned a ready-made sentence. That is
+       not answering; it is reciting. It also got the question wrong: 'پروژه
+       چقدر طول می‌کشد' (how long does a project take) matched the price table
+       because both contain 'چقدر', so a question about duration was answered
+       with a sentence about pricing, while the retrieval step that had already
+       found the right page was never reached.
+
+       The replacement asks the only question that can be settled from the
+       site's own text: is the word this question hangs on present anywhere in
+       what this site publishes? If a word is absent from every chunk, the site
+       does not cover it, and saying so is honest. If it is present, we search
+       it and the content answers. */
+    /* A question names something; the rest is the frame it is asked in.
+       'بودجه لازم برای شروع چقدر است' asks about a budget, and mentions
+       starting as the context. If none of the words the site knows is carrying
+       the question - if the ONLY thing it would be answering about is a word
+       the site never publishes - then it has nothing to say, even though the
+       supporting words are familiar. */
+    /* An unknown word is not always a refusal: 'هزینه بازپرداخت' names cost,
+       which this site does not publish, but its subject is the refund, which it
+       does. The distinction is which side of the question the word sits on. A
+       word the site never uses, that no known word of the question explains, is
+       the subject - and then saying "I have nothing on that" is the answer. */
+    /* A question with no content words left is a question about the assistant
+       itself: 'شما کی هستید' is entirely pronoun and copula, and the site does
+       publish what this assistant is - in the panel text it shows the visitor.
+       Answering from that chunk is answering from the site, not from a script. */
+    if (!terms.length) {
+      // The site's own description of this assistant is the chunk that was read
+      // from the panel. Look it up by topic so a stray match on 'support' in the
+      // privacy page cannot answer a question about identity.
+      var self = [];
+      for (var d = 0; d < this.docs.length; d++) {
+        if (this.docs[d].topic === 'assistant') {
+          self = [{ doc: this.docs[d], score: 1 }];
+          break;
+        }
+      }
+      if (!self.length) self = this.search('Xiona assistant', { language: 'any', limit: 1 });
+      if (self.length) {
+        return {
+          text: focus(self[0].doc.text, [], 320),
+          source: 'knowledge',
+          language: language,
+          citations: [{ title: self[0].doc.title, route: self[0].doc.route,
+                        topic: self[0].doc.topic, score: Math.round(self[0].score * 100) / 100 }]
+        };
+      }
+      return { text: labels.unsure, source: 'no-match', language: language, citations: [] };
+    }
+
+    var absent = this.absentTerms(terms);
+    var subjectMissing = false;
+    for (var a = 0; a < absent.length; a++) {
+      if (!this.explained(absent[a], terms, absent)) { subjectMissing = true; break; }
+    }
+    if (absent.length && (absent.length === terms.length || subjectMissing) &&
+        !this.carriesQuestion(terms, absent)) {
+      return {
+        text: uncoveredText(absent, language, this.topics()),
+        source: 'uncovered',
+        language: language,
+        citations: [],
+        absent: absent
+      };
+    }
     // Search the whole index, always. The site's page copy is English and much
     // of its catalog is Persian, so language is a weak signal: preferring the
     // question's own language made a Persian question match the one Persian
@@ -755,7 +1122,17 @@
       if (i > 0 && hit.score < floor) break;
       if (seen[hit.doc.topic + ':' + hit.doc.title]) continue;
       seen[hit.doc.topic + ':' + hit.doc.title] = true;
-      var body = focus(hit.doc.text, terms, 340);
+      /* Sentences are ranked against the words that actually occur in this
+         chunk - the visitor's own words plus the translations the chunk
+         contains. Ranking on the visitor's words alone means an English page
+         answers a Persian question with whichever sentence happens to come
+         first. */
+      var budget = 340;
+      var engine = this;
+      var used = expandWith(this.lexicon, terms,
+        function (w) { return engine.rarity(w); },
+        function (w) { return engine.labelled(w); });
+      var body = focus(hit.doc.text, matchedWords(hit.doc, terms, this, used), budget);
       if (!body) continue;
       parts.push(body);
       citations.push({
@@ -822,8 +1199,20 @@
 
   // Learn everything the site ships: the catalog snapshot, the articles, and
   // the sections that live in the page shell rather than a rendered route.
+  /* Has the page-level knowledge (footer, panel text) been added yet? The app
+     re-learns after every render, and adding the same chunks repeatedly would
+     dilute the index. */
   Engine.prototype.learnSite = function (options) {
     var opts = options || {};
+    // The app calls this after every render. Re-indexing the whole site each
+    // time would multiply every chunk and skew the statistics, so the data load
+    // happens once; the caller adds a newly visited page itself.
+    if (this.hasSite) {
+      var again = opts.site || {};
+      if (again.pages && again.pages.length) this.learn({ pages: again.pages });
+      return this;
+    }
+    this.hasSite = true;
     var win = opts.window || (typeof window !== 'undefined' ? window : null);
     var doc = opts.document || (win ? win.document : null);
     var static_ = (win && win.AXIA_STATIC) || {};
@@ -834,18 +1223,37 @@
       articles: opts.articles || (Array.isArray(static_.articles) ? static_.articles : []),
       // Page copy the build rendered from the app's own templates. Without it
       // the assistant only knows the pages this visitor happened to open.
-      pages: opts.pages || (Array.isArray(static_.pages) ? static_.pages : [])
+      pages: opts.pages || (Array.isArray(static_.pages) ? static_.pages : []),
+      // The site's own Persian/English dictionary, emitted by the build.
+      pairs: opts.pairs || (Array.isArray(static_.pairs) ? static_.pairs : [])
     };
     this.learn(args);
+    if (!doc) return this;
     // Footer and header carry the studio's own description on every page.
-    if (doc) {
-      var footer = doc.querySelector('footer .footer-top > p');
-      if (footer) {
-        this.add({
-          id: 'shell-footer', title: 'AXIASOFT', topic: 'about', route: '#/about',
-          text: footer.textContent || ''
-        });
-      }
+    var footer = doc.querySelector('footer .footer-top > p');
+    if (footer) {
+      this.add({
+        id: 'shell-footer', title: 'AXIASOFT', topic: 'about', route: '#/about',
+        text: footer.textContent || ''
+      });
+    }
+    /* What this assistant is, in the words the site shows the visitor. Read it
+       from the page when the panel is open, and otherwise fall back to the
+       template string the app carries - so 'who are you' is answered by the same
+       sentence a visitor can read above the chat box, and the two cannot drift.
+       This is the site describing itself, not a scripted reply. */
+    var claims = [];
+    var nodes = doc.querySelectorAll('.chat-head strong, .chat-head small, .chat-disclaimer');
+    for (var n = 0; n < nodes.length; n++) {
+      var text = (nodes[n].textContent || '').trim();
+      if (text) claims.push(text);
+    }
+    if (claims.length) {
+      this.add({
+        id: 'shell-assistant', title: 'Xiona', topic: 'assistant', route: '#/contact',
+        text: claims.join('. '),
+        keywords: 'assistant bot ai robot made built who xiona دستیار ربات هوش مصنوعی کی ساخت'
+      });
     }
     return this;
   };

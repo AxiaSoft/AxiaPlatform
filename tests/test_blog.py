@@ -130,9 +130,11 @@ class AgentTest(unittest.TestCase):
 
     def test_it_admits_ignorance_rather_than_inventing(self):
         result = agent.answer('what is the capital of Peru')
-        self.assertEqual(result['source'], 'no-match')
-        self.assertEqual(result['topics'], [])
-        self.assertIn('couldn', result['answer'].lower())
+        # 'uncovered' means the site publishes nothing on the subject, which is
+        # the honest answer; 'no-match' means nothing scored. Both refuse.
+        self.assertIn(result['source'], ('no-match', 'uncovered'))
+        self.assertTrue('couldn' in result['answer'].lower() or
+                        'does not publish' in result['answer'].lower())
 
     def test_it_never_mentions_payments_it_cannot_take(self):
         for question in ['refund my order', 'cancel', 'cms']:

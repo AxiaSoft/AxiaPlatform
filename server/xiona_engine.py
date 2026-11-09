@@ -53,73 +53,12 @@ STOPWORDS = {
            'there', 'about', 'tell', 'please', 'want', 'need', 'get', 'got'},
 }
 
-# The site publishes its page copy in English and much of its catalog copy in
-# Persian. This bridge maps the words a visitor uses to the words the site uses.
-# It is a lexicon, not a translator: it never produces prose, only search terms.
-BRIDGE = {
-    'محصول': ['product', 'products', 'catalog'],
-    'محصولات': ['product', 'products', 'catalog'],
-    'کاتالوگ': ['catalog', 'products'],
-    'سفارش': ['order', 'request', 'project'],
-    'درخواست': ['request', 'order'],
-    'پروژه': ['project', 'work'],
-    'شروع': ['start', 'begin', 'request'],
-    'قیمت': ['price', 'cost', 'quote'],
-    'هزینه': ['cost', 'price', 'quote'],
-    'زمان': ['time', 'timing', 'delivery'],
-    'تحویل': ['delivery', 'deliver'],
-    'بازپرداخت': ['refund', 'cancellation'],
-    'لغو': ['cancel', 'cancellation'],
-    'خدمات': ['services', 'service'],
-    'پشتیبانی': ['support', 'help'],
-    'حریم': ['privacy', 'data'],
-    'خصوصی': ['privacy'],
-    'قوانین': ['terms', 'conditions'],
-    'شرایط': ['terms', 'conditions'],
-    'درباره': ['about', 'company'],
-    'شرکت': ['company', 'about'],
-    'تیم': ['team', 'about'],
-    'تماس': ['contact', 'email'],
-    'ارتباط': ['contact'],
-    'وب‌سایت': ['website', 'web', 'site'],
-    'وبسایت': ['website', 'web', 'site'],
-    'سایت': ['website', 'site'],
-    'اپلیکیشن': ['application', 'app', 'mobile'],
-    'نرم‌افزار': ['software'],
-    'طراحی': ['design', 'development'],
-    'توسعه': ['development', 'develop'],
-    'مقاله': ['article', 'blog', 'post'],
-    'مقالات': ['articles', 'blog'],
-    'بلاگ': ['blog', 'article'],
-    'وبلاگ': ['blog', 'article'],
-    'سرعت': ['speed', 'fast', 'performance'],
-    'امنیت': ['security', 'secure'],
-    'پرداخت': ['payment', 'pay'],
-    'حساب': ['account'],
-    'کاربر': ['user', 'account'],
-    'شخص': ['person', 'human'],
-    'انسان': ['human', 'person'],
-    'product': ['محصول'], 'products': ['محصولات'], 'order': ['سفارش'],
-    'request': ['درخواست'], 'project': ['پروژه'], 'price': ['قیمت'],
-    'cost': ['هزینه'], 'refund': ['بازپرداخت'], 'services': ['خدمات'],
-    'support': ['پشتیبانی'], 'privacy': ['حریم'], 'terms': ['قوانین'],
-    'about': ['درباره'], 'contact': ['تماس'], 'website': ['وب‌سایت'],
-    'article': ['مقاله'], 'blog': ['وبلاگ'], 'speed': ['سرعت'],
-    'security': ['امنیت'], 'payment': ['پرداخت'], 'account': ['حساب'],
-}
-
-# Words that describe the setting rather than the subject: 'قوانین سایت' is a
-# question about the terms, not about websites.
-VAGUE = {'website', 'web', 'site', 'page', 'section', 'company', 'about',
-         'product', 'products', 'service', 'services'}
-
-GENERIC = {
-    'fa': {'محصول', 'محصولات', 'کاتالوگ', 'خدمات'},
-    'en': {'product', 'products', 'service', 'services', 'catalog'},
-}
-
+# 'تر' is deliberately absent: it is the comparative ending ('سریع‌تر') but also
+# the last two letters of ordinary nouns, and stripping it turns 'کامپیوتر'
+# into 'کامپیو'. A stemmer that mangles the word it was given is worse than one
+# that keeps a plural - and the JS engine must agree with this list exactly.
 _FA_SUFFIXES = ('هایشان', 'هایمان', 'هایتان', 'هایش', 'هایم', 'هایت', 'های',
-                'هایی', 'ها', 'تر', 'ترین', 'شان', 'مان', 'تان', 'یی', 'یم',
+                'هایی', 'ها', 'ترین', 'شان', 'مان', 'تان', 'یی', 'یم',
                 'ید', 'ند', 'هاست', 'ای', 'ی')
 
 _PERSIAN_RE = re.compile(r'[\u0600-\u06FF]')
@@ -154,52 +93,6 @@ def _light_stem(word):
     return _strip_suffix(word)
 
 
-PHRASES = [
-    (re.compile(r'(سفارش|درخواست).*(ثبت|بدم|بدهم|کنم)|چطور.*(سفارش|درخواست)'),
-     ['place an order', 'start a project', 'request', 'order']),
-    (re.compile(r'بازپرداخت|پس دادن پول|استرداد'), ['refund', 'cancellation']),
-    (re.compile(r'حریم خصوصی|اطلاعات من'), ['privacy', 'data protection']),
-    (re.compile(r'قوانین|شرایط استفاده'), ['terms', 'conditions']),
-    (re.compile(r'با انسان|پشتیبان انسانی|آدم واقعی'), ['human', 'support', 'person']),
-    (re.compile(r'قیمت|هزینه|چقدر'), ['price', 'cost', 'quote']),
-    (re.compile(r'محصولات|چه چیزی می‌فروشید'), ['products', 'catalog']),
-]
-
-# A site with no prices on it cannot answer a price question.
-UNCOVERED = [
-    (re.compile(r'قیمت|هزینه|چقدر|تعرفه|price|cost|pricing|how much', re.I), {
-        'fa': 'قیمت‌ها روی این سایت منتشر نشده‌اند. دامنه و هزینه پس از بررسی درخواست شما '
-              'توافق می‌شود؛ می‌توانید از صفحهٔ تماس درخواست بفرستید.',
-        'en': 'Prices are not published on this site. Scope and cost are agreed after your '
-              'request is reviewed — the Start a project page is the way in.',
-    }),
-    (re.compile(r'ربات|هوش مصنوعی هستی|are you (an? )?(ai|bot|robot)|who made you', re.I), {
-        'fa': 'من Xiona هستم، دستیار همین سایت. کاملاً داخل مرورگر شما اجرا می‌شوم؛ از محتوای '
-              'منتشرشدهٔ AXIASOFT یاد می‌گیرم و به هیچ سرویس بیرونی وصل نیستم.',
-        'en': "I'm Xiona, this site's assistant. I run entirely in your browser, learn from what "
-              "AXIASOFT publishes, and am not connected to any outside service.",
-    }),
-]
-
-
-def expand(terms, language, question):
-    """Add the question's words in the other language, and its task phrases."""
-    out = list(terms)
-    extra = []
-    folded = fold(question).lower()
-    for pattern, words in PHRASES:
-        if not pattern.search(folded):
-            continue
-        for word in words:
-            if word not in out and word not in extra:
-                extra.append(word)
-    for term in terms:
-        for word in BRIDGE.get(term, []):
-            if word not in out and word not in extra:
-                extra.append(word)
-    return out, extra
-
-
 def tokenize(text):
     folded = fold(text).lower()
     language = 'fa' if is_persian(text) else 'en'
@@ -219,6 +112,56 @@ def tokenize(text):
 # --------------------------------------------------------------------------- #
 
 MAX_CHUNK = 420
+
+
+# --------------------------------------------------------------------------- #
+# Vocabulary
+#
+# A visitor types Persian; most of what this site publishes is English. The
+# bridge is not a list written here: the UI ships a Persian/English dictionary
+# so a Persian reader can use the same product, and the build hands those pairs
+# over. A string added to the UI tomorrow is understood after the next build.
+# --------------------------------------------------------------------------- #
+
+class Lexicon:
+    """Word-level translations learned from the site's own dictionary."""
+
+    def __init__(self, pairs=None):
+        en_to_fa, fa_to_en, seen = {}, {}, {}
+        for pair in pairs or []:
+            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                continue
+            left, right = str(pair[0] or ''), str(pair[1] or '')
+            if not left or not right:
+                continue
+            english, persian = tokenize(left), tokenize(right)
+            if len(english) == 1 and len(persian) == 1:
+                if is_persian(english[0]) != is_persian(persian[0]):
+                    en_to_fa.setdefault(english[0], {})
+                    en_to_fa[english[0]][persian[0]] = \
+                        en_to_fa[english[0]].get(persian[0], 0) + 1
+                    fa_to_en.setdefault(persian[0], {})
+                    fa_to_en[persian[0]][english[0]] = \
+                        fa_to_en[persian[0]].get(english[0], 0) + 1
+            # A phrase pair does not say which word means which, but it does say
+            # the two sides describe one thing. Recorded as co-topic evidence
+            # only - never as a translation, because a guessed translation is an
+            # invented answer.
+            for f in persian:
+                if len(f) < 3:
+                    continue
+                bucket = seen.setdefault(f, {})
+                for e in english:
+                    if len(e) < 3:
+                        continue
+                    bucket[e] = bucket.get(e, 0) + 1
+        self.en = {k: max(v, key=v.get) for k, v in en_to_fa.items() if v}
+        self.fa = {k: max(v, key=v.get) for k, v in fa_to_en.items() if v}
+        self.known = {k: [w for w, _ in sorted(v.items(), key=lambda kv: -kv[1])]
+                      for k, v in seen.items()}
+
+    def __len__(self):
+        return len(self.fa)
 
 
 def clean(text):
@@ -310,6 +253,19 @@ class Engine:
         self.corpus = {'fa': [], 'en': []}
         self.df = {'fa': {}, 'en': {}}
         self.avg_length = {'fa': 1.0, 'en': 1.0}
+        # The site's own Persian/English dictionary, handed over by the build.
+        self.lexicon = Lexicon()
+
+    def vocabulary(self, pairs):
+        """Teach the assistant the site's own vocabulary.
+
+        The UI ships a Persian/English dictionary so a Persian reader can use the
+        same product. Those pairs are the site's own statement about what means
+        what, so they become search terms - not a list kept in this file.
+        """
+        if pairs:
+            self.lexicon = Lexicon(pairs)
+        return self
 
     # ---------------------------------------------------------------- build
     def add(self, doc):
@@ -339,6 +295,8 @@ class Engine:
     def learn(self, source):
         """Index everything the site publishes. No list to keep in sync."""
         source = source or {}
+        if source.get('pairs'):
+            self.vocabulary(source['pairs'])
         index = 0
 
         def push(topic, title, route, text, language=None, keywords=''):
@@ -411,53 +369,139 @@ class Engine:
         import math
         return math.log(1 + (total - docs + 0.5) / (docs + 0.5))
 
+    # ------------------------------------------------------------- evidence
+    def reach(self, term, extra=None):
+        """How many chunks a word touches, counting its translation."""
+        words = [term] + [w for w in (extra or []) if w != term]
+        return sum(1 for doc in self.docs
+                   if any(word in doc['tokens'] for word in words))
+
+    def known(self, term):
+        """Is this word part of what the site publishes at all?"""
+        direct = self.lexicon.fa.get(term) or self.lexicon.en.get(term)
+        if self.reach(term, [direct] if direct else []) > 0:
+            return True
+        partners = self.lexicon.known.get(term) or []
+        return bool(partners) and self.reach(partners[0]) > 0
+
+    def expand(self, terms):
+        """The words to search for, beyond the visitor's own.
+
+        A one-to-one translation is used as a translation. A phrase partner is
+        only used when the corpus cannot contain the word at all, and only the
+        strongest two of them - taking the whole phrase turns a question about
+        price into a question about orders, scope and delivery as well.
+        """
+        out = []
+        for term in terms:
+            direct = self.lexicon.fa.get(term) or self.lexicon.en.get(term)
+            candidates = [direct] if direct else []
+            if not candidates and self.reach(term) == 0:
+                for word in self.lexicon.known.get(term, []):
+                    if word in STOPWORDS['en'] or self.reach(word) == 0:
+                        continue
+                    candidates.append(word)
+                    if len(candidates) >= 2:
+                        break
+            for word in candidates:
+                if word and word not in out and word not in terms:
+                    out.append(word)
+        return out
+
+    def absent_terms(self, terms):
+        return [t for t in terms if not self.known(t)]
+
+    def topics(self):
+        seen, out = set(), []
+        for doc in self.docs:
+            if not doc['title'] or doc['topic'] in seen or doc['topic'] == 'article':
+                continue
+            seen.add(doc['topic'])
+            out.append(doc['title'])
+        return out
+
+    def carries_question(self, terms, absent):
+        """Does a word the site knows actually answer this question?"""
+        for term in terms:
+            if term in absent:
+                continue
+            direct = self.lexicon.fa.get(term) or self.lexicon.en.get(term)
+            if self.reach(term, [direct] if direct else []) >= 1:
+                return True
+        return False
+
+    def explained(self, word, terms, absent):
+        """Is an unknown word accounted for by another word in the question?"""
+        mine = self.lexicon.known.get(word) or []
+        for other in terms:
+            if other == word or other in absent:
+                continue
+            theirs = self.lexicon.known.get(other) or []
+            if any(shared in theirs for shared in mine):
+                return True
+        return False
+
+    # --------------------------------------------------------------- search
     def search(self, question, language=None, limit=None):
-        base = tokenize(question)
-        if not base:
+        terms = tokenize(question)
+        if not terms:
             return []
-        language = language or ('fa' if is_persian(question) else 'en')
-        pool = self.docs if language == 'any' else (self.corpus.get(language) or [])
-        if not pool:
-            pool = self.docs
+        bridged = self.expand(terms)
 
-        terms, bridged = expand(base, language, question)
-        generic = GENERIC.get(language, set())
-        vague_own = sum(1 for t in terms if t in VAGUE or t in generic)
-        meaningful = max(1, len(terms) - vague_own)
+        # Which of the visitor's words carry the question? A word spread across
+        # most of the corpus describes the setting, not the subject.
+        informative = []
+        for term in terms:
+            direct = self.lexicon.fa.get(term) or self.lexicon.en.get(term)
+            reach = self.reach(term, [direct] if direct else [])
+            if reach == 0:
+                if self.known(term):
+                    informative.append(term)
+            elif reach < 0.6 * len(self.docs):
+                informative.append(term)
+        meaningful = max(1, len(informative))
+
         phrase = re.sub(r'\s+', ' ', fold(question).lower()).strip()
-
         ranked = []
-        for doc in pool:
+        for doc in self.docs:
             counts = {}
             for token in doc['tokens']:
                 counts[token] = counts.get(token, 0) + 1
+            score = 0.0
+            matched = own = 0
+            covered = []
 
-            def add(term, weight):
+            def weigh(term, weight):
+                nonlocal score
                 freq = counts.get(term, 0)
                 if not freq:
                     return False
                 norm = doc['length'] / (self.avg_length.get(doc['language']) or 1)
-                nonlocal score
                 score += weight * self._idf(doc['language'], term) * (
                     (freq * (self.k1 + 1)) / (freq + self.k1 * (1 - self.b + self.b * norm)))
                 return True
 
-            score = 0.0
-            matched = own = strong = 0
             for term in terms:
-                if add(term, 1.0):
+                if weigh(term, 1.0):
                     matched += 1
                     own += 1
-                    if term not in generic:
-                        strong += 1
-            for term in bridged:
-                weight = 0.45 if term in VAGUE else 0.85
-                if add(term, weight):
-                    matched += 1
-                    if term not in generic and term not in VAGUE:
-                        strong += 1
+                    if term not in covered:
+                        covered.append(term)
+            for word in bridged:
+                if not weigh(word, 0.85):
+                    continue
+                matched += 1
+                for term in terms:
+                    direct = self.lexicon.fa.get(term) or self.lexicon.en.get(term)
+                    if direct == word or word in (self.lexicon.known.get(term) or []):
+                        if term not in covered:
+                            covered.append(term)
             if not matched:
                 continue
+            # A chunk holding a translation but none of the visitor's own words
+            # is a fallback, never a better answer than a direct hit.
+            if own == 0:
+                score *= 0.35
 
             total = len(terms) + len(bridged)
             score *= 1 + 0.45 * (matched / total)
@@ -465,7 +509,6 @@ class Engine:
                 score *= 1.18
             if len(phrase) > 3 and phrase in doc['text'].lower():
                 score *= 1.55
-            # The page's own label is the strongest signal of its subject.
             label = fold(doc['title'] + ' ' + doc['topic'] + ' ' +
                          doc.get('keywords', '')).lower()
             all_terms = terms + bridged
@@ -473,9 +516,10 @@ class Engine:
             if label_hits:
                 score *= 1 + 1.8 * (label_hits / len(all_terms))
 
+            hits = sum(1 for term in informative if term in covered)
             ranked.append({'doc': doc, 'score': score, 'matched': matched,
-                           'ownMatched': own, 'strongMatched': strong,
-                           'coverage': min(1.0, strong / meaningful)})
+                           'ownMatched': own, 'strongMatched': matched,
+                           'coverage': min(1.0, hits / meaningful)})
         ranked.sort(key=lambda hit: -hit['score'])
         return ranked[:limit or self.max_results]
 
@@ -483,17 +527,13 @@ class Engine:
         """True when the best hit is too weak to answer with.
 
         Coverage, not raw score: a BM25 score depends on corpus size, so an
-        absolute threshold that works on the live site rejects everything on a
-        small one. Language is deliberately not part of the test - the page copy
-        is English and much of the catalog is Persian, so a Persian question will
-        often only match English text.
+        absolute threshold tuned on the live site rejects everything on a small
+        one. Coverage counts only the words that carry the question.
         """
         if not best:
             return True
         if best['score'] < self.min_score:
             return True
-        # coverage already ignores the words that describe the setting rather
-        # than the subject, so it is the honest measure of "did I answer".
         return best['coverage'] < 0.5
 
     # -------------------------------------------------------------- answer
@@ -505,14 +545,20 @@ class Engine:
             return tidy(text)
         if len(parts) == 1:
             return tidy(parts[0])
+        # A sentence with the rare word the question is about is the better lead
+        # than one that merely repeats a common word.
+        weight = {}
+        for term in terms:
+            seen = sum(1 for part in parts if term in tokenize(part))
+            weight[term] = 1.0 / seen if seen else 0.0
         scored = []
         for index, part in enumerate(parts):
             tokens = tokenize(part)
-            hits = sum(1 for term in terms if term in tokens)
+            hits = sum(weight.get(term, 0.0) for term in terms if term in tokens)
             scored.append((hits, index))
         scored.sort(key=lambda pair: (-pair[0], pair[1]))
         keep, used = [], 0
-        for hits, index in scored:
+        for _, index in scored:
             part = parts[index]
             if used + len(part) > budget and keep:
                 break
@@ -526,28 +572,63 @@ class Engine:
         return tidy(' '.join(parts[index] for index in keep))
 
     def answer(self, question):
-        labels = _LABELS['fa' if is_persian(question) else 'en']
         language = 'fa' if is_persian(question) else 'en'
+        labels = _LABELS[language]
         query = str(question or '').strip()[:MAX_QUESTION]
         if not query:
-            return {'answer': labels['unsure'], 'source': 'empty', 'language': language, 'citations': []}
+            return {'answer': labels['unsure'], 'source': 'empty',
+                    'language': language, 'citations': []}
         if not self.size():
-            return {'answer': labels['nodocs'], 'source': 'empty-index', 'language': language, 'citations': []}
+            return {'answer': labels['nodocs'], 'source': 'empty-index',
+                    'language': language, 'citations': []}
         if _GREETING.match(query) and len(tokenize(query)) <= 2:
-            return {'answer': labels['greeting'], 'source': 'greeting', 'language': language, 'citations': []}
-        for pattern, texts in UNCOVERED:
-            if pattern.search(query):
-                return {'answer': texts[language], 'source': 'policy',
-                        'language': language, 'citations': []}
+            return {'answer': labels['greeting'], 'source': 'greeting',
+                    'language': language, 'citations': []}
 
-        # Search the whole index, always: the page copy is English and much of
-        # the catalog is Persian, so the question's language is a weak signal.
+        # There used to be two regex tables here that answered price and
+        # "are you a bot" with a ready-made sentence. Reciting is not answering,
+        # and it got the question wrong: 'پروژه چقدر طول میکشد' (how long does a
+        # project take) matched the price table on 'چقدر' and was answered about
+        # pricing. What can be settled from the site's own text is whether the
+        # word the question hangs on is present in what it publishes.
+        terms = tokenize(query)
+        # A question with no content words left is a question about the
+        # assistant itself: 'شما کی هستید' is pronoun and copula only. The site
+        # publishes what this assistant is, so answer from that chunk.
+        if not terms:
+            # The site's own description of this assistant is the chunk read from
+            # the panel; look it up by topic so a stray 'support' match in the
+            # privacy page cannot answer a question about identity.
+            hits_self = [{'doc': doc, 'score': 1.0} for doc in self.docs
+                         if doc['topic'] == 'assistant'] or \
+                        self.search('Xiona assistant', 'any', limit=1)
+            if hits_self:
+                doc = hits_self[0]['doc']
+                return {'answer': self._focus(doc['text'], [], 320),
+                        'source': 'knowledge', 'language': language,
+                        'citations': [{'title': doc['title'], 'route': doc['route'],
+                                       'topic': doc['topic'],
+                                       'score': round(hits_self[0]['score'], 2)}]}
+            return {'answer': labels['unsure'], 'source': 'no-match',
+                    'language': language, 'citations': []}
+
+        absent = self.absent_terms(terms)
+        subject_missing = any(not self.explained(word, terms, absent) for word in absent)
+        if absent and (len(absent) == len(terms) or subject_missing) and \
+                not self.carries_question(terms, absent):
+            return {'answer': uncovered_text(absent, language, self.topics()),
+                    'source': 'uncovered', 'language': language,
+                    'citations': [], 'absent': absent}
+
         hits = self.search(query, 'any')
         if self._judge(hits[0] if hits else None):
             return {'answer': labels['unsure'], 'source': 'no-match',
                     'language': language, 'citations': []}
 
-        terms = tokenize(query)
+        used = self.expand(terms)
+        for term in terms:
+            if term in _all_tokens_of(hits):
+                used.append(term)
         parts, citations, seen = [], [], set()
         for hit in hits:
             doc = hit['doc']
@@ -557,7 +638,7 @@ class Engine:
             seen.add(key)
             if parts and hit['score'] < hits[0]['score'] * 0.55:
                 break
-            body = self._focus(doc['text'], terms, 340)
+            body = self._focus(doc['text'], used, 340)
             if not body:
                 continue
             parts.append(body)
@@ -567,6 +648,33 @@ class Engine:
                 break
         return {'answer': ' '.join(parts), 'source': 'knowledge',
                 'language': language, 'citations': citations}
+
+
+def _all_tokens_of(hits):
+    tokens = set()
+    for hit in hits:
+        tokens.update(hit['doc']['tokens'])
+    return tokens
+
+
+def uncovered_text(absent, language, topics):
+    """Say plainly that the site does not cover a subject, and name what it does.
+
+    The list of what the site covers comes from the index, so the sentence stays
+    true as the site changes.
+    """
+    join = '، ' if language == 'fa' else ', '
+    subject = join.join(absent)
+    listing = join.join(topics[:5])
+    if language == 'fa':
+        return ('این سایت دربارهٔ «' + subject + '» چیزی منتشر نکرده است، '
+                'پس پاسخ تأییدشده‌ای ندارم.' +
+                (' آنچه منتشر شده: ' + listing + '.' if listing else '') +
+                ' می‌توانید پرسش خود را از صفحهٔ «شروع پروژه» مطرح کنید.')
+    return ('This site does not publish anything about "' + subject +
+            '", so I have no answer for it.' +
+            (' What it does publish: ' + listing + '.' if listing else '') +
+            ' You can raise it on the Start a project page.')
 
 
 _GREETING = re.compile(r'^(hi|hello|hey|salam|سلام|درود|وقت بخیر|چطوری|خوبی)(\s|$|[!,.؟?])',
@@ -604,12 +712,23 @@ _engine = None
 _content_stamp = None
 
 
-def build_engine(products, articles):
-    """Index a catalog and an article list. Used by the server and by tests."""
-    return Engine().learn({'products': products or [], 'articles': articles or []})
+def build_engine(products, articles, pages=None, pairs=None):
+    """Index what the site publishes. Used by the server and by tests.
+
+    ``pages`` is the page copy the build renders and ``pairs`` is the site's own
+    Persian/English dictionary. Both are optional, so a caller with only a
+    catalog still works - but supplying them is what lets a Persian question
+    reach English page copy.
+    """
+    return Engine().vocabulary(pairs).learn({
+        'products': products or [],
+        'articles': articles or [],
+        'pages': pages or [],
+    })
 
 
-def get_engine(products_provider, articles_provider, stamp):
+def get_engine(products_provider, articles_provider, stamp,
+               pages_provider=None, pairs_provider=None):
     """Return a cached engine, rebuilding only when the content stamp changes.
 
     ``stamp`` is anything comparable that changes when content does (a row count
@@ -618,7 +737,10 @@ def get_engine(products_provider, articles_provider, stamp):
     """
     global _engine, _content_stamp
     if _engine is None or stamp != _content_stamp:
-        _engine = build_engine(products_provider(), articles_provider())
+        _engine = build_engine(
+            products_provider(), articles_provider(),
+            pages_provider() if pages_provider else None,
+            pairs_provider() if pairs_provider else None)
         _content_stamp = stamp
     return _engine
 
