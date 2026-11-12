@@ -95,3 +95,54 @@ class CoverPathTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ProductCoverArtTests(unittest.TestCase):
+    """The card art must show the whole uploaded image, at one size.
+
+    The product covers are square logos (about 418x420) in a wide, short box.
+    object-fit: cover scaled a square until its width filled the box, which threw
+    away just over half the logo's height - the mark was sliced through the
+    middle and the brand name underneath vanished. object-fit: contain fits the
+    whole image, so nothing is cropped; the box is tall enough that every card
+    shows its logo at the same height.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        cls.built = (ROOT / 'styles.css').read_text(encoding='utf-8')
+
+    def _rule(self, css, selector):
+        # Match the rule that starts with this selector exactly: searching for
+        # the substring also finds '.detail-visual .product-cover...', which
+        # overrides only the padding.
+        start = 0
+        while True:
+            start = css.index(selector, start)
+            if start == 0 or css[start - 1] in '{}\n':
+                break
+            start += len(selector)
+        return css[start:css.index('}', start)]
+
+    def test_the_cover_is_contained_not_cropped(self):
+        for name, css in (('public', self.css), ('built root', self.built)):
+            rule = self._rule(css, '.product-cover.has-image img')
+            self.assertIn('object-fit: contain', rule,
+                          f'{name}: an uploaded cover must not be cropped')
+            self.assertNotIn('object-fit: cover', rule, name)
+
+    def test_every_card_box_is_the_same_height(self):
+        for name, css in (('public', self.css), ('built root', self.built)):
+            rule = self._rule(css, '.product-cover.has-image {')
+            self.assertIn('height:', rule,
+                          f'{name}: uploaded covers need their own fixed height, '
+                          'or a row of cards stops lining up')
+            self.assertIn('232px', rule, name)
+
+    def test_the_label_does_not_stretch_across_the_card(self):
+        # The cover is a grid with place-items:center, which stretched a
+        # positioned child to its inset box: the label spanned 334 of 360px and
+        # read as an empty bar.
+        rule = self._rule(self.css, '.product-cover.has-image .cover-label')
+        self.assertIn('width: max-content', rule)
