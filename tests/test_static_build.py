@@ -140,6 +140,18 @@ class ProductCoverArtTests(unittest.TestCase):
                           'or a row of cards stops lining up')
             self.assertIn('232px', rule, name)
 
+    def test_one_cover_height_everywhere(self):
+        # A mobile override lived in the media query near the top of the file,
+        # but the base .has-image rule comes later at equal specificity, so the
+        # override never applied. Rather than keep a rule that does nothing,
+        # the box has a single height and the card gets narrower on a phone,
+        # not shorter - which keeps the logo the same size on both.
+        import re
+        for name, css in (('public', self.css), ('built root', self.built)):
+            heights = re.findall(
+                r'\.product-cover\.has-image\s*\{[^}]*height:\s*(\d+)px', css)
+            self.assertEqual(sorted(set(heights)), ['232'], name)
+
     def test_the_label_does_not_stretch_across_the_card(self):
         # The cover is a grid with place-items:center, which stretched a
         # positioned child to its inset box: the label spanned 334 of 360px and
