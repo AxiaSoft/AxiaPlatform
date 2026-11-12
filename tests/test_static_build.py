@@ -158,3 +158,78 @@ class ProductCoverArtTests(unittest.TestCase):
         # read as an empty bar.
         rule = self._rule(self.css, '.product-cover.has-image .cover-label')
         self.assertIn('width: max-content', rule)
+
+
+class HomeLayoutTests(unittest.TestCase):
+    """The home page's shape, pinned down after a round of restructuring.
+
+    Three changes landed together and each one has a way of silently coming
+    back:
+
+      * the "Our north star" card was removed from the about block,
+      * the landing strip ("Digital, with intention.") moved above the
+        "Independent thinking. Intentional engineering." line,
+      * the AXIASOFT mark moved from the hero's right column to a section of its
+        own, under that landing strip.
+
+    Reordering is not the kind of thing a screenshot keeps honest over time, so
+    the order is asserted against the markup that actually ships.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        cls.built = (ROOT / 'app.js').read_text(encoding='utf-8')
+        cls.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+
+    def _home(self, js):
+        # home() is the template literal that returns the whole page.
+        start = js.index('function home(){')
+        end = js.index('function productArt(', start)
+        return js[start:end]
+
+    def test_the_north_star_card_is_gone(self):
+        for name, js in (('public', self.js), ('built root', self.built)):
+            home = self._home(js)
+            self.assertNotIn('Our north star', home,
+                             f'{name}: the north-star card was removed from the home page')
+            self.assertNotIn('feature-panel', home,
+                             f'{name}: its empty column must not remain either')
+
+    def test_the_section_that_held_it_is_no_longer_half_empty(self):
+        # With the card gone the about block kept a two-column grid whose second
+        # column had nothing in it, leaving half the page blank.
+        home = self._home(self.js)
+        self.assertIn('two-col-single', home)
+        self.assertIn('.two-col-single', self.css)
+
+    def test_the_landing_comes_before_the_independent_line(self):
+        home = self._home(self.js)
+        # categoryCards() renders the "Digital, with intention." strip;
+        # brandMark() renders the mark and the line beneath it.
+        self.assertLess(home.index('${categoryCards()}'), home.index('${brandMark()}'),
+                        'the landing strip must come first')
+
+    def test_the_mark_sits_under_the_landing_not_in_the_hero(self):
+        home = self._home(self.js)
+        hero = home[home.index('<section class="hero'):home.index('</section>')]
+        self.assertNotIn('hero-logo', hero,
+                         'the mark was moved out of the hero into its own section')
+        start = self.js.index('function brandMark()')
+        section = self.js[start:self.js.index('function home(){', start)]
+        self.assertIn('hero-logo', section)
+        self.assertIn('Independent thinking. Intentional engineering.', section,
+                      'the line belongs under the mark it introduces')
+
+    def test_the_hero_copy_is_centred_when_it_stands_alone(self):
+        # The hero no longer has a second column to sit beside, so it must not
+        # keep the two-column grid: the copy would occupy half the page.
+        self.assertIn('hero-solo', self._home(self.js))
+        self.assertIn('.hero-solo', self.css)
+
+    def test_a_test_for_this_class_is_not_reading_a_stale_build(self):
+        # The class reads the generated root build too, so a stylesheet or
+        # bundle that was not regenerated fails here rather than passing on the
+        # source alone.
+        home = self._home(self.built)
+        self.assertIn('categoryCards()', home)
