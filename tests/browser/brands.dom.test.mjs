@@ -25,7 +25,7 @@ function fetchStub(url) {
   return { ok: true, status: 200, headers: { get: () => null }, json: async () => body };
 }
 
-async function boot(hash = '#/products', lang = 'fa') {
+async function boot(hash = '#/products', lang = 'fa', storedBrand = null) {
   const dom = new JSDOM(read('index.html'), {
     runScripts: 'outside-only', url: 'https://x.test/AxiaPlatform/' + hash, pretendToBeVisual: true,
   });
@@ -33,6 +33,7 @@ async function boot(hash = '#/products', lang = 'fa') {
   const errors = [];
   w.addEventListener('error', (e) => errors.push(String(e.message)));
   w.localStorage.setItem('axia-lang', lang);
+  if (storedBrand) w.localStorage.setItem('axia-brand', storedBrand);
   w.fetch = fetchStub;
   w.matchMedia = w.matchMedia || (() => ({
     matches: false, addEventListener() {}, removeEventListener() {},
@@ -92,6 +93,63 @@ ck('the AXIASOFT mark is restored',
    doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png');
 ck('the wordmark returns', doc.querySelector('#brand-wordmark').hidden === false);
 ck('the brand attribute is removed', !doc.documentElement.hasAttribute('data-brand'));
+
+/* --------------------------------------- the header logo goes home -------
+   A visitor who picks Homa and then presses the header logo expects the
+   AXIASOFT mark back. The link points at '#/' and nothing ever cleared the
+   brand on that route, so the hash changed, the home page rendered, and the
+   Homa logo simply stayed in the header.
+
+   Two ways in are covered because they fail for different reasons: choosing
+   the brand from the catalog, and arriving with one already stored.
+   ------------------------------------------------------------------------ */
+const picked = await boot('#/products');
+click(picked.w, picked.doc.querySelector('[data-brand-pick="homa"]'));
+await new Promise((r) => setTimeout(r, 400));
+ck('the brand is running before the logo is pressed',
+   picked.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/homa-mark.png');
+
+click(picked.w, picked.doc.querySelector('#brand-link'));
+await new Promise((r) => setTimeout(r, 500));
+ck('pressing the header logo restores the AXIASOFT mark',
+   picked.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png',
+   picked.doc.querySelector('#brand-mark img').getAttribute('src'));
+ck('the brand attribute is gone', !picked.doc.documentElement.hasAttribute('data-brand'),
+   picked.doc.documentElement.getAttribute('data-brand'));
+ck('the stored choice is dropped, so a reload stays AXIASOFT',
+   picked.w.localStorage.getItem('axia-brand') === null,
+   picked.w.localStorage.getItem('axia-brand'));
+ck('the AXIASOFT wordmark comes back',
+   picked.doc.querySelector('#brand-wordmark').hidden === false);
+ck('the title stops naming the brand', picked.doc.title.startsWith('AXIASOFT'), picked.doc.title);
+ck('pressing the logo still lands on the home page',
+   picked.w.location.hash === '#/' || picked.w.location.hash === '',
+   picked.w.location.hash);
+
+/* A returning visitor: the choice was stored on an earlier visit, so the very
+   first render already shows that brand. */
+const returning = await boot('#/products', 'fa', 'mino');
+ck('a stored brand is running on arrival',
+   returning.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/mino-mark.png',
+   returning.doc.querySelector('#brand-mark img').getAttribute('src'));
+click(returning.w, returning.doc.querySelector('#brand-link'));
+await new Promise((r) => setTimeout(r, 500));
+ck('a returning visitor can also press the logo to get AXIASOFT back',
+   returning.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png');
+
+/* The home page is the AXIASOFT studio page, so arriving there drops a product
+   brand. Without this the header could show Homa above AXIASOFT's own hero. */
+const homeWithBrand = await boot('#/', 'fa', 'homa');
+ck('the home page does not wear a product brand',
+   homeWithBrand.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png',
+   homeWithBrand.doc.querySelector('#brand-mark img').getAttribute('src'));
+
+/* With no brand running the link must keep doing its ordinary job. */
+const plain = await boot('#/products');
+click(plain.w, plain.doc.querySelector('#brand-link'));
+await new Promise((r) => setTimeout(r, 400));
+ck('with no brand active the header logo still navigates home',
+   plain.w.location.hash === '#/', plain.w.location.hash);
 
 /* ------------------------------------------------ a second language ----- */
 const english = await boot('#/products', 'en');

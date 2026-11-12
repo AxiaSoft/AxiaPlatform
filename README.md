@@ -349,6 +349,11 @@ Two optional DOM tests render the real markup, scripts and effects layer in jsdo
 npm install --no-save jsdom
 node tests/browser/effects.dom.test.mjs
 node tests/browser/admin.dom.test.mjs
+
+# The brand suite reads a built copy of the site rather than the source, so
+# point it at one. It covers the header logo returning to AXIASOFT.
+python3 tools/build_static.py --out /tmp/site2/AxiaPlatform --base /AxiaPlatform/
+STATIC_DIST=/tmp/site2/AxiaPlatform/ node tests/browser/brands.dom.test.mjs
 ```
 
 jsdom is intentionally not a project dependency; these tests are skipped in CI when it is absent. They are not a substitute for a full browser suite or a penetration test.
