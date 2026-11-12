@@ -483,6 +483,87 @@ html[lang="fa"] .category-card .arrow-link{left:17px;bottom:16px}
   text-overflow: ellipsis;
 }
 
+/* ---- home: the mark under the landing strip ------------------------------
+   The hero used to be two columns: copy on one side, the orbiting emblem and
+   its two tags on the other. The emblem now belongs to the landing strip that
+   follows it, so the hero holds copy only and centres the column it has.
+
+   The mark is centred rather than aligned to an edge because it is no longer
+   answering text beside it - it is the page's emblem, on its own line. */
+
+.hero-solo {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+  padding-bottom: 46px;
+  min-height: unset;
+}
+.hero-solo .hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 780px;
+  padding-bottom: 0;
+}
+.hero-solo .hero-copy .headline,
+.hero-solo .hero-copy .subhead { max-width: 780px; }
+.hero-solo .hero-actions { justify-content: center; }
+/* The eyebrow's rule is drawn before the text, which reads as a stray dash when
+   the line is centred; it keeps it on both sides here so the label stays
+   balanced. */
+.hero-solo .eyebrow::after {
+  content: "";
+  width: 23px;
+  height: 1px;
+  background: currentColor;
+}
+.hero-solo .subhead { text-align: center; }
+
+.brand-mark-section {
+  padding-top: 26px;
+  padding-bottom: 30px;
+}
+.brand-mark-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+/* .hero-art already owns the orbit, the floating mark and the two tag boxes;
+   it only needs to stop reserving a column's worth of height and become the
+   positioning box they were written against. */
+.brand-mark-stage .hero-art {
+  width: 100%;
+  max-width: 620px;
+  height: 330px;
+}
+.brand-mark-stage .hero-note {
+  margin-top: 0;
+  justify-content: center;
+}
+/* Minding the two tag boxes: they sit at the far corners of a box that is now
+   the full width of the page, which pushes them into the empty margins. */
+.brand-mark-stage .tag-one { right: 0; top: 34px; }
+.brand-mark-stage .tag-two { left: 0; bottom: 34px; }
+
+/* A two-column block whose second column is gone. Without this the copy keeps
+   half the page and leaves the right half blank. */
+.two-col-single {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 720px;
+}
+
+@media (max-width: 650px) {
+  .hero-solo { padding: 38px 0 34px; }
+  .hero-solo .hero-copy { max-width: 100%; }
+  .brand-mark-section { padding-top: 18px; padding-bottom: 24px; }
+  .brand-mark-stage .hero-art { height: 250px; max-width: 100%; }
+  .brand-mark-stage .tag-one { right: 0; top: 0; }
+  .brand-mark-stage .tag-two { left: 0; bottom: 0; }
+  .brand-mark-stage .hero-logo { width: 150px; height: 150px; }
+  .two-col-single { max-width: 100%; }
+}
+
 /* The header plate belongs to a product brand only. Applying it regardless put
    a pale square behind the AXIASOFT emblem, which is already a colourful mark
    on transparency — it read as a broken image rather than a logo. */
