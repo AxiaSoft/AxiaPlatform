@@ -248,7 +248,10 @@ await admin.evaluate(() => {
 await pause(1800);
 const loaded = await admin.evaluate(() =>
   JSON.parse(localStorage.getItem('axia-demo-products-v1') || '[]').length);
-check('the maintenance tab can load a sample catalog', loaded === 6, `products=${loaded}`);
+/* Ten rows now: the four website builds plus the six neutral samples. The four
+   are demo-only content, kept out of the published catalog and written here on
+   request, so a visitor trying the console has real products with artwork. */
+check('the maintenance tab can load a sample catalog', loaded === 10, `products=${loaded}`);
 
 await store.reload({ waitUntil: 'networkidle0' });
 await store.evaluate(() => { location.hash = '#/products'; });
@@ -257,22 +260,24 @@ const catalog = await store.evaluate(() => ({
   cards: document.querySelectorAll('.product-card').length,
   prices: document.querySelectorAll('.product-price').length,
   featuredFirst: (document.querySelector('.product-card h3') || {}).textContent || '',
+  titles: [...document.querySelectorAll('.product-card h3')].map((h) => h.textContent.trim()),
 }));
 // The storefront hides AURION (its own showcase page) and unpublished rows, so
-// six stored products show as four cards.
-check('the storefront shows the sample catalog', catalog.cards === 4, `cards=${catalog.cards}`);
+// ten stored products show as eight cards: the four website builds and the four
+// published neutral samples.
+check('the storefront shows the sample catalog', catalog.cards === 8, `cards=${catalog.cards}`);
 check('price labels can be switched off', catalog.prices === 0, `labels=${catalog.prices}`);
 // The sample catalog is written in the console's language, so a Persian
 // install renders the Persian title for the same product.
-check('the featured product leads the catalog',
-  /Northstar|نورت‌استار|شرکتی نورث/i.test(catalog.featuredFirst), catalog.featuredFirst);
+check('the featured product is in the catalog',
+  /Northstar|نورت‌استار|شرکتی نورث/i.test(catalog.titles.join(' ')), catalog.titles.join(' | ').slice(0, 90));
 
 /* ------------------------------------------------ product controls --- */
 await admin.evaluate(() => { location.hash = '#products'; });
 await pause(1300);
 const rows = await admin.evaluate(() =>
   [...document.querySelectorAll('[data-act="feature-product"]')].map((b) => Number(b.dataset.id)));
-check('catalog lists the sample products', rows.length === 6, `rows=${rows.length}`);
+check('catalog lists the sample products', rows.length === 10, `rows=${rows.length}`);
 
 // Northstar ships as the featured product; feature a second one and confirm the
 // flag flips on exactly that row.

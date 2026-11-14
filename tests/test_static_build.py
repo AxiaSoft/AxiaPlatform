@@ -390,7 +390,18 @@ class BrandCatalogTests(unittest.TestCase):
         hover = hover[:hover.index('}')]
         self.assertNotIn('transform', hover,
                          'the hover transform cancels the 3D tilt')
-        self.assertIn('.brand-picker-row { grid-template-columns: 1fr;', styles)
+        # A phone gets one row of four tiles, not one column of four cards: the
+        # cards turn vertical so the logos can sit side by side and be compared
+        # at a glance.
+        phone = styles[styles.index('@media (max-width: 640px) {'):]
+        phone = phone[:phone.index('\n}')]
+        self.assertIn('.brand-picker-row { grid-template-columns: repeat(4', phone,
+                      'the phone layout is not a single row of four')
+        self.assertIn('flex-direction: column', phone,
+                      'the tiles must stack logo-over-name at this width')
+        self.assertIn('.brand-pick-copy small { display: none; }', phone)
+        self.assertNotIn('grid-template-columns: 1fr;', styles.split('@media (max-width: 640px) {')[1][:400],
+                         'a leftover single-column rule would cancel the row')
 
     def test_every_brand_reference_the_console_prints_is_translated(self):
         i18n = (ROOT / 'public' / 'i18n.js').read_text(encoding='utf-8')
@@ -584,3 +595,69 @@ console.log(JSON.stringify([
   assetUrl('/brand/a.png'),
 ]));
 """
+
+class CatalogShipsEmptyTests(unittest.TestCase):
+    """The published site ships no products; the demo still has some.
+
+    The four website builds used to ship inside data/products.json, so they
+    appeared on the live site whether or not the operator wanted them. They are
+    demo content now: the published catalog is empty out of the box and those
+    four live in the browser demo's own seed list, written only when someone
+    presses Load sample catalog.
+    """
+
+    def setUp(self):
+        self.snapshot = json.loads((ROOT / 'data' / 'products.json').read_text(encoding='utf-8'))
+        self.demo = (ROOT / 'public' / 'demo-backend.js').read_text(encoding='utf-8')
+        self.adapter = (ROOT / 'public' / 'static-adapter.js').read_text(encoding='utf-8')
+
+    def test_the_published_catalog_is_empty(self):
+        self.assertEqual(self.snapshot, [],
+                         'the live site must not ship products; they are created in the console')
+
+    def test_the_demo_still_carries_the_website_builds(self):
+        self.assertIn('DEMO_SITE_PRODUCTS', self.demo)
+        for slug in ('arya', 'ersha', 'mino', 'homa'):
+            self.assertIn(f"slug: {slug!r}" if f"slug: '{slug}'" in self.demo
+                          else f'"slug": "{slug}"', self.demo,
+                          f'{slug} is missing from the demo seed list')
+
+    def test_the_demo_seeds_are_only_written_on_request(self):
+        # The seed list is a constant; nothing may call the loader while the page
+        # is merely loading, or the public catalog would fill itself.
+        loader = self.demo[self.demo.index('window.AXIA_DEMO_SAMPLES'):]
+        body = loader[:loader.index('window.AXIA_DEMO_RESET')]
+        self.assertIn('writeProducts', body)
+        before = self.demo[:self.demo.index('window.AXIA_DEMO_SAMPLES')]
+        self.assertNotIn('AXIA_DEMO_SAMPLES()', before,
+                         'the sample catalog is being loaded automatically')
+
+    def test_the_demo_seed_rows_have_the_fields_a_card_needs(self):
+        start = self.demo.index('var DEMO_SITE_PRODUCTS = ')
+        from_ = self.demo.index('[', start)
+        depth, end = 0, -1
+        for i in range(from_, len(self.demo)):
+            if self.demo[i] == '[':
+                depth += 1
+            elif self.demo[i] == ']':
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        rows = json.loads(self.demo[from_:end + 1])
+        self.assertEqual(len(rows), 4)
+        for row in rows:
+            for field in ('slug', 'title', 'category', 'summary', 'description',
+                          'cover', 'features', 'technologies', 'status', 'price_label'):
+                self.assertIn(field, row, f'{row.get("slug")} has no {field}')
+            # A relative path, not one already carrying the deploy base: the
+            # storefront applies the base through assetUrl().
+            self.assertFalse(row['cover'].startswith('/'),
+                             f'{row["slug"]} cover is pre-prefixed')
+
+    def test_the_console_reaches_the_storefront_through_the_demo_store(self):
+        # The console writes localStorage; the public page has to read it back,
+        # otherwise products added in the demo never appear on the site.
+        self.assertIn("'axia-demo-products-v1'", self.demo)
+        self.assertIn("'axia-demo-products-v1'", self.adapter)
+        self.assertIn('demoProducts()', self.adapter)
