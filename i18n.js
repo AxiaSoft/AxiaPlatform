@@ -401,6 +401,11 @@ Object.assign(fa,{
  'Invalid email or password.':'ایمیل یا گذرواژه نادرست است.',
  'Too many attempts. Try again in a moment.':'تلاش‌های زیاد. کمی بعد دوباره امتحان کنید.',
  'Your session expired. Sign in again.':'نشست شما منقضی شد. دوباره وارد شوید.',
+ 'Or type a path':'یا یک مسیر بنویسید',
+ 'Uploaded.':'بارگذاری شد.',
+ 'Uploading…':'در حال بارگذاری…',
+ 'Read in this browser only — the demo console has no server to store it.':
+   'فقط در همین مرورگر خوانده شد — پنل نمایشی سروری برای ذخیره ندارد.',
  'Edit product':'ویرایش محصول',
  'PNG, JPEG, WebP or GIF, up to 5 MB.':'PNG، JPEG، WebP یا GIF، تا ۵ مگابایت.',
  'The image is re-encoded on upload, so camera metadata is removed.':

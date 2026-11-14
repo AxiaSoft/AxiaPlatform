@@ -1,0 +1,9 @@
+{
+ "fast-website": {
+  "title": "How to build a fast website",
+  "summary": "Speed is not a feature you add at the end; it is the result of three decisions made on day one.",
+  "body": "## Why speed matters\n\nA visitor who waits three seconds usually does not come back. Speed is not a\nfeature bolted on at the end of a project; it is the result of decisions taken\nfrom the very first day.\n\n## The three decisions that matter most\n\n- **Size your images correctly.** A 4 MB image displayed in a 400-pixel frame\n  does not just waste bandwidth — it makes the page feel broken.\n- **Keep the font light.** One variable family with a limited weight range beats\n  four separate files.\n- **Defer your JavaScript.** Work that is not needed for the first paint must\n  not hold up the first paint.\n\n## Measure, do not guess\n\nBefore optimising anything, get a number. If you do not know how long the page\ncurrently takes, you cannot say whether the change you made was better or worse.\n\n```html\n<img src=\"cover.webp\" width=\"1200\" height=\"630\" loading=\"lazy\" alt=\"Article image\">\n```\n\n> What is not measured does not improve.\n\n## In summary\n\nSpeed is decided in the structure of a project from the start. The three\ndecisions above make the largest difference with no extra tooling at all.\n\n",
+  "source_hash": "192cece9be77f8a697b0c84a626d8c74",
+  "translated_at": "2026-11-07T00:00:00Z"
+ }
+}

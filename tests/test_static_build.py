@@ -110,7 +110,9 @@ class CoverPathTests(unittest.TestCase):
 
     def test_every_shipped_cover_file_exists(self):
         # A cover that 404s still leaves a box on the card, so only a build-up
-        # check catches it.
+        # check catches it. An empty cover is fine — the storefront draws the
+        # brand's monogram instead — which is what the demo now ships, since the
+        # brand artwork it used to point at is no longer published.
         import json
         data = json.loads((ROOT / 'data' / 'products.json').read_text(encoding='utf-8'))
         for product in data:
@@ -121,6 +123,13 @@ class CoverPathTests(unittest.TestCase):
                 continue
             self.assertTrue((ROOT / 'public' / cover).is_file(),
                             f'{product["slug"]} points at a missing cover: {cover}')
+
+    def test_a_cover_that_is_empty_still_draws_something(self):
+        # The rule the storefront has to honour: image, or monogram, never a
+        # blank plate.
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn('function brandGlyph(', app)
+        self.assertIn('cover-glyph', app)
 
 
 if __name__ == '__main__':
@@ -380,8 +389,9 @@ class AdminThemeAndLanguageTests(unittest.TestCase):
         missing_db = ROOT / 'tests' / 'does-not-exist.sqlite3'
         rows = build_static.read_catalog(missing_db, '/AxiaPlatform/')
         self.assertEqual([r['slug'] for r in rows], ['arya', 'ersha', 'mino', 'homa'])
-        # The base is applied once, by the caller, to a bare path.
-        self.assertEqual(rows[0]['cover'], 'brand/arya-logo.png')
+        # A demo row ships without a cover: the brand artwork it used to point
+        # at is no longer published, and the storefront draws a monogram.
+        self.assertEqual(rows[0]['cover'], '')
         # And the rows carry what a card renders.
         self.assertEqual(len(rows[0]['features']), 4)
         self.assertTrue(rows[0]['published'])
@@ -766,6 +776,122 @@ class FontTests(unittest.TestCase):
         self.assertIn(0x200C, cmap, 'the zero-width non-joiner must survive')
 
 
+
+class BlogTranslationTests(unittest.TestCase):
+    """A Persian post has an English mirror that is actually in English.
+
+    The pipeline existed but nothing produced its input: `data/translations.json`
+    was never written by any tool and the build only looked for it in the output
+    tree, so a committed translation was ignored and /en/blog/ fell back to the
+    untranslated notice. Three separate breaks, each of which looks like "the
+    blog is not translated".
+    """
+
+    def setUp(self):
+        self.build = (ROOT / 'tools' / 'build_static.py').read_text(encoding='utf-8')
+        self.tool = (ROOT / 'tools' / 'translate_articles.py').read_text(encoding='utf-8')
+
+    def test_a_tool_exists_to_produce_the_translations(self):
+        self.assertIn('translations.json', self.tool)
+        # It must be runnable without arguments and must not write without a
+        # provider — a guessed translation is worse than an honest notice.
+        self.assertIn('translation_available()', self.tool)
+        self.assertIn('AXIA_AGENT_KEY', self.tool)
+
+    def test_the_hash_matches_the_console_so_both_agree_on_staleness(self):
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import translate_articles
+        import hashlib
+        article = {'title': 'a', 'summary': 'b', 'body': 'c'}
+        source = '\n\x00\n'.join(['a', 'b', 'c'])
+        expected = hashlib.sha256(source.encode('utf-8')).hexdigest()[:32]
+        self.assertEqual(translate_articles.digest(article), expected)
+
+    def test_the_build_reads_the_repository_copy_first(self):
+        # The bug: only `out/data/translations.json` was consulted, so a clean
+        # build never saw the committed file.
+        self.assertIn("ROOT / 'data' / 'translations.json'", self.build)
+        source_first = self.build.index("ROOT / 'data' / 'translations.json'")
+        out_copy = self.build.index("out / 'data' / 'translations.json'")
+        self.assertLess(source_first, out_copy,
+                        'the output copy is being read before the source')
+
+    def test_the_build_ships_the_translations(self):
+        # A client-side reader of data/*.json should see the same copy.
+        self.assertIn("(data_dir / 'translations.json')", self.build)
+
+    def test_the_build_names_the_command_when_a_post_is_owed(self):
+        self.assertIn('tools/translate_articles.py', self.build)
+
+    def test_the_published_article_has_english_copy(self):
+        articles = json.loads((ROOT / 'data' / 'articles.json').read_text(encoding='utf-8'))
+        stored = json.loads((ROOT / 'data' / 'translations.json').read_text(encoding='utf-8'))
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import translate_articles
+        for article in articles:
+            if str(article.get('language') or 'fa') != 'fa':
+                continue
+            entry = stored.get(article['slug'])
+            self.assertIsNotNone(entry, f'{article["slug"]} has no English copy')
+            self.assertEqual(entry['source_hash'], translate_articles.digest(article),
+                             f'{article["slug"]} translation is stale')
+            # The body has to be real prose, not the source echoed back.
+            self.assertGreater(len(entry['body']), 100)
+            self.assertNotIn('چطور', entry['title'])
+
+
+class BrandArtworkTests(unittest.TestCase):
+    """Brands carry no shipped artwork; an operator uploads their own.
+
+    The four brands shipped with the studio's own logo files. Those are gone: the
+    site does not publish drawings it does not own, and the console now takes an
+    upload for each of the two image slots. What has to keep working is the case
+    where a brand has no image at all.
+    """
+
+    def setUp(self):
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.brands = (ROOT / 'public' / 'brands.js').read_text(encoding='utf-8')
+        self.admin = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+
+    def test_a_brand_without_an_image_is_still_usable(self):
+        # usable() required a mark, which silently dropped every brand on a
+        # fresh install — the picker just looked empty.
+        start = self.brands.index('function usable(brand)')
+        block = self.brands[start:self.brands.index('}', start)]
+        self.assertNotIn("String(brand.mark || '').trim()", block)
+
+    def test_the_storefront_draws_a_monogram(self):
+        self.assertIn('function brandGlyph(', self.app)
+        self.assertIn('brand-glyph', self.app)
+        # The initial follows the language being read.
+        self.assertIn('brandName(brand)', self.app)
+
+    def test_the_console_uploads_a_brand_image(self):
+        self.assertIn('data-brand-asset-file', self.admin)
+        self.assertIn('data-brand-asset-path', self.admin)
+        self.assertIn('brandSwatch', self.admin)
+
+    def test_the_upload_keeps_the_bytes_for_a_logo(self):
+        # A logo is line art: re-encoding puts a fringe on a transparent edge.
+        self.assertIn("headers['X-Upload-Raw'] = '1'", self.admin)
+        server = (ROOT / 'server' / 'app.py').read_text(encoding='utf-8')
+        self.assertIn('X-Upload-Raw', server)
+        self.assertIn('raw=raw', server)
+
+    def test_an_svg_is_sandboxed_when_served(self):
+        server = (ROOT / 'server' / 'app.py').read_text(encoding='utf-8')
+        self.assertIn("if suffix == '.svg':", server)
+        self.assertIn("default-src 'none'", server)
+
+
+class MarqueeBehaviourTests(unittest.TestCase):
+    def test_the_strip_never_pauses(self):
+        css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        self.assertNotIn('animation-play-state:paused', css)
+        self.assertIn('.trust-strip{pointer-events:none}', css)
+
+
 class BrandCatalogTests(unittest.TestCase):
     """The site brands are data, not source.
 
@@ -806,8 +932,12 @@ class BrandCatalogTests(unittest.TestCase):
         self.assertIsInstance(data.get('brands'), list)
         self.assertTrue(data['brands'], 'the sites ships with no brands at all')
         for brand in data['brands']:
-            for field in ('id', 'name', 'mark', 'accent'):
+            # The image is the operator's to supply. Everything that makes the
+            # brand identifiable has to be there; the artwork does not.
+            for field in ('id', 'name', 'nameFa', 'accent'):
                 self.assertTrue(brand.get(field), f'{brand.get("id")} has no {field}')
+            self.assertIn(brand.get('mark', ''), ('', None),
+                          f'{brand.get("id")} ships artwork the site does not own')
 
     def test_the_console_edits_brands(self):
         self.assertIn("['brands'", self.admin_js)
@@ -869,6 +999,37 @@ class BrandValidationTests(unittest.TestCase):
         ok, brands = self.settings.clean_value('brands', self.settings.DEFAULTS['brands'])
         self.assertTrue(ok)
         self.assertEqual(len(brands), 4)
+
+    def test_the_shipped_brands_carry_no_artwork(self):
+        # The four brands shipped with the studio's own logo files. Those are
+        # gone: the site does not publish somebody else's drawings, and an
+        # operator uploads their own marks in the console. The defaults must
+        # therefore validate with empty paths.
+        for brand in self.settings.DEFAULTS['brands']:
+            self.assertEqual(brand['mark'], '', f"{brand['id']} still ships a mark")
+            self.assertEqual(brand['logo'], '', f"{brand['id']} still ships a logo")
+
+    def test_no_brand_artwork_is_left_in_the_tree(self):
+        for name in ('arya', 'ersha', 'mino', 'homa'):
+            for kind in ('mark', 'logo'):
+                path = ROOT / 'public' / 'brand' / f'{name}-{kind}.png'
+                self.assertFalse(path.exists(), f'{path.name} is still published')
+
+    def test_a_brand_may_have_no_image_at_all(self):
+        ok, brand = self.settings.clean_brand(
+            {'id': 'arya', 'name': 'Arya', 'nameFa': 'آریا', 'tagline': 'x',
+             'taglineFa': 'x', 'accent': '#1f5fa8', 'accentSoft': '#3f8ad8',
+             'mark': '', 'logo': ''}, set())
+        self.assertIsNone(brand and None if not ok else None,
+                          'an image-less brand must validate')
+
+    def test_a_brand_path_still_has_to_be_servable(self):
+        for bad in ('javascript:alert(1)', '../etc/passwd', 'brand/x.png" onerror='):
+            ok, _ = self.settings.clean_brand(
+                {'id': 'arya', 'name': 'Arya', 'nameFa': '', 'tagline': 'x',
+                 'taglineFa': '', 'accent': '#1f5fa8', 'accentSoft': '#3f8ad8',
+                 'mark': bad, 'logo': ''}, set())
+            self.assertFalse(ok, f'{bad!r} should be refused')
 
     def test_an_empty_list_is_allowed(self):
         # The administrator asked to be able to remove them, so none is a real
@@ -1111,14 +1272,17 @@ class CatalogShipsEmptyTests(unittest.TestCase):
 
     def test_the_demo_catalog_rows_are_complete(self):
         for row in self.catalog:
+            # `cover` is deliberately absent from this list: a demo product has
+            # no artwork, and the storefront draws the brand's monogram. Every
+            # other field is what a card renders.
             for field in ('slug', 'title', 'category', 'summary', 'description',
-                          'cover', 'features', 'technologies', 'status', 'price_label'):
+                          'features', 'technologies', 'status', 'price_label'):
                 self.assertTrue(row.get(field) not in (None, ''),
                                 f'{row.get("slug")} has no {field}')
-            # A bare path: the build applies the deploy base once, as it does
-            # for an uploaded cover.
-            self.assertFalse(row['cover'].startswith('/'),
-                             f'{row["slug"]} cover is pre-prefixed')
+            cover = row.get('cover') or ''
+            if cover:
+                self.assertFalse(cover.startswith('/'),
+                                 f'{row["slug"]} cover is pre-prefixed')
 
     def test_the_demo_seeds_are_only_written_on_request(self):
         # The seed list is a constant; nothing may call the loader while the page

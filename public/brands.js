@@ -34,13 +34,14 @@
   window.AXIA_BRANDS = live;
 
   /* A brand is only usable when it can drive the header: an id to key state on,
-     a name to show, a mark to draw and an accent to colour. Anything missing a
-     piece is dropped rather than half-applied. */
+     a name to show and an accent to colour. The image is NOT required — the
+     shipped brands carry none, and the storefront draws a monogram from the
+     initial until an operator uploads artwork. Requiring it here dropped every
+     brand on a fresh install, which looked exactly like a broken picker. */
   function usable(brand) {
     return brand && typeof brand === 'object' &&
       String(brand.id || '').trim() &&
       String(brand.name || '').trim() &&
-      String(brand.mark || '').trim() &&
       /^#[0-9a-f]{6}$/i.test(String(brand.accent || ''));
   }
 
@@ -57,8 +58,8 @@
         taglineFa: String(source[i].taglineFa || source[i].tagline || ''),
         accent: String(source[i].accent),
         accentSoft: String(source[i].accentSoft || source[i].accent),
-        mark: String(source[i].mark),
-        logo: String(source[i].logo || source[i].mark)
+        mark: String(source[i].mark || ''),
+        logo: String(source[i].logo || source[i].mark || '')
       });
     }
     // A brand that no longer exists must not stay applied to the header.
@@ -108,7 +109,9 @@
       if (!COLOUR_RE.test(b.accent) || !COLOUR_RE.test(b.accentSoft)) {
         return { ok: false, error: 'Brand colours must be #rrggbb.' };
       }
-      if (!MARK_RE.test(b.mark)) {
+      // Mirrors clean_brand in server/site_settings.py: an image may be absent,
+      // and one that is present has to be a path this site can serve.
+      if (b.mark && !MARK_RE.test(b.mark)) {
         return { ok: false, error: 'The header mark must be a path such as brand/name-mark.png.' };
       }
       if (b.logo && !MARK_RE.test(b.logo)) {

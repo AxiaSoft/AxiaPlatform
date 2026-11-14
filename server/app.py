@@ -182,7 +182,7 @@ SAFE_PATH_RE = re.compile(r'^/[a-z0-9._/-]*$', re.IGNORECASE)
 # shipped in the brand folder. Both are paths inside the public tree, so a
 # stored cover is always something the site itself serves.
 COVER_PATH_RE = re.compile(
-    r'^(?:/uploads/covers/[A-Za-z0-9_-]+\.png'
+    r'^(?:/uploads/covers/[A-Za-z0-9_-]+\.(?:png|jpg|jpeg|gif|webp|svg)'
     r'|/brand/[A-Za-z0-9_-]+\.(?:png|jpg|jpeg|webp|svg))$')
 
 
@@ -918,6 +918,15 @@ class Handler(SimpleHTTPRequestHandler):
                 # A cache must not hand a gzipped body to a client that did not
                 # ask for one, so the choice is part of the cache key.
                 self.send_header('Vary', 'Accept-Encoding')
+            if suffix == '.svg':
+                # An SVG is a document, not just pixels: opened directly it can
+                # carry script. An operator can upload one as a brand mark, so
+                # it is served with a sandbox that permits rendering and nothing
+                # else. The sniffing guard in uploads.py rejects the obvious
+                # cases; this is the belt to that pair of braces.
+                self.send_header('Content-Security-Policy',
+                                 "default-src 'none'; style-src 'unsafe-inline'; img-src data:")
+                self.send_header('X-Content-Type-Options', 'nosniff')
             if path in IMMUTABLE_DIRS or path.startswith(IMMUTABLE_DIRS):
                 self.send_header('Cache-Control', 'public, max-age=604800')
             elif suffix in BIG_ASSET_TYPES:
@@ -1150,12 +1159,16 @@ class Handler(SimpleHTTPRequestHandler):
                 data = self.multipart_file(body, boundary.encode()[:70])
                 if data is None:
                     self._send_json({'error': 'No image was received.'}, 400); return
-            elif ctype in ('image/png', 'image/jpeg', 'image/gif', 'image/webp'):
+            elif ctype in ('image/png', 'image/jpeg', 'image/gif', 'image/webp',
+                           'image/svg+xml'):
                 # A plain binary body: the admin sends the file directly.
                 data = self.raw_body(uploads.MAX_BYTES)
             else:
                 self._send_json({'error': 'Send the image as a file upload.'}, 415); return
-            url = uploads.store(data)
+            # X-Upload-Raw asks for the bytes back untouched — that is how a
+            # brand logo keeps its transparency and an SVG stays vector.
+            raw = (self.headers.get('X-Upload-Raw') or '').strip() == '1'
+            url = uploads.store(data, raw=raw)
         except uploads.UploadError as exc:
             self._send_json({'error': str(exc)}, 400); return
         except Reject as exc:

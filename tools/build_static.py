@@ -306,13 +306,22 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
     # Persian is the published language. The English mirror is written from the
     # same articles, using any stored translation (out/data/translations.json)
     # and otherwise labelling the page as untranslated rather than pretending.
+    # The source of truth is data/translations.json in the repository — that is
+    # what tools/translate_articles.py writes and what a reviewer reads in the
+    # diff. The output tree is only consulted as a fallback, for a build that
+    # runs against a published copy. Reading the output tree first meant a
+    # committed translation was silently ignored on every clean build, and the
+    # English mirror fell back to the untranslated notice.
     stored = {}
-    tsource = out / 'data' / 'translations.json'
-    if tsource.is_file():
+    for tsource in (ROOT / 'data' / 'translations.json', out / 'data' / 'translations.json'):
+        if not tsource.is_file():
+            continue
         try:
             stored = {str(k): v for k, v in (json.loads(tsource.read_text(encoding='utf-8')) or {}).items()}
         except Exception:
-            stored = {}
+            continue
+        if stored:
+            break
 
     def english(article, full=False):
         """An article's English fields, or None when no translation is stored."""
@@ -404,8 +413,17 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
 
     (blog_dir / 'feed.xml').write_text(
         blog.render_rss(origin, base, articles), encoding='utf-8')
+    owed = [p for p in en_posts if not p.get('translated')]
     print(f'  blog  : {len(articles)} article(s) to /blog/, '
           f'{len(en_posts)} translated to /en/blog/')
+    if owed:
+        # Say it once, plainly, at the end of the build rather than leaving an
+        # operator to wonder why /en/blog/ shows Persian. The article pages say
+        # the same thing to a reader; this is the reminder to the person who can
+        # fix it, and it names the command that does.
+        names = ', '.join(str(p.get('slug')) for p in owed)
+        print(f'  note  : {len(owed)} article(s) have no English copy: {names}')
+        print('          run: python3 tools/translate_articles.py')
 
 
 def build_sitemap(origin: str, base: str) -> str:
@@ -840,6 +858,13 @@ def main() -> int:
             settings['categories'] = [dict(row) for row in DEMO_CATEGORIES]
         except Exception as exc:
             print(f'  demo categories unreadable ({exc}); shipping none', file=sys.stderr)
+    # The article translations are published alongside the articles: the blog
+    # pages are built from them, and a client-side reader of data/*.json should
+    # see the same copy the pages show rather than an empty directory.
+    _translations = ROOT / 'data' / 'translations.json'
+    if _translations.is_file():
+        (data_dir / 'translations.json').write_text(
+            _translations.read_text(encoding='utf-8'), encoding='utf-8')
     (data_dir / 'settings.json').write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     (data_dir / 'products.json').write_text(

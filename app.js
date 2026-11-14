@@ -130,8 +130,14 @@ function productArt(p){
      back to its mark, and a product with neither brand gets the studio emblem,
      so this branch always draws something. */
   const fallback=brand?(brand.logo||brand.mark||''):'';
-  if(fallback){
-    return `<div class="product-cover is-emblem"><img class="cover-emblem" src="${esc(assetUrl(fallback))}" alt="${esc(brand.name)} logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)} / ${esc(p.category)}</span></div>`
+  if(brand&&fallback){
+    return `<div class="product-cover is-emblem"><img class="cover-emblem" src="${esc(assetUrl(fallback))}" alt="${esc(brand.name)} logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)} / ${esc(categoryLabel(p.category))}</span></div>`
+  }
+  /* The brand has no artwork. The monogram is drawn at emblem size, in the
+     same slot, so a catalog of image-less brands still reads as a grid of
+     pictures rather than four identical empty plates. */
+  if(brand){
+    return `<div class="product-cover is-emblem"><span class="cover-glyph" style="--glyph-accent:${esc(brand.accent||'#1f5fa8')}">${esc((brandName(brand)||brand.name||'·').trim()[0].toUpperCase())}</span><span class="cover-label">${esc(label)} / ${esc(categoryLabel(p.category))}</span></div>`
   }
   return `<div class="product-cover is-default"><img class="cover-emblem" src="${esc(assetUrl('brand/axiasoft-original.png'))}" alt="AXIASOFT logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">AXIA / ${esc(p.category)}</span></div>`}/* The whole card opens the product. Actions inside it (Details, Preview,
    Request) keep their own behaviour because the handler ignores clicks that
@@ -399,6 +405,24 @@ initPointerEffects();
    product for it — the mapping is by slug and by title — so a button never
    leads to an empty page.
    ------------------------------------------------------------------------- */
+
+/* A brand may have no image at all: the shipped brands deliberately carry none
+   and an operator uploads their own. Drawing nothing left an empty square, so
+   this returns the markup for either the uploaded picture or a monogram built
+   from the brand's initial and its accent colour — always something to look at,
+   and never a broken-image icon. `kind` is 'logo' or 'mark'. */
+function brandGlyph(brand, kind = 'logo') {
+  if (!brand) return '';
+  const path = kind === 'logo' ? (brand.logo || brand.mark || '') : (brand.mark || brand.logo || '');
+  const name = brandName(brand) || brand.name || '';
+  if (path) {
+    return `<img src="${esc(assetUrl(path))}" alt="${esc(name)}" draggable="false" loading="lazy" decoding="async">`;
+  }
+  /* The initial is the first letter in the language being read, so a Persian
+     visitor sees «آ» for آریا rather than an «A» that belongs to neither. */
+  const initial = (name.trim()[0] || '·').toUpperCase();
+  return `<span class="brand-glyph" style="--glyph-accent:${esc(brand.accent || '#1f5fa8')}" aria-hidden="true">${esc(initial)}</span>`;
+}
 
 function brandCatalog() {
   return Array.isArray(window.AXIA_BRANDS) ? window.AXIA_BRANDS : [];
@@ -696,7 +720,7 @@ function brandStrip() {
     return `<button class="brand-pick tilt-hover mouse-light${isActive ? ' is-active' : ''}" type="button"
               data-brand-pick="${esc(b.id)}" aria-pressed="${isActive ? 'true' : 'false'}"
               title="${esc(fa ? b.taglineFa : b.tagline)}">
-        <span class="brand-pick-logo"><img src="${esc(assetUrl(b.logo))}" alt="${esc(fa ? b.nameFa : b.name)}" draggable="false"></span>
+        <span class="brand-pick-logo">${brandGlyph(b, 'logo')}</span>
         <span class="brand-pick-copy">
           <strong>${esc(fa ? b.nameFa : b.name)}</strong>
           <small>${esc(fa ? b.taglineFa : b.tagline)}</small>
