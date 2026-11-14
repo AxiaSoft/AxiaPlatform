@@ -377,14 +377,24 @@ html[lang="fa"] .category-card .arrow-link{left:17px;bottom:16px}
   cursor: pointer;
   transition: border-color .2s, background .2s, transform .2s;
   min-width: 0;
+  /* The halo (`.mouse-light::before`) is absolutely positioned to `inset: 0`
+     against its card and is clipped by `overflow`, exactly as on
+     `.category-card`. Without both, the light would paint outside a rounded
+     corner and show as a rectangle behind the card. */
+  position: relative;
+  overflow: hidden;
 }
 .brand-pick:hover,
 .brand-pick:focus-visible {
   border-color: color-mix(in srgb, var(--brand-accent-soft, #4d92d6) 55%, transparent);
   background: var(--surface2);
-  transform: translateY(-2px);
   outline: none;
 }
+/* These cards tilt in 3D, so the flat hover lift is gone: .tilt-hover.is-tilting
+   owns `transform` now, and a translateY here of the same specificity would
+   overwrite it on every hover and cancel the tilt. The border and background
+   change above is the hover feedback instead. */
+
 .brand-pick.is-active {
   border-color: var(--brand-accent-soft, #4d92d6);
   background: var(--surface2);
@@ -445,6 +455,40 @@ html[lang="fa"] .category-card .arrow-link{left:17px;bottom:16px}
    shorter, so shrinking the box here would only make the logo smaller than the
    one on the desktop. A mobile override placed inside the media query earlier
    in this file loses to this rule, so there is none. */
+/* A product with no cover. The administrator's rule: never a blank plate, show
+   the product's own logo. Same 232px box as an uploaded cover, so a grid mixing
+   pictured and logo products still lines up. The emblem is contained and
+   capped, because a wordmark and a square mark have very different shapes and
+   neither should touch the edge. */
+.product-cover.is-emblem,
+.product-cover.is-default {
+  height: 232px;
+  padding: 0;
+  /* The same dark plate as an uploaded cover, in both themes. The brand marks
+     are blue artwork cut for a dark background; on the light theme's pale plate
+     they washed out to near-nothing. A pictured product and a logo-only product
+     should also look like the same family of card. */
+  background: radial-gradient(circle at 50% 42%, rgba(57, 130, 255, .24), transparent 64%), #0e1726;
+}
+.product-cover.is-emblem .cover-emblem,
+.product-cover.is-default .cover-emblem {
+  position: relative;
+  z-index: 1;
+  max-width: 62%;
+  max-height: 62%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  /* A soft pool of brand light under the emblem, so the fallback reads as
+     intentional artwork rather than as a gap with a picture in it. */
+  filter: drop-shadow(0 12px 26px rgba(20, 60, 130, .38));
+}
+/* A cover path that 404s still leaves a labelled plate rather than a broken
+   image icon: the onerror handler swaps the class, which hides the image and
+   restores the generated background. */
+.product-cover.cover-failed { background: radial-gradient(circle at 70% 40%, rgba(57, 130, 255, .32), transparent 48%), linear-gradient(135deg, #111e35, #0c1321); }
+.product-cover.cover-failed img { display: none; }
 .product-cover.has-image { padding: 0; overflow: hidden; background: #0e1726; height: 232px; }
 .product-cover.has-image img {
   position: absolute;
@@ -596,8 +640,13 @@ html[data-lang="fa"] .brand-name { letter-spacing: 0; font-size: 18px; }
 @media (max-width: 860px) {
   .brand-picker-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 520px) {
-  .brand-picker-row { grid-template-columns: 1fr; }
+/* One column for anything phone-sized, which is the width where two cards left
+   each brand barely wider than its own logo and the tagline clipped. Every card
+   keeps the horizontal logo-then-text layout, so the column reads as a list of
+   choices rather than four shrunken tiles. */
+@media (max-width: 640px) {
+  .brand-picker-row { grid-template-columns: 1fr; gap: 10px; }
+  .brand-pick { border-radius: 14px; padding: 14px; }
   .brand-pick-logo { width: 46px; height: 46px; }
   .brand-pick-logo img { width: 36px; height: 36px; }
 }

@@ -43,15 +43,39 @@ function categoryCards(){
 function brandMark(){return `<section class="section-sm brand-mark-section"><div class="brand-mark-stage"><div class="hero-art"><div class="hero-orbit"></div><div class="hero-logo tilt-hover"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt="Original AXIASOFT logo, shown as a glossy three-dimensional mark" draggable="false"></div><div class="orbit-tag tag-one">Digital craft<b>Built around your goals</b></div><div class="orbit-tag tag-two">Engineering<b>Clarity at every step</b></div></div><div class="hero-note"><span class="status-dot"></span> Independent thinking. Intentional engineering.</div></div></section>`}
 
 function home(){return `<div class="container"><section class="hero hero-solo"><div class="hero-copy"><div class="eyebrow">Independent software studio · Nuremberg</div><h1 class="headline">${esc(site.hero_title)}<br><span class="gradient">${esc(site.hero_accent)}</span></h1><p class="subhead">${esc(site.hero_subtitle)}</p><div class="hero-actions"><a class="button button-primary" href="#/products">Explore products ↗</a><a class="button button-quiet" href="#/contact">Start a project</a></div></div></section><div class="trust-strip"><span><i>✦</i> Custom by design</span><span><i>✦</i> Security-minded</span><span><i>✦</i> Thoughtful delivery</span><span><i>✦</i> Built to evolve</span></div>${categoryCards()}${brandMark()}<section class="section-sm"><div class="two-col two-col-single"><div><div class="eyebrow">A better way to build</div><h2 class="headline" style="font-size:clamp(31px,4vw,45px)">Technology should feel <span class="gradient">human.</span></h2><p class="subhead" style="font-size:13px">We pair clear communication with dependable engineering. Every engagement starts with understanding the problem—not pushing a pre-built answer.</p><div class="feature-list">${['Modern, maintainable stacks','Custom to your workflow','Security-conscious delivery','Support that stays human'].map(x=>`<div class="feature-item"><span class="check">✓</span>${x}</div>`).join('')}</div><a class="button button-quiet" style="margin-top:25px" href="#/about">Get to know us ↗</a></div></div></section><section class="section-sm"><div class="section-heading"><div><div class="eyebrow">A clear path forward</div><h2>Built together, step by step.</h2></div></div><div class="process">${[['01','Listen','Understand your goals'],['02','Define','Shape scope and priorities'],['03','Design','Map flows and direction'],['04','Build','Engineer in iterations'],['05','Validate','Test, refine and secure'],['06','Deliver','Launch and improve']].map(x=>`<div class="step"><span class="step-num">${x[0]} / 06</span><h3>${x[1]}</h3><p>${x[2]}</p></div>`).join('')}</div></section><section class="section-sm"><div class="card cta-band"><div><h2>Have something good in mind?</h2><p>Tell us what you're trying to solve. We'll figure out the right next step together.</p></div><a class="button button-primary" href="#/contact">Start a conversation ↗</a></div></section></div>`}
+/* The artwork on a product card and at the top of a product page.
+ *
+ * Three cases, in order of preference:
+ *   1. the product has a cover, so show it;
+ *   2. it has no cover but belongs to a brand, so show that brand's logo — this
+ *      is what the administrator asked for: a product with no picture should
+ *      still look deliberate, not empty;
+ *   3. neither, so show the AXIASOFT emblem on the generated plate.
+ *
+ * Every branch renders the same box, so covers of different shapes and the logo
+ * fallbacks all occupy one size and the grid never jumps.
+ */
 function productArt(p){
-  /* An uploaded cover wins over the generated placeholder: it is the product's
-     own artwork, so it should be what a visitor sees on the card. */
-  if(p.cover&&/^(https?:|\/)/.test(p.cover)){
-    const brand=brandForProduct(p);
-    const label=brand?brand.name:'AXIA';
-    return `<div class="product-cover has-image"><img src="${esc(p.cover)}" alt="${esc(p.title)}" loading="lazy" decoding="async"><span class="cover-label">${esc(label)} / ${esc(p.category)}</span></div>`
+  const brand=brandForProduct(p);
+  const label=brand?brand.name:'AXIA';
+  /* A cover may be stored root-relative or base-relative; a bare filename would
+     resolve against the current route, so it is passed through assetUrl. */
+  const cover=p.cover?assetUrl(p.cover):'';
+  /* assetUrl() returns a root-relative path for a stored relative name and the
+     URL unchanged for an absolute one, so both shapes have to count as usable.
+     Testing for '//' alone silently demoted every existing cover to the logo
+     fallback. */
+  if(cover&&/^(?:(?:https?:)?\/\/|\/)/i.test(cover)){
+    return `<div class="product-cover has-image"><img src="${esc(cover)}" alt="${esc(p.title)}" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)} / ${esc(p.category)}</span></div>`
   }
-  return `<div class="product-cover"><span class="cover-label">AXIA / ${esc(p.category)}</span><div class="cover-orb"></div><span class="cover-mark">${icons[p.category]||'✦'}</span></div>`}/* The whole card opens the product. Actions inside it (Details, Preview,
+  /* No cover: the brand's logo stands in for it. A brand without a logo falls
+     back to its mark, and a product with neither brand gets the studio emblem,
+     so this branch always draws something. */
+  const fallback=brand?(brand.logo||brand.mark||''):'';
+  if(fallback){
+    return `<div class="product-cover is-emblem"><img class="cover-emblem" src="${esc(assetUrl(fallback))}" alt="${esc(brand.name)} logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)} / ${esc(p.category)}</span></div>`
+  }
+  return `<div class="product-cover is-default"><img class="cover-emblem" src="${esc(assetUrl('brand/axiasoft-original.png'))}" alt="AXIASOFT logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">AXIA / ${esc(p.category)}</span></div>`}/* The whole card opens the product. Actions inside it (Details, Preview,
    Request) keep their own behaviour because the handler ignores clicks that
    land on a control. */
 function card(p){return `<article class="card product-card tilt-hover mouse-light" data-open-product="${esc(p.slug)}" tabindex="0" role="link" aria-label="${esc(p.title)}">${productArt(p)}<div class="product-info"><div class="product-top"><span class="badge">${esc(p.category)}</span><span class="badge badge-live">● ${p.status==='available'?'Available':'Showcase'}</span></div><h3>${esc(p.title)}</h3><p>${esc(p.summary)}</p>${visible('show_prices')?`<div class="product-price">${esc(p.price_label)}</div>`:''}<div class="product-actions"><a class="button button-quiet" href="#/products/${esc(p.slug)}">Details</a>${safePreview(p.github_url)?`<a class="button button-outline" href="${esc(safePreview(p.github_url))}" target="_blank" rel="noopener noreferrer">Preview ↗</a>`:`<a class="button button-outline" href="#/preview/${esc(p.slug)}">Preview</a>`}<button class="button button-primary" data-order="${p.id}">Request ↗</button></div></div></article>`}
@@ -78,7 +102,17 @@ else if(adminTab==='Products'){box.innerHTML=`<div class="dash-grid"><div class=
 else if(adminTab==='Support'){let tickets=[];try{tickets=await api('/api/support')}catch{}box.innerHTML=`<div class="card dash-panel"><h3>Support requests (${tickets.length})</h3>${tickets.map(t=>`<div class="order-card card"><div><h3>${esc(t.ref)} · ${esc(t.subject)}</h3><p>${esc(t.email)} · ${esc(t.created_at)}<br>${esc(t.message)}</p></div><div style="display:flex;gap:8px;align-items:center"><span class="status-pill">${esc(t.status)}</span><button class="button button-quiet button-small" data-reply-ticket="${t.id}">Reply</button><button class="button button-quiet button-small" data-close-ticket="${t.id}" ${t.status==='Closed'?'disabled':''}>Close</button></div></div>${t.messages?.map(m=>`<div class="form-hint" style="padding:4px 14px">${esc(m.sender||'Team')}: ${esc(m.message)}</div>`).join('')||''}`).join('')||'<div class="empty-state">No support requests.</div>'}</div>`;$$('[data-close-ticket]').forEach(b=>b.onclick=async()=>{try{await api('/api/admin/tickets/status',{method:'PUT',body:JSON.stringify({id:+b.dataset.closeTicket,status:'Closed'})});toast('Ticket closed.');admin()}catch(e){toast(e.message)}});$$('[data-reply-ticket]').forEach(b=>b.onclick=async()=>{let message=prompt('Reply to customer:');if(!message)return;try{await api('/api/admin/tickets/reply',{method:'POST',body:JSON.stringify({id:+b.dataset.replyTicket,message})});toast('Reply sent to ticket.');admin()}catch(e){toast(e.message)}})}
 else {let refunds=[];try{refunds=await api('/api/refunds')}catch{}box.innerHTML=`<div class="card dash-panel"><h3>Refund review</h3>${refunds.map(r=>`<div class="order-card card"><div><h3>${esc(r.ref)} · ${esc(r.order_number)}</h3><p>${esc(r.reason)}<br>${esc(r.created_at)}</p></div><div style="display:flex;gap:7px;align-items:center"><span class="status-pill">${esc(r.status)}</span>${r.status==='Under review'?`<button class="button button-quiet button-small" data-refund="${r.id}" data-decision="Approved">Approve</button><button class="button button-quiet button-small" data-refund="${r.id}" data-decision="Rejected">Reject</button>`:''}</div></div>`).join('')||'<div class="empty-state">No refund requests.</div>'}<p class="form-hint">Approving records a decision only. It does not process or confirm a payment-provider refund.</p></div>`;$$('[data-refund]').forEach(b=>b.onclick=async()=>{let note=prompt(`Optional note for ${b.dataset.decision.toLowerCase()} decision:`)||'';try{await api('/api/admin/refunds/decision',{method:'PUT',body:JSON.stringify({id:+b.dataset.refund,status:b.dataset.decision,note})});toast('Refund decision recorded.');admin()}catch(e){toast(e.message)}})}}
 async function loadProducts(){try{products=await api('/api/products')}catch(e){products=[]}}
-async function loadSite(){try{const r=await api('/api/site');if(r&&r.settings)site={...siteDefaults,...r.settings}}catch(e){const snap=window.AXIA_STATIC&&window.AXIA_STATIC.settings;if(snap)site={...siteDefaults,...snap}}}
+/* Settings carry the brand list as well as the copy, and the brand strip is
+   rendered from window.AXIA_BRANDS. Brands are applied here, after the settings
+   have arrived, so a brand added or removed in the console shows up on the very
+   next render rather than after a reload. On the static build the same document
+   already reached brands.js synchronously, and re-applying it is idempotent. */
+function applySettingsBrands(){
+  if(typeof window.AXIA_BRANDS_APPLY!=='function')return;
+  if(!Array.isArray(site.brands))return;
+  window.AXIA_BRANDS_APPLY(site.brands);
+}
+async function loadSite(){try{const r=await api('/api/site');if(r&&r.settings)site={...siteDefaults,...r.settings}}catch(e){const snap=window.AXIA_STATIC&&window.AXIA_STATIC.settings;if(snap)site={...siteDefaults,...snap}}applySettingsBrands()}
 /* Reflect settings that live in the page chrome (header, footer, announcement
    bar, support assistant) rather than in a rendered route. These are re-applied
    after every route change because the mobile menu and the auth modals rebuild
@@ -311,10 +345,18 @@ function brandName(brand) {
    serves this build from /AxiaPlatform/, so a hard-coded "/brand/x.png" 404s
    there — which is exactly what happened to the header logo. */
 function assetUrl(path) {
-  const clean = String(path || '').replace(/^\//, '');
+  const raw = String(path || '');
   const base = (window.AXIA_STATIC && window.AXIA_STATIC.base)
     || document.currentScript?.dataset?.base
     || '';
+  // A path the build already prefixed with the deploy base — a product cover
+  // written by tools/build_static.py, for instance — must be returned as it is.
+  // Prefixing it again produced /AxiaPlatform/AxiaPlatform/brand/… and the
+  // image 404ed. Checking the base rather than the leading '/' also keeps a
+  // genuinely root-relative '/brand/x.png' working, because that is exactly
+  // what the base-prefixed form looks like once the base is '/' or '/sub/'.
+  if (base && raw.startsWith(base.replace(/\/$/, '') + '/')) return raw;
+  const clean = raw.replace(/^\//, '');
   if (base) return base.replace(/\/$/, '') + '/' + clean;
   // Fall back to the deployed sub-path, derived from this page's own address.
   const marker = '/blog/';
@@ -414,7 +456,13 @@ function brandStrip() {
   const cards = available.map((b) => {
     const items = products.filter((p) => brandMatches(b, p));
     const isActive = active && active.id === b.id;
-    return `<button class="brand-pick${isActive ? ' is-active' : ''}" type="button"
+    /* `tilt-hover mouse-light` is the same 3D tilt and pointer-following halo the
+       service and category cards use, so the brand row feels like the same
+       family of surfaces. The brand card is a <button>, so the halo pseudo
+       element is suppressed when the card is disabled — these never are — and
+       the tilt is skipped for coarse pointers and reduced motion by
+       initPointerEffects(), which is the behaviour we want on a phone. */
+    return `<button class="brand-pick tilt-hover mouse-light${isActive ? ' is-active' : ''}" type="button"
               data-brand-pick="${esc(b.id)}" aria-pressed="${isActive ? 'true' : 'false'}"
               title="${esc(fa ? b.taglineFa : b.tagline)}">
         <span class="brand-pick-logo"><img src="${esc(assetUrl(b.logo))}" alt="${esc(fa ? b.nameFa : b.name)}" draggable="false"></span>

@@ -5,6 +5,10 @@ disable it silently: an unclosed <script> swallows every following tag as raw
 text, which is exactly how the static adapter once disappeared from a build
 that still reported success. These tests fail loudly instead.
 """
+import json
+import shutil
+import subprocess
+import tempfile
 import sys
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
@@ -319,3 +323,264 @@ class AdminThemeAndLanguageTests(unittest.TestCase):
         for m in re.finditer(r"T\('([^']*)'\)", self.admin):
             self.assertNotIn('(s)', m.group(1),
                              f'{m.group(1)!r} would print a plural placeholder')
+
+
+class BrandCatalogTests(unittest.TestCase):
+    """The site brands are data, not source.
+
+    They used to be four objects hardcoded in public/brands.js, so adding a fifth
+    meant editing code and redeploying. The administrator asked for them to be
+    managed from the console instead. These tests hold that line: the storefront
+    must read them from the settings document, and the file that used to carry
+    them must not carry them any more.
+    """
+
+    def setUp(self):
+        self.brands_js = (ROOT / 'public' / 'brands.js').read_text(encoding='utf-8')
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.admin_js = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+
+    def test_no_brand_names_are_hardcoded_in_the_storefront(self):
+        # Comments are allowed to mention the names — that is how a reader
+        # learns what the file is for. Only code counts.
+        import re
+
+        def code(src):
+            src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+            return re.sub(r'(?m)^\s*//.*$', '', src)
+
+        for name in ('Arya', 'Ersha', 'Mino', 'Homa', 'آریا', 'ارشا', 'مینو', 'هما'):
+            self.assertNotIn(name, code(self.brands_js),
+                             f'{name!r} is still baked into brands.js')
+            self.assertNotIn(name, code(self.app_js),
+                             f'{name!r} is still baked into app.js')
+
+    def test_the_brand_list_comes_from_the_settings_snapshot(self):
+        self.assertIn('AXIA_STATIC.settings.brands', self.brands_js)
+        self.assertIn('AXIA_BRANDS_APPLY', self.brands_js)
+
+    def test_the_shipped_snapshot_carries_brands(self):
+        import json
+        data = json.loads((ROOT / 'data' / 'settings.json').read_text(encoding='utf-8'))
+        self.assertIsInstance(data.get('brands'), list)
+        self.assertTrue(data['brands'], 'the sites ships with no brands at all')
+        for brand in data['brands']:
+            for field in ('id', 'name', 'mark', 'accent'):
+                self.assertTrue(brand.get(field), f'{brand.get("id")} has no {field}')
+
+    def test_the_console_edits_brands(self):
+        self.assertIn("['brands'", self.admin_js)
+        self.assertIn('brandsTabHTML', self.admin_js)
+        self.assertIn('saveBrands', self.admin_js)
+
+    def test_a_product_without_a_cover_falls_back_to_a_logo(self):
+        # The administrator's rule: no cover must never mean an empty plate.
+        self.assertIn('is-emblem', self.app_js)
+        self.assertIn('axiasoft-original.png', self.app_js)
+        styles = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        self.assertIn('.product-cover.is-emblem', styles)
+        self.assertIn('.product-cover.is-default', styles)
+
+    def test_brand_cards_tilt_and_glow_and_stack_on_a_phone(self):
+        self.assertIn('brand-pick tilt-hover mouse-light', self.app_js)
+        styles = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        # The flat hover lift must not survive next to the 3D tilt: same
+        # specificity, declared later, it silently cancels the rotation.
+        hover = styles[styles.index('.brand-pick:hover'):]
+        hover = hover[:hover.index('}')]
+        self.assertNotIn('transform', hover,
+                         'the hover transform cancels the 3D tilt')
+        self.assertIn('.brand-picker-row { grid-template-columns: 1fr;', styles)
+
+    def test_every_brand_reference_the_console_prints_is_translated(self):
+        i18n = (ROOT / 'public' / 'i18n.js').read_text(encoding='utf-8')
+        for word in ('Site brands', 'brand', 'brands'):
+            self.assertIn(f'"{word}":', i18n, f'{word!r} has no Persian entry')
+
+
+class BrandValidationTests(unittest.TestCase):
+    """A brand drives the header lockup and every accent colour on the page, so
+    a malformed one is worse than a missing one. Both the Python server and the
+    browser demo must refuse the same payloads."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / 'server'))
+        import site_settings
+        self.settings = site_settings
+
+    def _brand(self, **over):
+        brand = dict(self.settings.DEFAULTS['brands'][0])
+        brand.update(over)
+        return brand
+
+    def test_the_shipped_defaults_are_valid(self):
+        ok, brands = self.settings.clean_value('brands', self.settings.DEFAULTS['brands'])
+        self.assertTrue(ok)
+        self.assertEqual(len(brands), 4)
+
+    def test_an_empty_list_is_allowed(self):
+        # The administrator asked to be able to remove them, so none is a real
+        # choice and must not be an error.
+        self.assertEqual(self.settings.clean_value('brands', []), (True, []))
+
+    def test_duplicate_ids_are_refused(self):
+        one = self._brand()
+        ok, _ = self.settings.clean_value('brands', [one, dict(one)])
+        self.assertFalse(ok)
+
+    def test_a_colour_that_is_not_hex_is_refused(self):
+        ok, _ = self.settings.clean_value('brands', [self._brand(accent='blue')])
+        self.assertFalse(ok)
+
+    def test_a_script_url_is_refused_as_a_mark(self):
+        # These values reach an <img src>, so a javascript: or data: URL is an
+        # injection vector, not a path.
+        for bad in ('javascript:alert(1)', 'data:image/svg+xml,<svg>', '../../etc/passwd'):
+            ok, _ = self.settings.clean_value('brands', [self._brand(mark=bad)])
+            self.assertFalse(ok, f'{bad!r} was accepted as a mark')
+
+    def test_relative_and_absolute_asset_paths_are_both_accepted(self):
+        for good in ('brand/x-mark.png', '/brand/x-mark.png', 'https://example.test/x.png'):
+            ok, _ = self.settings.clean_value('brands', [self._brand(mark=good)])
+            self.assertTrue(ok, f'{good!r} was refused')
+
+    def test_more_than_twelve_brands_are_refused(self):
+        many = [self._brand(id=f'b{i}') for i in range(13)]
+        ok, _ = self.settings.clean_value('brands', many)
+        self.assertFalse(ok)
+
+    def test_brands_survive_a_settings_round_trip(self):
+        merged = self.settings.merge({'brands': [self._brand(name='Zed', id='zed')]})
+        self.assertEqual([b['id'] for b in merged['brands']], ['zed'])
+
+
+class BrandEditorTranslationsTests(unittest.TestCase):
+    """The brand editor must be fully Persian in a Persian console.
+
+    Round 11 fixed the console's English leaks, and this new tab arrived after
+    it. The guard is repeated here so a label added to the editor in English
+    fails a test rather than shipping to a Persian administrator.
+    """
+
+    def setUp(self):
+        self.admin_js = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+        i18n = (ROOT / 'public' / 'i18n.js').read_text(encoding='utf-8')
+        self.i18n = i18n
+
+    def _brand_editor_source(self):
+        start = self.admin_js.index('function brandRowHTML')
+        end = self.admin_js.index('function siteTabHTML')
+        return self.admin_js[start:end]
+
+    def test_the_editor_has_no_untranslated_prose(self):
+        # Every visible label in the editor goes through T(). The check is a
+        # list of words that appeared in the first draft in English.
+        src = self._brand_editor_source()
+        for leaked in ('Name (English)', 'Accent colour', 'Header mark',
+                       'Card logo', 'Add brand', 'Save brands'):
+            self.assertNotIn('>' + leaked + '<', src,
+                             f'{leaked!r} is printed without T()')
+            self.assertNotIn('"' + leaked + '"', src.replace('T("', ''),
+                             f'{leaked!r} is printed without T()')
+
+    def test_every_editor_string_is_in_the_dictionary(self):
+        import re
+
+        def keys_near(src, marker):
+            i = src.index(marker)
+            j = src.index('{', i)
+            depth = 0
+            for k in range(j, len(src)):
+                if src[k] == '{':
+                    depth += 1
+                elif src[k] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return set(re.findall(r"[‘'\"]([^‘'\"\\]{2,90})[’'\"]\s*:", src[j:k + 1]))
+            return set()
+
+        known = keys_near(self.i18n, 'const fa={') | keys_near(self.i18n, 'Object.assign(fa,{')
+        requested = set(re.findall(r"T\('((?:[^'\\]|\\.)*)'\)",
+                                   self._brand_editor_source()))
+        self.assertEqual(sorted(requested - known), [],
+                         'these stay English in the Persian console')
+
+    def test_translatable_keys_stay_under_ninety_characters(self):
+        # The dictionary scanner in the tests above only sees keys up to 90
+        # characters; a longer key is silently invisible to it and would slip
+        # through untranslated. Kept as a rule of its own so the limit is stated
+        # once rather than implied by a regex.
+        import re
+        for m in re.finditer(r"T\('((?:[^'\\]|\\.)*)'\)", self.admin_js):
+            self.assertLessEqual(len(m.group(1)), 90,
+                                 f'{m.group(1)[:60]!r} is too long to be checked')
+
+
+class AssetPathTests(unittest.TestCase):
+    """Asset URLs are built once, not twice.
+
+    The browser check found /AxiaPlatform/AxiaPlatform/brand/arya-logo.png: the
+    build had already prefixed the product cover with the deploy base, and
+    assetUrl() prefixed it again. A 404 there is invisible in a screenshot —
+    the cover box stays, the picture is just gone — which is why it is tested.
+    """
+
+    def setUp(self):
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.admin_js = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+
+    def test_asset_url_returns_an_already_prefixed_path_unchanged(self):
+        # Runs the shipped assetUrl() itself, extracted from app.js, rather than
+        # a copy of its logic: a copy would keep passing after the original
+        # regressed.
+        if not shutil.which('node'):
+            self.skipTest('node is not installed')
+        script = ASSET_URL_PROBE
+        with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False) as fh:
+            fh.write(script)
+            path = fh.name
+        try:
+            out = subprocess.run(['node', path, str(ROOT / 'public' / 'app.js')],
+                                 capture_output=True, text=True, timeout=60)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        self.assertEqual(out.returncode, 0, out.stderr[:400])
+        already, bare, rooted = json.loads(out.stdout)
+        self.assertEqual(already, '/AxiaPlatform/brand/a.png',
+                         'the deploy base was applied twice')
+        self.assertEqual(bare, '/AxiaPlatform/brand/a.png')
+        self.assertEqual(rooted, '/AxiaPlatform/brand/a.png')
+
+    def test_the_console_resolves_assets_without_static_config(self):
+        # The console page never loads static-config.js, so AXIA_STATIC.base is
+        # undefined there and brand marks fell back to the server root.
+        self.assertIn('location.pathname.replace', self.admin_js,
+                      'the console must derive the deploy base from its own path')
+        self.assertNotIn('window.AXIA_BASE', self.admin_js,
+                         'there is no such global; assets 404 at the root')
+
+
+# Extracts the shipped assetUrl() and reports what it returns for the three
+# shapes of asset path the build produces. Kept as a separate constant so the
+# backslashes in its regular expressions survive verbatim.
+ASSET_URL_PROBE = """
+const fs = require('fs');
+const src = fs.readFileSync(process.argv[2], 'utf8');  // argv[1] is this script
+global.window = { AXIA_STATIC: { base: '/AxiaPlatform/' } };
+global.document = { currentScript: null };
+global.location = { pathname: '/AxiaPlatform/' };
+// Locate the function by plain string search: a regex literal here would have
+// to survive Python's own string escaping, and one wrong backslash makes the
+// test fail for a reason that has nothing to do with assetUrl.
+const NL = String.fromCharCode(10);
+const start = src.indexOf(NL + 'function assetUrl(path) {');
+const body = start + (NL + 'function assetUrl(path) {').length;
+const end = src.indexOf(NL + '}' + NL, body);
+if (start < 0 || end < 0) throw new Error('assetUrl not found in app.js');
+const assetUrl = new Function(src.slice(start, end + 2) + '; return assetUrl;')();
+console.log(JSON.stringify([
+  assetUrl('/AxiaPlatform/brand/a.png'),
+  assetUrl('brand/a.png'),
+  assetUrl('/brand/a.png'),
+]));
+"""

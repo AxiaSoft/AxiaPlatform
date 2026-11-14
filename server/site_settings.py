@@ -24,6 +24,10 @@ GROUPS = {
     'sections': ['show_catalog', 'show_services', 'show_aurion', 'show_about',
                  'show_contact', 'show_assistant', 'show_prices'],
     'appearance': ['default_theme'],
+    # Brands are not a form of scalar fields but a list the console edits with
+    # its own editor; it is grouped here so a caller that walks GROUPS to build
+    # a settings form knows the key exists and is not silently droppable.
+    'brands': ['brands'],
 }
 
 SPEC = {
@@ -50,7 +54,24 @@ SPEC = {
     'show_prices': {'type': 'bool'},
 
     'default_theme': {'type': 'enum', 'values': ('dark', 'light', 'system')},
+
+    # Which site brands the storefront offers. This used to be a hardcoded list
+    # in public/brands.js, which meant adding a brand was a code change and a
+    # deploy. It is data now: the console writes it, the storefront reads it.
+    'brands': {'type': 'brands'},
 }
+
+# A brand is a small record, not free text, so it is checked field by field.
+BRAND_FIELDS = ('id', 'name', 'nameFa', 'tagline', 'taglineFa',
+                'accent', 'accentSoft', 'mark', 'logo')
+BRAND_MAX = 12
+COLOUR_RE = re.compile(r'^#[0-9a-f]{6}$', re.I)
+# Asset paths are stored the way assetUrl() in the storefront reads them: a
+# root-relative path ('/brand/x.png'), a bare relative one ('brand/x.png',
+# which assetUrl prefixes with the deploy base) or an absolute https URL. A
+# scheme such as javascript: or data: is refused because these values end up in
+# an <img src> and in a CSS background.
+ASSET_RE = re.compile(r'^(?:/|https://)?[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$', re.I)
 
 # Every value here is also the copy the storefront already ships, so an empty
 # settings row renders exactly the site that existed before this feature.
@@ -79,6 +100,25 @@ DEFAULTS = {
     'show_prices': True,
 
     'default_theme': 'dark',
+
+    'brands': [
+        {'id': 'arya', 'name': 'Arya', 'nameFa': 'آریا',
+         'tagline': 'Software with wings.', 'taglineFa': 'نرم‌افزاری با بال‌های پرواز.',
+         'accent': '#1f5fa8', 'accentSoft': '#3f8ad8',
+         'mark': 'brand/arya-mark.png', 'logo': 'brand/arya-logo.png'},
+        {'id': 'ersha', 'name': 'Ersha', 'nameFa': 'ارشا',
+         'tagline': 'Built to stand.', 'taglineFa': 'ساخته‌شده برای ماندن.',
+         'accent': '#1b64a8', 'accentSoft': '#4d97d8',
+         'mark': 'brand/ersha-mark.png', 'logo': 'brand/ersha-logo.png'},
+        {'id': 'mino', 'name': 'Mino', 'nameFa': 'مینو',
+         'tagline': 'Clarity, by design.', 'taglineFa': 'شفافیت، به‌صورت طراحی‌شده.',
+         'accent': '#1a5c9e', 'accentSoft': '#4a8fd0',
+         'mark': 'brand/mino-mark.png', 'logo': 'brand/mino-logo.png'},
+        {'id': 'homa', 'name': 'Homa', 'nameFa': 'هما',
+         'tagline': 'Rise above the noise.', 'taglineFa': 'بالاتر از همهمه.',
+         'accent': '#1e5fa6', 'accentSoft': '#4d92d6',
+         'mark': 'brand/homa-mark.png', 'logo': 'brand/homa-logo.png'},
+    ],
 }
 
 # Section toggles also decide whether a route is reachable.
@@ -103,6 +143,59 @@ def _as_bool(value):
     return None
 
 
+def clean_brand(raw, seen_ids):
+    """Validate one brand. Returns ``(brand, error)``; error is a field message.
+
+    A brand drives the header lockup, the accent colour and the page title, so
+    a malformed one is worse than a missing one: it would put a broken image in
+    the header of every page. Every field is therefore checked here rather than
+    trusted, including the two asset paths and the two colours.
+    """
+    if not isinstance(raw, dict):
+        return None, 'A brand must be an object.'
+    brand = {}
+    for field in BRAND_FIELDS:
+        brand[field] = str(raw.get(field) or '').strip()
+
+    brand['id'] = brand['id'].lower()
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,30}', brand['id']):
+        return None, 'Brand id must be lowercase letters, numbers and hyphens (max 31).'
+    if brand['id'] in seen_ids:
+        return None, f'Two brands use the id "{brand["id"]}".'
+    if not brand['name']:
+        return None, 'A brand needs a name.'
+    if len(brand['name']) > 40 or len(brand['nameFa']) > 40:
+        return None, 'A brand name must be 40 characters or fewer.'
+    if len(brand['tagline']) > 90 or len(brand['taglineFa']) > 90:
+        return None, 'A tagline must be 90 characters or fewer.'
+    for colour in ('accent', 'accentSoft'):
+        if not COLOUR_RE.fullmatch(brand[colour]):
+            return None, f'{colour} must be a #rrggbb colour.'
+    # The mark is what the header shows; a brand without one would empty the
+    # lockup, so it is required. The logo is the larger card artwork and may be
+    # left out — the product cover falls back to the default emblem.
+    if not ASSET_RE.fullmatch(brand['mark']):
+        return None, 'The header mark must be a path such as brand/name-mark.png.'
+    if brand['logo'] and not ASSET_RE.fullmatch(brand['logo']):
+        return None, 'The logo must be a path such as brand/name-logo.png.'
+    return brand, None
+
+
+def clean_brand_list(value):
+    if not isinstance(value, list):
+        return False, None
+    if len(value) > BRAND_MAX:
+        return False, None
+    out, seen = [], set()
+    for raw in value:
+        brand, error = clean_brand(raw, seen)
+        if error:
+            return False, None
+        seen.add(brand['id'])
+        out.append(brand)
+    return True, out
+
+
 def clean_value(name, value):
     """Validate one setting. Returns ``(ok, cleaned)``.
 
@@ -114,6 +207,8 @@ def clean_value(name, value):
         return False, None
     kind = rule['type']
 
+    if kind == 'brands':
+        return clean_brand_list(value)
     if kind == 'bool':
         parsed = _as_bool(value)
         return (parsed is not None), parsed
@@ -134,6 +229,10 @@ def clean_value(name, value):
         if text not in values:
             return False, None
         return True, text
+    if kind == 'brands':
+        # Handled before the text branch, because a list is not text. It is
+        # checked here so a caller that only looks at SPEC still works.
+        return clean_brand_list(value)
     return False, None
 
 

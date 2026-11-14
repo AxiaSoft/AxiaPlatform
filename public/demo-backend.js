@@ -156,7 +156,8 @@
     announcement_tone: 'tone', hero_title: 'text', hero_accent: 'text', hero_subtitle: 'text',
     contact_email: 'email', contact_phone: 'text', github_url: 'link', footer_note: 'text',
     show_catalog: 'bool', show_services: 'bool', show_aurion: 'bool', show_about: 'bool',
-    show_contact: 'bool', show_assistant: 'bool', show_prices: 'bool', default_theme: 'theme'
+    show_contact: 'bool', show_assistant: 'bool', show_prices: 'bool', default_theme: 'theme',
+    brands: 'brands'
   };
   var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   var LINK_RE = /^(?:https:\/\/[^\s<>"']+|#\/[a-z0-9/_-]*)$/i;
@@ -178,6 +179,14 @@
         if (['info', 'promo', 'warning'].indexOf(value) < 0) errors[key] = 'Invalid tone.';
       } else if (kind === 'theme') {
         if (['dark', 'light', 'system'].indexOf(value) < 0) errors[key] = 'Invalid theme.';
+      } else if (kind === 'brands') {
+        // One validator, shared with the storefront, so the demo cannot accept a
+        // brand the real server would refuse.
+        var verdict = window.AXIA_BRANDS_VALIDATE
+          ? window.AXIA_BRANDS_VALIDATE(value)
+          : { ok: false, error: 'Brand validation is unavailable.' };
+        if (!verdict.ok) errors[key] = verdict.error;
+        else patch[key] = verdict.brands;
       } else if (typeof value !== 'string' || value.length > 300) {
         errors[key] = 'Invalid text.';
       }
