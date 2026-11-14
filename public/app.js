@@ -22,15 +22,73 @@ function toast(s){let x=document.createElement('div');x.className='toast';x.text
 function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=$('.theme-icon');if(icon)icon.textContent=sys==='dark'?'◐':'☼'}$('.theme-toggle').onclick=()=>{let t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);$('.theme-icon').textContent=t==='dark'?'◐':'☼'};
 async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');b.textContent=me?(me.role==='admin'?'Admin panel':'My account'):'Sign in';b.onclick=()=>me?(me.role==='admin'?location.assign('/admin/'):go('/account')):openAuth()}
 function sectionOff(name){const label=({about:'About',services:'Services',contact:'Contact',aurion:'AURION',catalog:'Products'})[name]||'This page';return `<div class="container"><section class="page-head"><div class="eyebrow">SECTION HIDDEN</div><h1>${label} is not<br><span class="gradient">published right now.</span></h1><p>An administrator has hidden this section of the site. The rest of AXIASOFT is still available.</p><a class="button button-primary" href="#/">Return home ↗</a></section></div>`}
+/* The strip of promises directly under the hero buttons. It used to be four
+   static spans spread across the width; they now travel as one continuous line,
+   the way a broadcast ticker does, and the direction follows the page: the
+   track is laid out in document order, so in Persian it slides toward the left
+   edge and in English toward the right, which is the direction readers of each
+   language already move.
+
+   The list is written twice and the track is scrolled by exactly 50%. That is
+   what makes the loop invisible: at -50% the second copy sits precisely where
+   the first one started, so the jump back to 0 cannot be seen. The animation
+   pauses on hover and on focus so a visitor who wants to read a line can, and
+   it is switched off entirely under prefers-reduced-motion, where the strip
+   falls back to the old static row. */
+const TRUST_LINES = ['Custom by design', 'Security-minded', 'Thoughtful delivery', 'Built to evolve'];
+function trustMarquee(){
+ const items = TRUST_LINES.map(x=>`<span><i>✦</i>${x}</span>`).join('');
+ return `<div class="trust-strip" aria-label="What AXIASOFT promises"><div class="trust-track">${items}${items}</div></div>`;
+}
+
+/* The catalog's categories are the operator's, not this file's. They arrive in
+   the settings document the console writes; an empty list means the catalog is
+   not split up at all, and the tab row disappears rather than showing tabs that
+   would filter to nothing. Four was the old hardcoded shape, so the card grid
+   still looks right with none, two or four. */
+function siteCategories(){
+ const list = Array.isArray(site.categories) ? site.categories : [];
+ return list.filter(c=>c&&c.id&&c.name).map(c=>({
+  id:String(c.id),
+  // The Persian label is only used when the page is in Persian and the
+  // operator supplied one; otherwise the English name stands, which is the
+  // same fallback brands.js uses for its own labels.
+  label: document.documentElement.lang==='fa' && c.nameFa ? String(c.nameFa) : String(c.name)
+ }));
+}
+/* The icon and the one-line blurb used to live beside the two hardcoded cards.
+   They are keyed by category id now, so a renamed or new category still gets a
+   sensible door: an unknown id falls back to a neutral glyph and the generic
+   line rather than rendering blank. */
+/* A product stores the category id; this is what turns it back into the label
+   the operator wrote, in the current language. It is used anywhere a category
+   appears as a word rather than a filter value — the card badge, the detail
+   eyebrow — because printing 'websites' next to a product title looks like a
+   bug even though it is the stored value. */
+function categoryLabel(id){
+ const cat = siteCategories().find(c=>c.id===String(id||''));
+ if(!cat) return String(id||'');
+ return cat.label;
+}
+/* AURION is the showcase concept rather than a catalog category, so every place
+   that hides it from the product grid asks this instead of comparing against a
+   display name. */
+function isAurion(p){return String(p&&p.category||'').toLowerCase()==='aurion';}
+
+const CATEGORY_COPY = {
+ websites: ['⌘', 'Brand-led digital experiences built to turn visits into meaningful connections.'],
+ applications: ['▣', 'Useful mobile products, shaped around the people and teams who use them.']
+};
 function categoryCards(){
  // Each card is a door into a section an administrator can switch off, so a
  // hidden section must not be advertised here either - the grid then simply
  // carries the sections that are still published.
- const cards=[
-  [visible('show_catalog'),`<a href="#/products?category=Websites" class="card category-card tilt-hover mouse-light"><div class="category-icon">⌘</div><h3>Websites</h3><p>Brand-led digital experiences built to turn visits into meaningful connections.</p><span class="arrow-link">↗</span></a>`],
-  [visible('show_catalog'),`<a href="#/products?category=Applications" class="card category-card tilt-hover mouse-light"><div class="category-icon">▣</div><h3>Applications</h3><p>Useful mobile products, shaped around the people and teams who use them.</p><span class="arrow-link">↗</span></a>`],
-  [visible('show_aurion'),`<a href="#/aurion" class="card category-card tilt-hover mouse-light"><div class="category-icon">◈</div><h3>AURION</h3><p>A considered showcase for our MetaTrader companion software concept.</p><span class="arrow-link">↗</span></a>`]
- ].filter(x=>x[0]).map(x=>x[1]).join('');
+ const cats = siteCategories().map(c=>{
+  const [icon, copy] = CATEGORY_COPY[c.id] || ['◈', 'Products built around a clear purpose and shaped with you.'];
+  return `<a href="#/products?category=${encodeURIComponent(c.id)}" class="card category-card tilt-hover mouse-light"><div class="category-icon">${icon}</div><h3>${esc(c.label)}</h3><p>${esc(copy)}</p><span class="arrow-link">↗</span></a>`;
+ });
+ if (visible('show_aurion')) cats.push(`<a href="#/aurion" class="card category-card tilt-hover mouse-light"><div class="category-icon">◈</div><h3>AURION</h3><p>A considered showcase for our MetaTrader companion software concept.</p><span class="arrow-link">↗</span></a>`);
+ const cards = visible('show_catalog') ? cats.join('') : (visible('show_aurion') ? cats.slice(-1).join('') : '');
  return cards?`<section class="section"><div class="section-heading"><div><div class="eyebrow">What we make</div><h2>Digital, with intention.</h2></div><p>From the first sketch to the system behind it, we bring product thinking and engineering together.</p></div><div class="category-grid">${cards}</div></section>`:''}
 /* The mark, the orbit and the two tags were the whole right-hand column of the
    hero. They now sit directly under the landing strip, so the page opens on the
@@ -40,9 +98,9 @@ function categoryCards(){
 
    The tags are absolutely positioned against .hero-art, so they keep that
    wrapper; it is only being used as their positioning box now. */
-function brandMark(){return `<section class="section-sm brand-mark-section"><div class="brand-mark-stage"><div class="hero-art"><div class="hero-orbit"></div><div class="hero-logo tilt-hover"><img src="/brand/axiasoft-original.png" alt="Original AXIASOFT logo, shown as a glossy three-dimensional mark" draggable="false"></div><div class="orbit-tag tag-one">Digital craft<b>Built around your goals</b></div><div class="orbit-tag tag-two">Engineering<b>Clarity at every step</b></div></div><div class="hero-note"><span class="status-dot"></span> Independent thinking. Intentional engineering.</div></div></section>`}
+function brandMark(){return `<section class="section-sm brand-mark-section"><div class="brand-mark-stage"><div class="hero-art"><div class="hero-orbit"></div><div class="hero-logo tilt-hover"><picture><source srcset="/brand/axiasoft-original.webp" type="image/webp"><img src="/brand/axiasoft-original.png" alt="Original AXIASOFT logo, shown as a glossy three-dimensional mark" draggable="false" decoding="async"></picture></div><div class="orbit-tag tag-one">Digital craft<b>Built around your goals</b></div><div class="orbit-tag tag-two">Engineering<b>Clarity at every step</b></div></div><div class="hero-note"><span class="status-dot"></span> Independent thinking. Intentional engineering.</div></div></section>`}
 
-function home(){return `<div class="container"><section class="hero hero-solo"><div class="hero-copy"><div class="eyebrow">Independent software studio · Nuremberg</div><h1 class="headline">${esc(site.hero_title)}<br><span class="gradient">${esc(site.hero_accent)}</span></h1><p class="subhead">${esc(site.hero_subtitle)}</p><div class="hero-actions"><a class="button button-primary" href="#/products">Explore products ↗</a><a class="button button-quiet" href="#/contact">Start a project</a></div></div></section><div class="trust-strip"><span><i>✦</i> Custom by design</span><span><i>✦</i> Security-minded</span><span><i>✦</i> Thoughtful delivery</span><span><i>✦</i> Built to evolve</span></div>${categoryCards()}${brandMark()}<section class="section-sm"><div class="two-col two-col-single"><div><div class="eyebrow">A better way to build</div><h2 class="headline" style="font-size:clamp(31px,4vw,45px)">Technology should feel <span class="gradient">human.</span></h2><p class="subhead" style="font-size:13px">We pair clear communication with dependable engineering. Every engagement starts with understanding the problem—not pushing a pre-built answer.</p><div class="feature-list">${['Modern, maintainable stacks','Custom to your workflow','Security-conscious delivery','Support that stays human'].map(x=>`<div class="feature-item"><span class="check">✓</span>${x}</div>`).join('')}</div><a class="button button-quiet" style="margin-top:25px" href="#/about">Get to know us ↗</a></div></div></section><section class="section-sm"><div class="section-heading"><div><div class="eyebrow">A clear path forward</div><h2>Built together, step by step.</h2></div></div><div class="process">${[['01','Listen','Understand your goals'],['02','Define','Shape scope and priorities'],['03','Design','Map flows and direction'],['04','Build','Engineer in iterations'],['05','Validate','Test, refine and secure'],['06','Deliver','Launch and improve']].map(x=>`<div class="step"><span class="step-num">${x[0]} / 06</span><h3>${x[1]}</h3><p>${x[2]}</p></div>`).join('')}</div></section><section class="section-sm"><div class="card cta-band"><div><h2>Have something good in mind?</h2><p>Tell us what you're trying to solve. We'll figure out the right next step together.</p></div><a class="button button-primary" href="#/contact">Start a conversation ↗</a></div></section></div>`}
+function home(){return `<div class="container"><section class="hero hero-solo"><div class="hero-copy"><div class="eyebrow">Independent software studio · Nuremberg</div><h1 class="headline"><span>${esc(site.hero_title)}</span><br><span class="gradient">${esc(site.hero_accent)}</span></h1><p class="subhead">${esc(site.hero_subtitle)}</p><div class="hero-actions"><a class="button button-primary" href="#/products">Explore products ↗</a><a class="button button-quiet" href="#/contact">Start a project</a></div></div></section>${trustMarquee()}${categoryCards()}${brandMark()}<section class="section-sm"><div class="two-col two-col-single"><div><div class="eyebrow">A better way to build</div><h2 class="headline" style="font-size:clamp(31px,4vw,45px)">Technology should feel <span class="gradient">human.</span></h2><p class="subhead" style="font-size:13px">We pair clear communication with dependable engineering. Every engagement starts with understanding the problem—not pushing a pre-built answer.</p><div class="feature-list">${['Modern, maintainable stacks','Custom to your workflow','Security-conscious delivery','Support that stays human'].map(x=>`<div class="feature-item"><span class="check">✓</span>${x}</div>`).join('')}</div><a class="button button-quiet" style="margin-top:25px" href="#/about">Get to know us ↗</a></div></div></section><section class="section-sm"><div class="section-heading"><div><div class="eyebrow">A clear path forward</div><h2>Built together, step by step.</h2></div></div><div class="process">${[['01','Listen','Understand your goals'],['02','Define','Shape scope and priorities'],['03','Design','Map flows and direction'],['04','Build','Engineer in iterations'],['05','Validate','Test, refine and secure'],['06','Deliver','Launch and improve']].map(x=>`<div class="step"><span class="step-num">${x[0]} / 06</span><h3>${x[1]}</h3><p>${x[2]}</p></div>`).join('')}</div></section><section class="section-sm"><div class="card cta-band"><div><h2>Have something good in mind?</h2><p>Tell us what you're trying to solve. We'll figure out the right next step together.</p></div><a class="button button-primary" href="#/contact">Start a conversation ↗</a></div></section></div>`}
 /* The artwork on a product card and at the top of a product page.
  *
  * Three cases, in order of preference:
@@ -78,14 +136,19 @@ function productArt(p){
   return `<div class="product-cover is-default"><img class="cover-emblem" src="${esc(assetUrl('brand/axiasoft-original.png'))}" alt="AXIASOFT logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">AXIA / ${esc(p.category)}</span></div>`}/* The whole card opens the product. Actions inside it (Details, Preview,
    Request) keep their own behaviour because the handler ignores clicks that
    land on a control. */
-function card(p){return `<article class="card product-card tilt-hover mouse-light" data-open-product="${esc(p.slug)}" tabindex="0" role="link" aria-label="${esc(p.title)}">${productArt(p)}<div class="product-info"><div class="product-top"><span class="badge">${esc(p.category)}</span><span class="badge badge-live">● ${p.status==='available'?'Available':'Showcase'}</span></div><h3>${esc(p.title)}</h3><p>${esc(p.summary)}</p>${visible('show_prices')?`<div class="product-price">${esc(p.price_label)}</div>`:''}<div class="product-actions"><a class="button button-quiet" href="#/products/${esc(p.slug)}">Details</a>${safePreview(p.github_url)?`<a class="button button-outline" href="${esc(safePreview(p.github_url))}" target="_blank" rel="noopener noreferrer">Preview ↗</a>`:`<a class="button button-outline" href="#/preview/${esc(p.slug)}">Preview</a>`}<button class="button button-primary" data-order="${p.id}">Request ↗</button></div></div></article>`}
-function catalog(){const brand=currentBrand();let rows=products.filter(p=>p.category!=='Aurion'&&(productFilter==='All'||p.category===productFilter)&&(!brand||brandMatches(brand,p)));return `<div class="container"><section class="page-head"><div class="eyebrow">The AXIASOFT catalog</div><h1>Made to move you <span class="gradient">forward.</span></h1><p>Explore our product concepts and development starting points. Every engagement can be shaped to fit your goals.</p></section>${brandStrip()}<div class="tabs">${['All','Websites','Applications'].map(c=>`<button data-filter="${c}" class="tab ${productFilter===c?'active':''}">${c}</button>`).join('')}</div><div class="product-grid">${rows.map(card).join('')}</div>${rows.length?'':'<div class="empty-state catalog-empty">No products published yet. New products are added from the admin console, each with its own GitHub preview link.</div>'}<section class="section-sm"><div class="card cta-band"><div><h2>Need something more specific?</h2><p>Tell us about the custom product you have in mind.</p></div><a class="button button-primary" href="#/contact">Discuss your project ↗</a></div></section></div>`}
-function detail(p){return `<div class="container"><div style="padding-top:34px"><a class="back-link" href="#/products">← Back to products</a></div><div class="product-detail"><div class="card detail-visual">${productArt(p)}</div><div class="detail-copy"><div class="eyebrow">${esc(p.category)} / AXIA PRODUCT</div><h1>${esc(p.title)}</h1><p>${esc(p.description)}</p><div class="detail-meta"><span class="badge">Responsive by design</span><span class="badge">Custom scope</span><span class="badge">${esc(p.category)}</span></div><h3>What it can include</h3><div class="detail-features">${p.features.map(f=>`<div><span class="check">✓</span>${esc(f)}</div>`).join('')}</div><h3>Technology direction</h3><div class="detail-meta">${p.technologies.map(t=>`<span class="badge">${esc(t)}</span>`).join('')}</div>${visible('show_prices')?`<div class="price-box"><div><small>Indicative starting point</small><strong>${esc(p.price_label)}</strong></div><span class="badge">Scope confirmed together</span></div>`:''}${p.category==='Aurion'?`<a class="button button-primary button-block" href="#/aurion">View AURION showcase ↗</a>`:`<button class="button button-primary button-block" data-order="${p.id}">Request this product ↗</button>`}<p style="font-size:9px;color:var(--faint);margin-top:12px">No payment is taken here. Scope and any quotation are confirmed before work begins.</p></div></div>${safePreview(p.github_url)?`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">Live preview</div><h3 style="font-weight:550">See it on GitHub</h3><p class="preview-disclaimer">This product is presented by its own repository. The link opens in a new tab.</p><a class="button button-primary" href="${esc(safePreview(p.github_url))}" target="_blank" rel="noopener noreferrer">Open preview ↗</a><p style="font-size:9px;color:var(--faint);margin-top:12px;word-break:break-all">${esc(p.github_url)}</p></div>`:`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">See the direction</div><h3 style="font-weight:550">Concept preview</h3><p class="preview-disclaimer">Demonstration content only—not a live customer website or functioning application.</p><div class="preview-frame"><div class="preview-toolbar"><i class="preview-dot"></i><i class="preview-dot" style="background:#ffc457"></i><i class="preview-dot" style="background:#51c99e"></i><span style="margin-left:12px">AXIASOFT concept · ${esc(p.slug)}</span></div><div class="preview-body"><div style="font-size:10px;letter-spacing:.12em;color:#337ada">${esc(p.category.toUpperCase())} / PRODUCT CONCEPT</div><h2>${esc(p.title)}<br><span style="color:#377cd8">designed around you.</span></h2><p>${esc(p.summary)} This is a demonstration of visual direction only.</p><button style="background:#286fcd;color:white;border:0;padding:12px 18px;border-radius:7px">Discover more</button></div></div></div>`}</div>`}
+function card(p){return `<article class="card product-card tilt-hover mouse-light" data-open-product="${esc(p.slug)}" tabindex="0" role="link" aria-label="${esc(p.title)}">${productArt(p)}<div class="product-info"><div class="product-top"><span class="badge">${esc(categoryLabel(p.category))}</span><span class="badge badge-live">● ${p.status==='available'?'Available':'Showcase'}</span></div><h3>${esc(p.title)}</h3><p>${esc(p.summary)}</p>${visible('show_prices')?`<div class="product-price">${esc(p.price_label)}</div>`:''}<div class="product-actions"><a class="button button-quiet" href="#/products/${esc(p.slug)}">Details</a><button class="button button-outline" data-preview="${esc(p.slug)}">Preview</button><button class="button button-primary" data-order="${p.id}">Request ↗</button></div></div></article>`}
+function catalog(){const brand=currentBrand();const cats=siteCategories();let rows=products.filter(p=>!isAurion(p)&&(productFilter==='All'||p.category===productFilter)&&(!brand||brandMatches(brand,p)));/* The tab row prints one tab per category the operator published, then the
+   "All" reset. With no categories there is nothing to filter by, so the row is
+   dropped instead of showing a lone "All" button. A tab whose category holds no
+   published product is filtered out too: a tab that opens an empty grid is
+   worse than no tab. */
+const shownCats=cats.filter(c=>products.some(p=>p.category===c.id&&!isAurion(p)));const tabsHtml=shownCats.length?`<div class="tabs"><button data-filter="All" class="tab ${productFilter==='All'?'active':''}">All</button>${shownCats.map(c=>`<button data-filter="${esc(c.id)}" class="tab ${productFilter===c.id?'active':''}">${esc(c.label)}</button>`).join('')}</div>`:'';return `<div class="container"><section class="page-head"><div class="eyebrow">The AXIASOFT catalog</div><h1>Made to move you <span class="gradient">forward.</span></h1><p>Explore our product concepts and development starting points. Every engagement can be shaped to fit your goals.</p></section>${brandStrip()}${tabsHtml}<div class="product-grid">${rows.map(card).join('')}</div>${rows.length?'':'<div class="empty-state catalog-empty">No products published yet. New products are added from the admin console, each with its own GitHub preview link.</div>'}<section class="section-sm"><div class="card cta-band"><div><h2>Need something more specific?</h2><p>Tell us about the custom product you have in mind.</p></div><a class="button button-primary" href="#/contact">Discuss your project ↗</a></div></section></div>`}
+function detail(p){return `<div class="container"><div style="padding-top:34px"><a class="back-link" href="#/products">← Back to products</a></div><div class="product-detail"><div class="card detail-visual">${productArt(p)}</div><div class="detail-copy"><div class="eyebrow">${esc(categoryLabel(p.category))} / AXIA PRODUCT</div><h1>${esc(p.title)}</h1><p>${esc(p.description)}</p><div class="detail-meta"><span class="badge">Responsive by design</span><span class="badge">Custom scope</span><span class="badge">${esc(categoryLabel(p.category))}</span></div><h3>What it can include</h3><div class="detail-features">${p.features.map(f=>`<div><span class="check">✓</span>${esc(f)}</div>`).join('')}</div><h3>Technology direction</h3><div class="detail-meta">${p.technologies.map(t=>`<span class="badge">${esc(t)}</span>`).join('')}</div>${visible('show_prices')?`<div class="price-box"><div><small>Indicative starting point</small><strong>${esc(p.price_label)}</strong></div><span class="badge">Scope confirmed together</span></div>`:''}${isAurion(p)?`<a class="button button-primary button-block" href="#/aurion">View AURION showcase ↗</a>`:`<button class="button button-primary button-block" data-order="${p.id}">Request this product ↗</button>`}<p style="font-size:9px;color:var(--faint);margin-top:12px">No payment is taken here. Scope and any quotation are confirmed before work begins.</p></div></div>${safePreview(p.github_url)?`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">Live preview</div><h3 style="font-weight:550">See it on GitHub</h3><p class="preview-disclaimer">This product is presented by its own repository. The link opens in a new tab.</p><a class="button button-primary" href="${esc(safePreview(p.github_url))}" target="_blank" rel="noopener noreferrer">Open preview ↗</a><p style="font-size:9px;color:var(--faint);margin-top:12px;word-break:break-all">${esc(p.github_url)}</p></div>`:`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">See the direction</div><h3 style="font-weight:550">Concept preview</h3><p class="preview-disclaimer">Demonstration content only—not a live customer website or functioning application.</p><div class="preview-frame"><div class="preview-toolbar"><i class="preview-dot"></i><i class="preview-dot" style="background:#ffc457"></i><i class="preview-dot" style="background:#51c99e"></i><span style="margin-left:12px">AXIASOFT concept · ${esc(p.slug)}</span></div><div class="preview-body"><div style="font-size:10px;letter-spacing:.12em;color:#337ada">${esc(categoryLabel(p.category).toUpperCase())} / PRODUCT CONCEPT</div><h2>${esc(p.title)}<br><span style="color:#377cd8">designed around you.</span></h2><p>${esc(p.summary)} This is a demonstration of visual direction only.</p><button style="background:#286fcd;color:white;border:0;padding:12px 18px;border-radius:7px">Discover more</button></div></div></div>`}</div>`}
 function aurionWorkflowCards(){return `<div class="category-grid"><article class="card category-card tilt-hover mouse-light workflow-card"><div class="category-icon">⌘</div><h3>MetaTrader environment</h3><p>AURION is presented as a concept for the MetaTrader ecosystem. No broker connection or live integration is enabled.</p></article><article class="card category-card tilt-hover mouse-light workflow-card"><div class="category-icon">◉</div><h3>Operator-led</h3><p>Product direction focuses on clarity, deliberate setup and keeping the operator in control.</p></article><article class="card category-card tilt-hover mouse-light workflow-card"><div class="category-icon">⛨</div><h3>Risk-aware</h3><p>Trading involves risk. This symbolic showcase does not execute trades and is not financial advice.</p></article></div>`}
-function aurion(){return `<div class="container"><section class="aurion-hero"><div><div class="eyebrow">A product by AXIASOFT</div><h1 class="headline" style="font-size:clamp(48px,7vw,76px);margin:17px 0">AURION<span class="gradient">.</span></h1><p class="subhead">A focused companion software concept for working with trading robots through the MetaTrader environment.</p><div class="symbolic-note"><b>Showcase only.</b> Trading execution, broker connections, license purchase, generation and activation are not operational.</div><a class="button button-quiet" href="#aurion-packages">Explore packages ↓</a></div><div class="aurion-logo"><div class="aurion-orbit"></div><div class="aurion-orbit two"></div><div class="aurion-core aurion-logo-hover tilt-hover"><img src="/brand/aurion-original.png" alt="Original AURION logo with its symbol and wordmark" draggable="false"></div></div></section><section class="section-sm"><div class="section-heading"><div><div class="eyebrow">A clearer workflow</div><h2>Designed for focused work.</h2></div><p>Product direction built around clarity, compatibility and operator oversight.</p></div>${aurionWorkflowCards()}</section><section class="section-sm" id="aurion-packages"><div class="section-heading"><div><div class="eyebrow">Presentation packages</div><h2>Choose a display duration.</h2></div><p>Illustrative package cards only. No payment, license or activation is created.</p></div><div class="package-grid">${[['1','Month'],['3','Months'],['6','Months'],['12','Months']].map(x=>`<div class="card package"><div class="license-icon">◈</div><div class="package-duration">${x[0]}</div><div class="package-unit">${x[1]} / showcase</div><p>Concept features and presentation access.</p><button class="button button-quiet button-block" data-aurion-presentation>Presentation only</button></div>`).join('')}</div><div class="symbolic-note">No live trading, broker connection, automated execution, real license activation or payment processing.</div></section><section class="section-sm"><div class="section-heading"><div><div class="eyebrow">Questions</div><h2>Frequently asked.</h2></div></div>${[['Does AURION place trades?','No. This showcase does not connect to a broker or execute trades.'],['Can I purchase or activate a license?','Not in this development phase. The packages are visual examples only.'],['Does it work with MetaTrader?','AURION is a concept for a MetaTrader environment. No live integration is available.']].map(x=>`<details class="faq"><summary>${x[0]}</summary><p>${x[1]}</p></details>`).join('')}</section></div>`}
+function aurion(){return `<div class="container"><section class="aurion-hero"><div><div class="eyebrow">A product by AXIASOFT</div><h1 class="headline" style="font-size:clamp(48px,7vw,76px);margin:17px 0">AURION<span class="gradient">.</span></h1><p class="subhead">A focused companion software concept for working with trading robots through the MetaTrader environment.</p><div class="symbolic-note"><b>Showcase only.</b> Trading execution, broker connections, license purchase, generation and activation are not operational.</div><a class="button button-quiet" href="#aurion-packages">Explore packages ↓</a></div><div class="aurion-logo"><div class="aurion-orbit"></div><div class="aurion-orbit two"></div><div class="aurion-core aurion-logo-hover tilt-hover"><picture><source srcset="/brand/aurion-original.webp" type="image/webp"><img src="/brand/aurion-original.png" alt="Original AURION logo with its symbol and wordmark" draggable="false" loading="lazy" decoding="async"></picture></div></div></section><section class="section-sm"><div class="section-heading"><div><div class="eyebrow">A clearer workflow</div><h2>Designed for focused work.</h2></div><p>Product direction built around clarity, compatibility and operator oversight.</p></div>${aurionWorkflowCards()}</section><section class="section-sm" id="aurion-packages"><div class="section-heading"><div><div class="eyebrow">Presentation packages</div><h2>Choose a display duration.</h2></div><p>Illustrative package cards only. No payment, license or activation is created.</p></div><div class="package-grid">${[['1','Month'],['3','Months'],['6','Months'],['12','Months']].map(x=>`<div class="card package"><div class="license-icon">◈</div><div class="package-duration">${x[0]}</div><div class="package-unit">${x[1]} / showcase</div><p>Concept features and presentation access.</p><button class="button button-quiet button-block" data-aurion-presentation>Presentation only</button></div>`).join('')}</div><div class="symbolic-note">No live trading, broker connection, automated execution, real license activation or payment processing.</div></section><section class="section-sm"><div class="section-heading"><div><div class="eyebrow">Questions</div><h2>Frequently asked.</h2></div></div>${[['Does AURION place trades?','No. This showcase does not connect to a broker or execute trades.'],['Can I purchase or activate a license?','Not in this development phase. The packages are visual examples only.'],['Does it work with MetaTrader?','AURION is a concept for a MetaTrader environment. No live integration is available.']].map(x=>`<details class="faq"><summary>${x[0]}</summary><p>${x[1]}</p></details>`).join('')}</section></div>`}
 function about(){return `<div class="container"><section class="page-head"><div class="eyebrow">A little about us</div><h1>Good software starts<br>with <span class="gradient">good questions.</span></h1><p>AXIASOFT is an independent software brand focused on creating digital products and custom development experiences with care, clarity and craft.</p></section><section class="section-sm"><div class="two-col"><div class="card feature-panel"><div class="big-symbol brand-emblem"><img src="/brand/axiasoft-original.png" alt="AXIASOFT logo"></div><div class="eyebrow">Our approach</div><h3 style="font-size:23px;font-weight:550">Less noise.<br>More useful software.</h3></div><div><div class="eyebrow">Our values</div><h2 style="font-size:30px;font-weight:550">Built to be clear.<br>Made to be trusted.</h2><p class="subhead" style="font-size:13px">We turn ideas into useful, well-considered software. We value open collaboration, responsible security practices and products that can grow without losing their purpose.</p><div class="feature-list">${['Modern technologies','Custom development','Security-minded engineering','Responsive design','Ongoing support'].map(x=>`<div class="feature-item"><span class="check">✓</span>${x}</div>`).join('')}</div></div></div></section></div>`}
 function services(){return `<div class="container"><section class="page-head"><div class="eyebrow">Services</div><h1>From first idea<br>to <span class="gradient">ready to grow.</span></h1><p>Flexible software development for teams who need a thoughtful partner to shape and build their next digital product.</p></section><div class="category-grid">${[['⌘','Website development','Responsive brand sites, storefronts, content platforms and custom web applications.'],['▣','Mobile applications','Mobile product strategy and cross-platform app development for Android and iOS.'],['⌘','Custom software','Purpose-built tools, integrations, business systems and workflow automation.']].map(a=>`<div class="card category-card tilt-hover mouse-light"><div class="category-icon">${a[0]}</div><h3>${a[1]}</h3><p>${a[2]}</p><a class="arrow-link" href="#/contact">↗</a></div>`).join('')}</div><section class="section"><div class="section-heading"><div><div class="eyebrow">Our process</div><h2>From question to outcome.</h2></div></div><div class="process">${[['01','Request','Tell us what you need'],['02','Discover','Align on requirements'],['03','Design','Map an intuitive experience'],['04','Develop','Build in reviewed stages'],['05','Test','Validate quality and security'],['06','Deliver','Launch and support']].map(x=>`<div class="step"><span class="step-num">${x[0]} / 06</span><h3>${x[1]}</h3><p>${x[2]}</p></div>`).join('')}</div></section><div class="card cta-band"><div><h2>Let's scope your project.</h2><p>We will review your brief and get back to you about next steps.</p></div><a class="button button-primary" href="#/contact">Start a project ↗</a></div></div>`}
-function contact(){return `<div class="container"><section class="page-head"><div class="eyebrow">Start a conversation</div><h1>Tell us what you're<br><span class="gradient">working toward.</span></h1><p>Choose a development starting point and share context. Our team will follow up to discuss scope. No payment is taken on this site.</p></section><div class="product-grid" style="padding-bottom:85px">${products.filter(p=>p.category!=='Aurion').map(p=>`<div class="card category-card tilt-hover mouse-light"><span class="badge">${esc(p.category)}</span><h3>${esc(p.title)}</h3><p>${esc(p.summary)}</p><button class="button button-primary" style="margin-top:20px" data-order="${p.id}">Request this product ↗</button></div>`).join('')}</div></div>`}
+function contact(){return `<div class="container"><section class="page-head"><div class="eyebrow">Start a conversation</div><h1>Tell us what you're<br><span class="gradient">working toward.</span></h1><p>Choose a development starting point and share context. Our team will follow up to discuss scope. No payment is taken on this site.</p></section><div class="product-grid" style="padding-bottom:85px">${products.filter(p=>!isAurion(p)).map(p=>`<div class="card category-card tilt-hover mouse-light"><span class="badge">${esc(categoryLabel(p.category))}</span><h3>${esc(p.title)}</h3><p>${esc(p.summary)}</p><button class="button button-primary" style="margin-top:20px" data-order="${p.id}">Request this product ↗</button></div>`).join('')}</div></div>`}
 function policy(type){let data={privacy:['Privacy Policy','We collect information needed to respond to enquiries, manage accounts and provide requested services. Order and support data is used to operate this platform. Do not submit sensitive personal information in project briefs.','Data is retained as needed for delivery, security, legal obligations and dispute resolution. Contact support to request access, correction or deletion, subject to legal requirements.','AI support in this build uses a limited local guidance layer. Do not share passwords, payment details or sensitive data in the assistant.'],terms:['Terms and Conditions','This development-stage platform provides product information, service enquiries and order requests. A request does not create a fixed-price contract or guarantee delivery timing. Scope, price and milestones must be confirmed separately in writing.','AURION is a symbolic presentation. Trading functionality, broker connections, payment and license activation are not operational. Trading carries risk; this site does not provide financial advice.','Product previews are demonstrations and may contain illustrative content. Availability, features and indicative prices are subject to confirmation.'],'refunds-policy':['Refund and Return Policy','Customers may submit a refund request within 14 calendar days of the applicable purchase or order date if they are not satisfied, subject to the published terms and applicable law.','To request a review, sign in, open your account and submit a refund request for the relevant order. Provide the order number and reason. Support can also help.','Requests are reviewed against the order details, delivery status, agreed scope and applicable law. AXIASOFT communicates the decision and next steps. Approval is not an automatic refund or proof that payment was returned.','Custom development, completed digital products, undelivered projects and subscription or license products may be treated differently. Consumer rules vary by market; legal review is needed where AXIASOFT operates.','A refund is processed only when a real payment provider confirms it. No payment gateway is connected in this development phase.']}[type];return `<div class="container"><section class="page-head"><div class="eyebrow">AXIASOFT / INFORMATION</div><h1>${data[0]}</h1></section><article class="policy-copy" style="padding-bottom:90px">${data.slice(1).map((x,i)=>`<h2>${['Overview','How to request support','Review and next steps','Important distinctions','Payment status'][i]||'Your information'}</h2><p>${x}</p>`).join('')}</article></div>`}
 
 function authModal(mode='login',after=null){modalRoot.innerHTML=`<div class="modal-overlay"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">AXIASOFT ACCOUNT</div><h2>${mode==='login'?'Welcome back':'Create your account'}</h2><p>Secure access to your project requests and support.</p></div><button class="close-button" aria-label="Close">×</button></div><form id="auth-form"><div class="form-grid">${mode==='register'?`<div class="field full"><label for="auth-name">Full name</label><input id="auth-name" name="name" autocomplete="name" required minlength="2"></div>`:''}<div class="field full"><label for="auth-email">Email address</label><input id="auth-email" name="email" type="email" autocomplete="email" required></div><div class="field full"><label for="auth-password">Password ${mode==='register'?'(at least 12 characters)':''}</label><input id="auth-password" name="password" type="password" autocomplete="${mode==='login'?'current-password':'new-password'}" minlength="${mode==='register'?12:1}" required></div>${mode==='register'?`<div class="field full"><label for="auth-phone">Phone (optional)</label><input id="auth-phone" name="phone" autocomplete="tel"></div>`:''}</div><div id="auth-error"></div><button class="button button-primary button-block" style="margin-top:17px" type="submit">${mode==='login'?'Sign in securely':'Create account'}</button></form><div class="auth-switch">${mode==='login'?`New to AXIASOFT? <button class="text-button" data-auth-switch="register">Create an account</button>`:`Already have an account? <button class="text-button" data-auth-switch="login">Sign in</button>`}</div><p class="form-hint" style="text-align:center;margin-top:14px">Passwords are securely hashed on the server. Use a unique password of 12+ characters.</p></div></div>`;
@@ -168,7 +231,11 @@ function render(){let raw=decodeURIComponent(location.hash.slice(1)||'/');let [p
    asking for the studio, not for the last product brand they browsed, so the
    brand is dropped here too. Without this the header kept showing e.g. Homa
    after a trip home, and the brand could only be cleared from the catalog. */
-if(path==='/'){productFilter='All';if(localStorage.getItem(BRAND_STORAGE)){localStorage.removeItem(BRAND_STORAGE);activeBrand=null}applyBrand();app.innerHTML=home();return}if(path==='/about'){app.innerHTML=visible('show_about')?about():sectionOff('about');return}if(path==='/services'){app.innerHTML=visible('show_services')?services():sectionOff('services');return}if(path==='/contact'){app.innerHTML=visible('show_contact')?contact():sectionOff('contact');return}if(path==='/aurion'){app.innerHTML=visible('show_aurion')?aurion():sectionOff('aurion');return}if(path==='/account'){account();return}if(path==='/admin'){location.assign('/admin/');return}if(path==='/privacy'||path==='/terms'||path==='/refunds-policy'){app.innerHTML=policy(path.slice(1));return}if(path.startsWith('/products/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){api('/api/products/'+encodeURIComponent(slug)).then(x=>{products.push(x);app.innerHTML=detail(x)}).catch(()=>{app.innerHTML='<div class="container page-head"><h1>Product not found</h1><a href="#/products">Return to products</a></div>'});return}app.innerHTML=detail(p);return}if(path.startsWith('/preview/')){let p=products.find(x=>x.slug===path.split('/')[2]);app.innerHTML=p?`<div class="container page-head"><a class="back-link" href="#/products/${esc(p.slug)}">← Back to product</a><h1>${esc(p.title)} preview</h1><p>This is a clearly identified concept demonstration, not a live production deployment.</p>${detail(p)}</div>`:'<div class="container page-head"><h1>Preview not found</h1></div>';return}app.innerHTML=home()}
+if(path==='/'){productFilter='All';if(localStorage.getItem(BRAND_STORAGE)){localStorage.removeItem(BRAND_STORAGE);activeBrand=null}applyBrand();app.innerHTML=home();return}if(path==='/about'){app.innerHTML=visible('show_about')?about():sectionOff('about');return}if(path==='/services'){app.innerHTML=visible('show_services')?services():sectionOff('services');return}if(path==='/contact'){app.innerHTML=visible('show_contact')?contact():sectionOff('contact');return}if(path==='/aurion'){app.innerHTML=visible('show_aurion')?aurion():sectionOff('aurion');return}if(path==='/account'){account();return}if(path==='/admin'){location.assign('/admin/');return}if(path==='/privacy'||path==='/terms'||path==='/refunds-policy'){app.innerHTML=policy(path.slice(1));return}if(path.startsWith('/products/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){api('/api/products/'+encodeURIComponent(slug)).then(x=>{products.push(x);app.innerHTML=detail(x)}).catch(()=>{app.innerHTML='<div class="container page-head"><h1>Product not found</h1><a href="#/products">Return to products</a></div>'});return}app.innerHTML=detail(p);return}/* The preview is a layer over the page, not a route of its own: it opens over
+   whatever the visitor was looking at and closing it returns them there. The
+   hash is kept in step so a shared link lands on the same preview, and the
+   route below re-creates the layer when the page loads directly at that hash. */
+if(path.startsWith('/preview/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){app.innerHTML='<div class="container page-head"><h1>Preview not found</h1><a class="back-link" href="#/products">Return to products</a></div>';return}app.innerHTML=catalog();bindFilters();setTimeout(()=>openPreview(slug,false),0);return}app.innerHTML=home()}
 $('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();loadSite().then(async()=>{applyChrome();applyThemePreference();await loadProducts();await refresh();render();applyChrome();teachXiona()}).catch(async()=>{await loadProducts();await refresh();render();applyChrome();teachXiona()});window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();teachXiona();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}
 /* Pressing the header lockup while a product brand is running returns to
    AXIASOFT. The link has always pointed at '#/', but the home route never
@@ -182,7 +249,7 @@ if(e.target.closest('#brand-link')&&currentBrand()){
   activeBrand=null;
   applyBrand();
   if(location.hash&&location.hash!=='#/')location.hash='#/';
-  return}let btn=e.target.closest('[data-order]');if(btn)orderModal(btn.dataset.order);if(e.target.closest('[data-open-auth]'))openAuth();if(e.target.closest('[data-aurion-presentation]'))toast('AURION is a symbolic showcase; purchasing is not enabled.');const cardEl=e.target.closest('[data-open-product]');if(cardEl&&!e.target.closest('a,button,[data-order]')){location.hash='#/products/'+cardEl.dataset.openProduct}});
+  return}const previewBtn=e.target.closest('[data-preview]');if(previewBtn){e.preventDefault();openPreview(previewBtn.dataset.preview);return}let btn=e.target.closest('[data-order]');if(btn)orderModal(btn.dataset.order);if(e.target.closest('[data-open-auth]'))openAuth();if(e.target.closest('[data-aurion-presentation]'))toast('AURION is a symbolic showcase; purchasing is not enabled.');const cardEl=e.target.closest('[data-open-product]');if(cardEl&&!e.target.closest('a,button,[data-order]')){location.hash='#/products/'+cardEl.dataset.openProduct}});
 /* Keyboard parity: a card is focusable and responds to Enter/Space. */
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const cardEl=e.target.closest&&e.target.closest('[data-open-product]');if(!cardEl||e.target.closest('a,button'))return;e.preventDefault();location.hash='#/products/'+cardEl.dataset.openProduct});
 /* Xiona — the assistant behind the launcher.
@@ -203,6 +270,29 @@ function syncLauncher(){const l=$('#chat-launcher');if(!l)return;l.classList.tog
 /* One engine for the session. It is built lazily on first use so the launcher
    costs nothing until someone asks something. */
 let xiona=null,xionaPagesSeen={};
+/* The assistant's Persian/English vocabulary is a 45 KB table that only it
+   reads. It used to ride along in the catalog snapshot, so every visitor
+   downloaded it before the hero had resolved, whether or not they ever opened
+   the chat. app.js fetches it the first time the panel is opened and merges it
+   into the snapshot the engine reads; a second open reuses the same promise. */
+let vocabularyRequest=null;
+function loadVocabulary(){
+  if(window.AXIA_STATIC&&Array.isArray(window.AXIA_STATIC.pairs)&&window.AXIA_STATIC.pairs.length)return Promise.resolve(window.AXIA_STATIC.pairs);
+  if(vocabularyRequest)return vocabularyRequest;
+  const base=document.baseURI||location.href;
+  vocabularyRequest=fetch(new URL('data/vocabulary.js',base).href,{cache:'force-cache'})
+    .then(r=>r.ok?r.text():'')
+    .then(text=>{
+      if(!text)return[];
+      /* A snapshot file is a plain script, not JSON: it assigns to the same
+         window.AXIA_STATIC the rest of the build writes to. Evaluating it is
+         what the browser would have done had the tag been in the page. */
+      new Function(text)();
+      return (window.AXIA_STATIC&&window.AXIA_STATIC.pairs)||[];
+    })
+    .catch(()=>[]);
+  return vocabularyRequest;
+}
 function xionaEngine(){
   if(xiona)return xiona;
   if(!window.Xiona){xiona=null;return null}
@@ -219,7 +309,19 @@ function teachXiona(){
   engine.learn(source);
 }
 
-function toggleChat(){chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · on-site assistant</strong><small>Learns this site · answers on its own · no outside service</small></div><button class="close-button" aria-label="Close support">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">Xiona answers only from what this site publishes. It cannot see orders, payments or your account.</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="Ask about products, services or the process…" maxlength="500" required><button>Send</button></form>`;document.body.append(panel);
+function toggleChat(){
+  /* Opening the panel is the first moment the vocabulary is worth its bytes. */
+  if(!chatOpen&&!(window.AXIA_STATIC&&(window.AXIA_STATIC.pairs||[]).length)){
+    loadVocabulary().then(()=>{
+      /* The engine has already indexed the pages with no dictionary. Rebuilding
+         it is cheaper than teaching a live one a second vocabulary, and it is a
+         one-off: this runs the first time the panel opens and never again. */
+      xiona=null;
+      xionaEngine();
+      teachXiona();
+    })
+  }
+  chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · on-site assistant</strong><small>Learns this site · answers on its own · no outside service</small></div><button class="close-button" aria-label="Close support">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">Xiona answers only from what this site publishes. It cannot see orders, payments or your account.</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="Ask about products, services or the process…" maxlength="500" required><button>Send</button></form>`;document.body.append(panel);
   /* The panel is the site telling the visitor what this assistant is. Teach it
      the moment it exists, so "who are you" is answered from the panel text the
      visitor can read - not from a sentence kept in the engine. */
@@ -434,6 +536,135 @@ function showBrand() {
 
 /* The tab buttons are re-bound after any render that replaces the catalog, and
    choosing a brand does exactly that. */
+/* ------------------------------------------------------------- preview ---- */
+/* A product's preview used to cost the visitor the site: the button opened the
+   GitHub repository in a new tab, and the built-in concept demo was a card at
+   the bottom of the detail page. The preview belongs *in* the site now — a
+   fullscreen layer the visitor can browse without leaving AXIASOFT.
+
+   The layer is one fixed element with three stacked parts: a slim toolbar that
+   carries the product name, an "open on GitHub" escape hatch and the close
+   button; the frame itself; and a loading veil that lifts when the frame
+   reports it has loaded. The frame is an <iframe> with sandbox="allow-scripts
+   allow-same-origin allow-popups" — enough for a real site to run, not enough
+   for it to reach back into this page's storage or navigate the top window. */
+let previewSlug = null;
+
+function previewProduct(slug) {
+  return products.find((p) => p.slug === slug) || null;
+}
+
+/* Where a product's preview actually points. A valid https link is the real
+   thing; without one the product gets the built-in concept page, which is a
+   document this build writes to data/preview/<slug>.html. Both are loaded into
+   the same frame, so the visitor's experience is identical either way. */
+function previewSrc(p) {
+  const live = safePreview(p.github_url);
+  if (live) return live;
+  const path = 'data/preview/' + encodeURIComponent(p.slug) + '.html';
+  return assetUrl(path);
+}
+
+function openPreview(slug, pushHash) {
+  const p = previewProduct(slug);
+  if (!p) {
+    toast('That product preview is not available.');
+    return;
+  }
+  closePreview(false);
+  previewSlug = slug;
+  const fa = document.documentElement.lang === 'fa';
+  const src = previewSrc(p);
+  const live = safePreview(p.github_url);
+  const layer = document.createElement('section');
+  layer.className = 'preview-layer';
+  layer.id = 'preview-layer';
+  layer.setAttribute('role', 'dialog');
+  layer.setAttribute('aria-modal', 'true');
+  layer.setAttribute('aria-label', (fa ? 'پیش‌نمایش ' : 'Preview of ') + p.title);
+  layer.innerHTML = `
+    <header class="preview-bar">
+      <div class="preview-bar-title"><span class="preview-bar-dot"></span><strong>${esc(p.title)}</strong><span class="preview-bar-slug">${esc(p.slug)}</span></div>
+      <div class="preview-bar-actions">
+        ${live ? `<a class="preview-btn" href="${esc(live)}" target="_blank" rel="noopener noreferrer">${fa ? 'بازکردن در زبانهٔ تازه ↗' : 'Open in a new tab ↗'}</a>` : ''}
+        <a class="preview-btn" href="#/products/${esc(p.slug)}" data-preview-details>${fa ? 'جزئیات محصول' : 'Product details'}</a>
+        <button class="preview-btn preview-close" data-preview-close aria-label="${fa ? 'بستن پیش‌نمایش' : 'Close preview'}">×</button>
+      </div>
+    </header>
+    <div class="preview-stage">
+      <div class="preview-loading" data-preview-loading><span class="preview-spinner"></span><span>${fa ? 'در حال بارگذاری پیش‌نمایش…' : 'Loading the preview…'}</span></div>
+      <iframe class="preview-frame-live" data-preview-frame src="${esc(src)}" title="${esc(p.title)}"
+        loading="eager" referrerpolicy="no-referrer"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox"></iframe>
+    </div>`;
+  document.body.append(layer);
+  document.body.classList.add('preview-open');
+  const frame = $('[data-preview-frame]', layer);
+  const veil = $('[data-preview-loading]', layer);
+  const reveal = () => { if (veil) veil.remove(); layer.classList.add('is-ready'); };
+  if (frame) {
+    frame.addEventListener('load', reveal, { once: true });
+    /* A site that sends X-Frame-Options: DENY renders as an empty browser error
+       page and fires no useful event, and the failure is invisible from here —
+       the frame is cross-origin, so its contentDocument stays unreadable. The
+       only honest move is to say so on the timer: lift the veil, but leave a
+       note naming the escape hatch that has been in the toolbar all along. */
+    setTimeout(() => {
+      if (!layer.classList.contains('is-ready')) {
+        reveal();
+        if (live) {
+          const note = document.createElement('p');
+          note.className = 'preview-blocked';
+          note.innerHTML = (fa ? 'این سایت اجازهٔ نمایش درون‌برنامه‌ای نمی‌دهد. ' : 'This site does not allow being shown inside another page. ')
+            + `<a href="${esc(live)}" target="_blank" rel="noopener noreferrer">${fa ? 'در زبانهٔ تازه باز کنید ↗' : 'Open it in a new tab ↗'}</a>`;
+          layer.append(note);
+        }
+      }
+    }, 6000);
+  }
+  layer.addEventListener('click', (event) => {
+    if (event.target.closest('[data-preview-close]') || event.target.closest('[data-preview-details]')) {
+      closePreview();
+    }
+  });
+  document.addEventListener('keydown', previewKeys);
+  if (pushHash !== false && location.hash !== '#/preview/' + slug) location.hash = '#/preview/' + slug;
+  $('[data-preview-close]', layer)?.focus();
+}
+
+function closePreview(dropHash = true) {
+  const layer = $('#preview-layer');
+  if (layer) layer.remove();
+  document.body.classList.remove('preview-open');
+  document.removeEventListener('keydown', previewKeys);
+  previewSlug = null;
+  if (dropHash && location.hash.startsWith('#/preview/')) {
+    /* Back to the catalog rather than stripping the hash. Stripping it left the
+       page empty: no hash means the home route, but the viewer was opened over
+       the catalog, so the visitor lost their place. replaceState is used so the
+       history keeps one stop instead of gaining one that points at a closed
+       layer. */
+    history.replaceState(null, '', '#/products');
+    render();
+    applyChrome();
+  }
+}
+
+/* Escape closes, and focus is kept inside the layer while it is open — the
+   storefront behind it is visually covered and should not take a Tab. */
+function previewKeys(event) {
+  const layer = $('#preview-layer');
+  if (!layer) return;
+  if (event.key === 'Escape') { event.preventDefault(); closePreview(); return; }
+  if (event.key !== 'Tab') return;
+  const focusable = $$('a[href],button:not([disabled]),iframe,[tabindex]:not([tabindex="-1"])', layer);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+
 function bindFilters() {
   $$('[data-filter]').forEach((b) => {
     b.onclick = () => {

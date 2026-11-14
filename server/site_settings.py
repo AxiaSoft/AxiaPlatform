@@ -28,6 +28,7 @@ GROUPS = {
     # its own editor; it is grouped here so a caller that walks GROUPS to build
     # a settings form knows the key exists and is not silently droppable.
     'brands': ['brands'],
+    'categories': ['categories'],
 }
 
 SPEC = {
@@ -59,12 +60,24 @@ SPEC = {
     # in public/brands.js, which meant adding a brand was a code change and a
     # deploy. It is data now: the console writes it, the storefront reads it.
     'brands': {'type': 'brands'},
+
+    # The catalog categories, same story as brands: the storefront used to draw
+    # its tabs from a literal ['Websites','Applications'] in public/app.js, so
+    # renaming one meant editing three files. The console owns the list now.
+    # An empty list is a valid answer - it means the catalog is not split into
+    # categories at all, and the storefront hides the tab row.
+    'categories': {'type': 'categories'},
 }
 
 # A brand is a small record, not free text, so it is checked field by field.
 BRAND_FIELDS = ('id', 'name', 'nameFa', 'tagline', 'taglineFa',
                 'accent', 'accentSoft', 'mark', 'logo')
 BRAND_MAX = 12
+CATEGORY_FIELDS = ('id', 'name', 'nameFa')
+CATEGORY_MAX = 24
+# Category ids appear in a URL query (?category=sites) and in the data attribute
+# the tab button carries, so they stay in the same alphabet as product slugs.
+ID_RE = re.compile(r'^[a-z0-9-]{2,40}$')
 COLOUR_RE = re.compile(r'^#[0-9a-f]{6}$', re.I)
 # Asset paths are stored the way assetUrl() in the storefront reads them: a
 # root-relative path ('/brand/x.png'), a bare relative one ('brand/x.png',
@@ -100,6 +113,12 @@ DEFAULTS = {
     'show_prices': True,
 
     'default_theme': 'dark',
+
+    # Empty on purpose: a fresh install publishes no categories, so the catalog
+    # shows one flat grid and no tab row. An operator adds them in the console;
+    # the demo build ships its own list from tools/demo_catalog.py so a visitor
+    # trying the demo has something to filter by.
+    'categories': [],
 
     'brands': [
         {'id': 'arya', 'name': 'Arya', 'nameFa': 'آریا',
@@ -196,6 +215,43 @@ def clean_brand_list(value):
     return True, out
 
 
+def clean_category(raw, seen_ids):
+    """Validate one catalog category. Returns ``(category, error)``.
+
+    A category is deliberately tiny: an id the products reference and the two
+    labels the storefront's tab row prints. Keeping the id separate from the
+    label is what lets an operator rename "Websites" to "Sites" without touching
+    every product that sits in it.
+    """
+    if not isinstance(raw, dict):
+        return None, 'Each category must be an object.'
+    cat = {field: str(raw.get(field) or '').strip() for field in CATEGORY_FIELDS}
+    if not ID_RE.fullmatch(cat['id'] or ''):
+        return None, 'Category id must be lowercase letters, digits and hyphens.'
+    if cat['id'] in seen_ids:
+        return None, 'Category ids must be unique.'
+    if not cat['name'] or len(cat['name']) > 40:
+        return None, 'Category name is required (max 40 characters).'
+    if len(cat['nameFa']) > 40:
+        return None, 'The Persian category name is too long.'
+    return cat, None
+
+
+def clean_category_list(value):
+    if not isinstance(value, list):
+        return False, None
+    if len(value) > CATEGORY_MAX:
+        return False, None
+    out, seen = [], set()
+    for raw in value:
+        cat, error = clean_category(raw, seen)
+        if error:
+            return False, None
+        seen.add(cat['id'])
+        out.append(cat)
+    return True, out
+
+
 def clean_value(name, value):
     """Validate one setting. Returns ``(ok, cleaned)``.
 
@@ -209,6 +265,8 @@ def clean_value(name, value):
 
     if kind == 'brands':
         return clean_brand_list(value)
+    if kind == 'categories':
+        return clean_category_list(value)
     if kind == 'bool':
         parsed = _as_bool(value)
         return (parsed is not None), parsed

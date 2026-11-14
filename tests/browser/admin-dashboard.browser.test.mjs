@@ -243,8 +243,11 @@ const shipped = await store.evaluate(() => ({
 }));
 check('the demo ships the four website builds', shipped.cards === 4, `cards=${shipped.cards}`);
 check('the demo catalog has its own artwork', shipped.covers === 4, `covers=${shipped.covers}`);
+/* The storefront translates the demo's English titles into Persian now that the
+   catalog carries titleFa, so the check accepts either spelling of each brand. */
 check('the demo catalog is the four brands',
-  shipped.titles.every((t) => /Arya|Ersha|Mino|Homa/.test(t)), shipped.titles.join(' | '));
+  shipped.titles.every((t) => /Arya|آریا|Ersha|ارشا|Mino|مینو|Homa|هما/.test(t)),
+  shipped.titles.join(' | '));
 
 /* Load the sample rows from Maintenance, then the catalog has more to show. */
 await admin.evaluate(() => { location.hash = '#site'; });

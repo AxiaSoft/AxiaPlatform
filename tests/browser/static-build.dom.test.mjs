@@ -91,9 +91,12 @@ const catalogHtml = document.getElementById('app').innerHTML;
 ck('catalog route rendered', /product-grid/.test(catalogHtml));
 const cards = document.querySelectorAll('.product-card').length;
 ck('product from the demo store is rendered', cards === 1, `cards=${cards}`);
-ck('product links to its GitHub preview',
+/* The card's preview control is a button carrying the slug: the preview opens
+   in a fullscreen in-site frame, so the GitHub URL lives in the product data
+   rather than in an href the visitor would leave the site through. */
+ck('the card opens the in-site preview',
    !!document.querySelector('.product-card') &&
-   /href="https:\/\/github\.com\/AxiaSoft\/tutorial-product"/.test(document.querySelector('.product-card').innerHTML),
+   !!document.querySelector('.product-card [data-preview="tutorial-product"]'),
    'card markup');
 
 // Detail page via hash route (uses the in-memory list, no network)

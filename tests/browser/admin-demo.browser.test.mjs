@@ -106,12 +106,11 @@ const catalog = await store.evaluate(() => {
   const cards = [...document.querySelectorAll('.product-card')];
   return cards.map((card) => ({
     title: (card.querySelector('h3') || {}).textContent,
-    // The button is labelled "Preview ↗" in English and "پیش‌نمایش ↗" in Persian,
-    // so it is identified by its target rather than its translated text.
-    preview: [...card.querySelectorAll('a')]
-      .filter((a) => /github\.com/i.test(a.getAttribute('href') || '') ||
-                     /preview|پیش‌نمایش/i.test(a.textContent))
-      .map((a) => ({ href: a.getAttribute('href'), target: a.target, rel: a.rel })),
+    /* The card's preview control is a button carrying the slug: it opens the
+       in-site fullscreen viewer, which frames whatever the product points at.
+       An <a target="_blank"> here would be the old behaviour. */
+    preview: [...card.querySelectorAll('[data-preview]')]
+      .map((b) => ({ tag: b.tagName, preview: b.dataset.preview })),
   }));
 });
 // The card is matched loosely: the visible title follows the console language
@@ -119,11 +118,13 @@ const catalog = await store.evaluate(() => {
 const demoCard = catalog.find((c) => /demo product|محصول نمایشی/i.test(c.title || '')) ||
                  catalog.find((c) => c.preview && c.preview.length);
 check('new product appears in the storefront', !!demoCard, JSON.stringify(catalog.map((c) => c.title)));
-check('preview button opens the GitHub link in a new tab',
+/* The card's Preview control is a button now: it opens the fullscreen in-site
+   viewer, which loads the GitHub URL in an iframe. Sending the visitor to a new
+   tab was the behaviour this replaces. */
+check('preview opens in the in-site viewer, not a new tab',
       !!demoCard && demoCard.preview.length === 1 &&
-      demoCard.preview[0].href === 'https://github.com/AxiaSoft/demo-product' &&
-      demoCard.preview[0].target === '_blank' &&
-      /noopener/.test(demoCard.preview[0].rel),
+      demoCard.preview[0].tag === 'BUTTON' &&
+      demoCard.preview[0].preview === 'demo-product',
       JSON.stringify(demoCard && demoCard.preview));
 
 // detail page swaps the concept preview for the real link

@@ -34,6 +34,7 @@ byte-identical output apart from ``data/snapshot-meta.js``.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import shutil
@@ -55,7 +56,13 @@ STATIC_OMIT = {'static-config.js'}
 
 # Root-relative references that must become base-aware. Bindings and protocol
 # URLs are handled separately so "//" sequences are never touched.
+# srcset carries a comma-separated candidate list, which is why it needs its own
+# rule rather than joining the single-value attributes below. Missing it meant a
+# <picture> shipped with root-absolute candidates on a sub-path deploy: the
+# browser asked for /brand/x.webp at the origin root, got a 404, and fell through
+# to the PNG it had been told to avoid.
 REFERENCE_RE = re.compile(r'(?<![\w:/.\\])(href|src|action|content)="(/[^/"][^"]*)"')
+SRCSET_RE = re.compile(r'(?<![\w:/.\\])(srcset)="([^"]*)"')
 # `url(/fonts/...)` inside CSS (and inline styles) points at the origin root, so it
 # also has to follow the Pages base path. Without this the @font-face 404s and the
 # Persian text renders in a wider fallback font.
@@ -176,6 +183,21 @@ def rewrite_references(text: str, base: str) -> str:
         return f'{attr}="{base}{target.lstrip("/")}"'
 
     text = REFERENCE_RE.sub(replace, text)
+
+    def replace_srcset(match: re.Match) -> str:
+        attr, value = match.group(1), match.group(2)
+        candidates = []
+        for part in value.split(','):
+            piece = part.strip()
+            if not piece:
+                continue
+            url, _, descriptor = piece.partition(' ')
+            if url.startswith('/') and not url.startswith('//') and not url.startswith(base):
+                url = base + url.lstrip('/')
+            candidates.append((url + (' ' + descriptor if descriptor else '')).strip())
+        return f'{attr}="{", ".join(candidates)}"'
+
+    text = SRCSET_RE.sub(replace_srcset, text)
 
     def replace_url(match: re.Match) -> str:
         lead, target = match.group(1), match.group(2)
@@ -548,6 +570,93 @@ def xiona_dictionary(source: Path) -> list[list[str]]:
     return pairs
 
 
+PREVIEW_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title} · AXIASOFT concept preview</title>
+<style>
+  :root {{ color-scheme: dark; }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; min-height: 100vh; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: radial-gradient(120% 90% at 18% 0%, #12203a 0%, #0a1220 55%, #070d18 100%); color: #eef4ff; }}
+  .wrap {{ min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }}
+  .bar {{ display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid rgba(170,194,230,.13);
+         font-size: 11px; color: #9aa9bf; letter-spacing: .04em; }}
+  .bar i {{ width: 8px; height: 8px; border-radius: 50%; background: #6aa9ff; }}
+  .hero {{ display: grid; align-content: center; gap: 18px; padding: 6vh 8vw; }}
+  .eyebrow {{ font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: #6aa9ff; font-weight: 750; }}
+  h1 {{ margin: 0; font-size: clamp(30px, 6vw, 58px); line-height: 1.07; letter-spacing: -.05em; font-weight: 590; max-width: 18ch; }}
+  h1 span {{ background: linear-gradient(110deg,#8bc3ff 8%,#438fff 55%,#b2a5ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }}
+  p {{ margin: 0; max-width: 62ch; font-size: 14px; line-height: 1.9; color: #9aa9bf; }}
+  .row {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }}
+  .tag {{ border: 1px solid rgba(170,194,230,.18); border-radius: 99px; padding: 7px 12px; font-size: 10px; color: #c9d8ee; }}
+  .art {{ border: 1px solid rgba(170,194,230,.13); border-radius: 20px; overflow: hidden; background: #0e1726;
+          display: grid; place-items: center; min-height: 190px; margin-top: 8px; }}
+  .art img {{ max-width: 62%; max-height: 150px; object-fit: contain; }}
+  .note {{ margin-top: 10px; font-size: 10px; color: #71819a; }}
+  ul {{ margin: 0; padding-inline-start: 18px; color: #c9d8ee; font-size: 13px; line-height: 2; }}
+</style>
+</head>
+<body><div class="wrap">
+  <div class="bar"><i></i>AXIASOFT · concept preview · {slug}</div>
+  <div class="hero">
+    <div class="eyebrow">{category} / product concept</div>
+    <h1>{title_lead}<span>{title_tail}</span></h1>
+    <p>{summary}</p>
+    <div class="row">{tags}</div>
+    <div class="art">{art}</div>
+    <ul>{features}</ul>
+    <p class="note">This is a clearly identified concept demonstration, not a live production deployment.
+      No payment is taken and no personal data is collected on this page.</p>
+  </div>
+</div></body></html>
+"""
+
+
+def write_previews(out, base: str, products: list[dict]) -> int:
+    """Write one self-contained concept page per product.
+
+    A product without a https preview link has nothing to open, so the Preview
+    button used to fall back to a small card at the bottom of the detail page.
+    The preview is a fullscreen frame now, and a frame needs a document: these
+    pages are it. They are plain HTML with the product's own copy and artwork,
+    no scripts, and nothing that reaches outside the file - so the frame renders
+    instantly and works offline.
+    """
+    target = out / 'data' / 'preview'
+    target.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for product in products:
+        slug = str(product.get('slug') or '')
+        if not slug:
+            continue
+        title = str(product.get('title') or slug)
+        # The headline rule splits the title so the second half can carry the
+        # gradient, the same way the storefront's hero does.
+        words = title.split()
+        cut = max(1, len(words) - 2) if len(words) > 3 else len(words)
+        lead = ' '.join(words[:cut]) + (' ' if cut < len(words) else '')
+        tail = ' '.join(words[cut:])
+        cover = str(product.get('cover') or '')
+        if cover and not cover.startswith('http') and not cover.startswith('//'):
+            cover = base.rstrip('/') + '/' + cover.lstrip('/')
+        art = f'<img src="{html.escape(cover, quote=True)}" alt="">' if cover else ''
+        tags = ''.join(f'<span class="tag">{html.escape(str(t))}</span>'
+                       for t in (product.get('technologies') or [])[:6])
+        features = ''.join(f'<li>{html.escape(str(f))}</li>'
+                           for f in (product.get('features') or [])[:6])
+        html_text = PREVIEW_PAGE.format(
+            title=html.escape(title), slug=html.escape(slug),
+            category=html.escape(str(product.get('category') or '').upper()),
+            title_lead=html.escape(lead), title_tail=html.escape(tail),
+            summary=html.escape(str(product.get('summary') or '')),
+            tags=tags, art=art, features=features)
+        (target / f'{slug}.html').write_text(html_text, encoding='utf-8')
+        written += 1
+    return written
+
+
 def xiona_pages(out, base: str, settings_path: Path) -> list[dict]:
     """Render the SPA's page copy and return it as knowledge chunks.
 
@@ -582,7 +691,7 @@ def xiona_pages(out, base: str, settings_path: Path) -> list[dict]:
 
 def inject_adapter(html: str, base: str) -> str:
     """Insert the static adapter just before the app bundle."""
-    tag = f'<script src="{base}static-adapter.js?v=static-1" defer></script>'
+    tag = f'<script src="{base}static-adapter.js?v=static-2" defer></script>'
     if 'static-adapter.js' in html:
         return html
     match = app_script_re(base).search(html)
@@ -718,6 +827,19 @@ def main() -> int:
         settings = settings_module.merge({})
     except Exception:
         settings = {}
+
+    # This build is the no-server demo, so it also carries the demo's category
+    # list. The site's own default is empty: categories are the operator's, and
+    # a fresh install publishes none. Shipping an empty list here would leave a
+    # visitor with products they cannot filter, which is the half-built demo
+    # this round exists to avoid.
+    if not settings.get('categories'):
+        try:
+            sys.path.insert(0, str(ROOT / 'tools'))
+            from demo_catalog import DEMO_CATEGORIES
+            settings['categories'] = [dict(row) for row in DEMO_CATEGORIES]
+        except Exception as exc:
+            print(f'  demo categories unreadable ({exc}); shipping none', file=sys.stderr)
     (data_dir / 'settings.json').write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     (data_dir / 'products.json').write_text(
@@ -734,16 +856,35 @@ def main() -> int:
     )
     # Xiona learns from the same snapshot the storefront renders, so an answer
     # can never cite a product or post the visitor cannot open.
-    _xiona_pairs = xiona_dictionary(PUBLIC / 'i18n.js')
     snapshot_js += (
         f'window.AXIA_STATIC.articles = '
         f'{json.dumps(_xiona_articles, ensure_ascii=False)};\n'
         f'window.AXIA_STATIC.pages = '
         f'{json.dumps(_xiona_pages, ensure_ascii=False)};\n'
-        f'window.AXIA_STATIC.pairs = '
-        f'{json.dumps(_xiona_pairs, ensure_ascii=False)};\n'
     )
     (data_dir / 'products.js').write_text(snapshot_js, encoding='utf-8')
+
+    # ---- the assistant's vocabulary --------------------------------------- #
+    # Every Persian/English pair in the site's dictionary, ~45 KB of the 55 KB
+    # snapshot. Only Xiona reads it, and only once it is asked a question, so
+    # keeping it here made every visitor download the whole dictionary before
+    # the hero resolved. It is its own file now and app.js fetches it the first
+    # time the chat panel opens.
+    _xiona_pairs = xiona_dictionary(PUBLIC / 'i18n.js')
+    (data_dir / 'vocabulary.js').write_text(
+        '/* Generated by tools/build_static.py — the assistant\'s vocabulary.\n'
+        '   Loaded on demand; see loadVocabulary() in app.js. */\n'
+        'window.AXIA_STATIC = window.AXIA_STATIC || {};\n'
+        f'window.AXIA_STATIC.pairs = '
+        f'{json.dumps(_xiona_pairs, ensure_ascii=False)};\n',
+        encoding='utf-8')
+
+    # ---- concept previews -------------------------------------------------- #
+    # The fullscreen preview frame needs a document for every product that has
+    # no https link of its own. Written before the blog block so the build's log
+    # reads in page order.
+    previews = write_previews(out, base, products)
+    print(f'  previews: {previews} concept page(s)')
 
     # ---- blog ------------------------------------------------------------- #
     # The published site is static, so there is no article database here. If the
@@ -771,11 +912,11 @@ def main() -> int:
     # Load the snapshot before the app so the catalog is available offline.
     html = html.replace(
         f'<script src="{base}effects.js',
-        f'<script src="{base}data/products.js?v=static-1"></script>\n'
-        f'  <script src="{base}data/settings.js?v=static-1"></script>\n  <script src="{base}effects.js',
+        f'<script src="{base}data/products.js?v=static-2"></script>\n'
+        f'  <script src="{base}data/settings.js?v=static-2"></script>\n  <script src="{base}effects.js',
     )
     html = inject_adapter(html, base)
-    snapshot_tag = f'<script src="{base}static-config.js?v=static-1" defer></script>\n  '
+    snapshot_tag = f'<script src="{base}static-config.js?v=static-2" defer></script>\n  '
     html = html.replace('<script src="' + base + 'data/products.js', snapshot_tag + '<script src="' + base + 'data/products.js')
     # A missing </script> in the shell silently disables every bundle after it.
     # Fail the build instead of shipping a page whose adapter never runs.
@@ -803,7 +944,7 @@ def main() -> int:
     admin_path = out / 'admin' / 'index.html'
     if admin_path.is_file():
         admin_html = admin_path.read_text(encoding='utf-8')
-        demo_tag = f'<script src="{base}demo-backend.js?v=static-4" defer></script>'
+        demo_tag = f'<script src="{base}demo-backend.js?v=static-5" defer></script>'
         if 'demo-backend.js' not in admin_html:
             admin_html = admin_html.replace(
                 f'<script src="{base}admin/admin.js',
@@ -814,12 +955,12 @@ def main() -> int:
         # console's catalog from it, and without it the demo console opened on
         # an empty catalog even though the storefront shipped four products.
         # Both tags go before effects.js, which nothing depends on.
-        settings_tag = f'<script src="{base}data/settings.js?v=static-1"></script>'
+        settings_tag = f'<script src="{base}data/settings.js?v=static-2"></script>'
         if 'data/settings.js' not in admin_html:
             admin_html = admin_html.replace(
                 f'<script src="{base}effects.js',
                 settings_tag + '\n  <script src="' + base + 'effects.js')
-        products_tag = f'<script src="{base}data/products.js?v=static-1"></script>'
+        products_tag = f'<script src="{base}data/products.js?v=static-2"></script>'
         if 'data/products.js' not in admin_html:
             admin_html = admin_html.replace(
                 settings_tag,
@@ -831,7 +972,7 @@ def main() -> int:
     (out / 'robots.txt').write_text(build_robots(origin, base), encoding='utf-8')
     (out / '.nojekyll').write_text('', encoding='utf-8')
 
-    print(f'  wrote  : index.html, static-config.js, data/products.json, data/products.js,')
+    print(f'  wrote  : index.html, static-config.js, data/products.json, data/products.js, data/vocabulary.js,')
     print(f'           data/settings.json, data/settings.js,')
     print(f'           sitemap.xml, robots.txt, .nojekyll')
 

@@ -22,12 +22,12 @@ function pillClass(s){const x=String(s||'').toLowerCase();if(['delivered','close
 function pill(s){return`<span class="pill ${pillClass(s)}">${esc(s||'Unknown')}</span>`}
 function iconFor(page){return({dashboard:'◫',site:'⚙',orders:'▤',products:'◈',customers:'♙',support:'✳',refunds:'↩',activity:'◷'})[page]||'•'}
 function loginView(error=''){
- root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt=""></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div><span style="margin-left:auto"><button id="languageToggle" class="language-btn" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button></span></div><div class="eyebrow">Restricted workspace</div><h1>Administrator sign in</h1><p class="muted">Use your AXIASOFT administrator account to access operational records and tools.</p>${error?`<div class="error-note" role="alert">${esc(error)}</div>`:''}<form data-form="login"><div class="field" style="margin-bottom:12px"><label for="loginEmail">Administrator email</label><input id="loginEmail" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="name@company.com"></div><div class="field"><label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required maxlength="256" placeholder="Your password"></div><button class="btn btn-primary" style="width:100%;margin-top:18px;min-height:42px">Sign in securely <span>↗</span></button></form><div class="secure-note"><span class="secure-dot"></span> Server-verified administrator role · secure session</div><p class="setup-command">No default administrator credentials are provided. To create or reset an admin account, run <code>python3 provision_admin.py</code> from the server directory.</p></section></main>`;
+ root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt="" width="37" height="37" decoding="async"></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div><span style="margin-left:auto"><button id="languageToggle" class="language-btn" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button></span></div><div class="eyebrow">Restricted workspace</div><h1>Administrator sign in</h1><p class="muted">Use your AXIASOFT administrator account to access operational records and tools.</p>${error?`<div class="error-note" role="alert">${esc(error)}</div>`:''}<form data-form="login"><div class="field" style="margin-bottom:12px"><label for="loginEmail">Administrator email</label><input id="loginEmail" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="name@company.com"></div><div class="field"><label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required maxlength="256" placeholder="Your password"></div><button class="btn btn-primary" style="width:100%;margin-top:18px;min-height:42px">Sign in securely <span>↗</span></button></form><div class="secure-note"><span class="secure-dot"></span> Server-verified administrator role · secure session</div><p class="setup-command">No default administrator credentials are provided. To create or reset an admin account, run <code>python3 provision_admin.py</code> from the server directory.</p></section></main>`;
 }
-function deniedView(){root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt=""></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div></div><div class="eyebrow">Access restricted</div><h1>Administrator access required</h1><p class="muted">This account does not have the required administrator role. The server has denied protected data access.</p><div class="head-actions"><button class="btn btn-quiet" data-act="logout">Sign out</button><a class="btn btn-primary" href="/AxiaPlatform/#/">Return to website</a></div></section></main>`}
+function deniedView(){root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt="" width="37" height="37" decoding="async"></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div></div><div class="eyebrow">Access restricted</div><h1>Administrator access required</h1><p class="muted">This account does not have the required administrator role. The server has denied protected data access.</p><div class="head-actions"><button class="btn btn-quiet" data-act="logout">Sign out</button><a class="btn btn-primary" href="/AxiaPlatform/#/">Return to website</a></div></section></main>`}
 function shell(){
  const nav=[['dashboard','Overview'],['site','Website'],['products','Products'],['articles','Blog articles'],['orders','Project requests'],['customers','Customers'],['support','Support'],['refunds','Refunds'],['activity','Activity log']];
- root.innerHTML=`<div class="admin-shell"><div class="side-scrim" data-act="close-nav"></div><aside class="sidebar" id="sidebar"><a href="/" class="side-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt=""></span><span><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></span></a><div class="side-label">Workspace</div><nav class="nav-list">${nav.map(([id,label])=>`<button class="side-link ${state.page===id?'active':''}" data-page="${id}"><span class="nav-glyph">${iconFor(id)}</span><span>${T(label)}</span>${id==='refunds'&&state.overview?.counts?.refunds?`<span class="nav-count">${fmtNum(state.overview.counts.refunds)}</span>`:''}${id==='orders'&&state.overview?.counts?.pending?`<span class="nav-count">${fmtNum(state.overview.counts.pending)}</span>`:''}</button>`).join('')}</nav><div class="side-label" style="margin-top:23px">Website</div><a class="side-link" href="/"><span class="nav-glyph">↗</span><span>Open public website</span></a><div class="sidebar-bottom"><div class="sidebar-foot"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min"><strong>${esc(state.me?.name||'Administrator')}</strong><small>${esc(state.me?.email||'')}</small></div><button class="icon-btn" data-act="logout" title="Sign out" aria-label="Sign out">⇥</button></div></div></aside><section class="workspace"><header class="topbar"><div class="top-left"><button class="icon-btn mobile-toggle" data-act="toggle-nav" aria-label="Open navigation">☰</button><div class="crumb">AXIASOFT <span style="color:var(--faint)">/</span> <strong>${nav.find(x=>x[0]===state.page)?.[1]||'Overview'}</strong></div></div><div class="top-right"><button class="language-btn" id="languageToggle" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button><button class="icon-btn" data-act="theme" title="Toggle color theme" aria-label="Toggle color theme">${document.documentElement.dataset.theme==='dark'?'◐':'☼'}</button><button class="icon-btn" data-act="refresh" title="Refresh data" aria-label="Refresh data">↻</button><div class="top-user"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min-top"><strong>${esc(state.me?.name||'Administrator')}</strong><small>Administrator</small></div></div></div></header><main class="content" id="pageContent"><div class="panel" style="height:190px"><div class="skeleton" style="width:170px;margin:14px 0"></div><div class="skeleton" style="width:78%;height:50px;margin:14px 0"></div><div class="skeleton" style="width:55%"></div></div></main></section></div>`;
+ root.innerHTML=`<div class="admin-shell"><div class="side-scrim" data-act="close-nav"></div><aside class="sidebar" id="sidebar"><a href="/" class="side-brand"><span class="logo-mark"><img src="/AxiaPlatform/brand/axiasoft-original.png" alt="" width="37" height="37" decoding="async"></span><span><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></span></a><div class="side-label">Workspace</div><nav class="nav-list">${nav.map(([id,label])=>`<button class="side-link ${state.page===id?'active':''}" data-page="${id}"><span class="nav-glyph">${iconFor(id)}</span><span>${T(label)}</span>${id==='refunds'&&state.overview?.counts?.refunds?`<span class="nav-count">${fmtNum(state.overview.counts.refunds)}</span>`:''}${id==='orders'&&state.overview?.counts?.pending?`<span class="nav-count">${fmtNum(state.overview.counts.pending)}</span>`:''}</button>`).join('')}</nav><div class="side-label" style="margin-top:23px">Website</div><a class="side-link" href="/"><span class="nav-glyph">↗</span><span>Open public website</span></a><div class="sidebar-bottom"><div class="sidebar-foot"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min"><strong>${esc(state.me?.name||'Administrator')}</strong><small>${esc(state.me?.email||'')}</small></div><button class="icon-btn" data-act="logout" title="Sign out" aria-label="Sign out">⇥</button></div></div></aside><section class="workspace"><header class="topbar"><div class="top-left"><button class="icon-btn mobile-toggle" data-act="toggle-nav" aria-label="Open navigation">☰</button><div class="crumb">AXIASOFT <span style="color:var(--faint)">/</span> <strong>${nav.find(x=>x[0]===state.page)?.[1]||'Overview'}</strong></div></div><div class="top-right"><button class="language-btn" id="languageToggle" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button><button class="icon-btn" data-act="theme" title="Toggle color theme" aria-label="Toggle color theme">${document.documentElement.dataset.theme==='dark'?'◐':'☼'}</button><button class="icon-btn" data-act="refresh" title="Refresh data" aria-label="Refresh data">↻</button><div class="top-user"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min-top"><strong>${esc(state.me?.name||'Administrator')}</strong><small>Administrator</small></div></div></div></header><main class="content" id="pageContent"><div class="panel" style="height:190px"><div class="skeleton" style="width:170px;margin:14px 0"></div><div class="skeleton" style="width:78%;height:50px;margin:14px 0"></div><div class="skeleton" style="width:55%"></div></div></main></section></div>`;
 }
 function chartSvg(rows){
  const months=[];const now=new Date();for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({year:d.getFullYear(),month:d.getMonth(),label:new Intl.DateTimeFormat(document.documentElement.lang==='fa'?'fa-IR':'en',{month:'short'}).format(d),value:0})}
@@ -125,25 +125,139 @@ function productSortCompare(a,b){
  const pa=Number(a.position)||0,pb=Number(b.position)||0;
  return fa-fb||pa-pb||Number(a.id)-Number(b.id);
 }
+/* ---------------------------------------------------------------- catalog */
+/* The catalog screen shows the same rows two ways. On a desktop it is a table
+   with a column per fact; a table with nine columns is unreadable on a phone,
+   and the row still needs to carry every fact, so below 900px the same data is
+   drawn as a card per product. Both are rendered from the functions below and
+   the stylesheet chooses which one is displayed - no re-render on resize, and
+   nothing is duplicated in the markup a screen reader walks. */
+
+/* The categories, as the operator defined them. Products store a category id,
+   so this is what turns 'websites' back into the label the site prints. A
+   category that has been deleted still has products pointing at it; those
+   fall back to the raw id rather than to an empty cell, so the gap is visible
+   instead of silent. */
+function siteCategories(){
+ const list=Array.isArray(state.settings?.categories)?state.settings.categories:[];
+ return list.filter(c=>c&&c.id&&c.name).map(c=>({id:String(c.id),name:String(c.name),nameFa:String(c.nameFa||'')}));
+}
+function categoryLabel(id){
+ const cat=siteCategories().find(c=>c.id===id);
+ if(!cat)return id?String(id):'—';
+ return document.documentElement.lang==='fa'&&cat.nameFa?cat.nameFa:cat.name;
+}
+/* A product whose category no longer exists is flagged in the row, so an
+   operator who deletes a category can find the products it orphaned. */
+function orphanCategory(p){return !!p.category&&!siteCategories().some(c=>c.id===p.category)}
+
+function productStats(counts){
+ return `<div class="mini-stats"><div><strong>${fmtNum(counts.all)}</strong><span>${T('Total')}</span></div><div><strong>${fmtNum(counts.published)}</strong><span>${T('Published')}</span></div><div><strong>${fmtNum(counts.hidden)}</strong><span>${T('Hidden')}</span></div><div><strong>${fmtNum(counts.featured)}</strong><span>${T('Featured')}</span></div></div>`;
+}
+
+function productActions(p){
+ return `<div class="row-actions">
+  <button class="btn btn-sm ${p.featured?'btn-primary':'btn-quiet'}" data-act="feature-product" data-id="${p.id}" data-featured="${p.featured?1:0}" title="${T('Feature on the storefront')}" aria-label="${T('Feature on the storefront')}" aria-pressed="${p.featured?'true':'false'}">${p.featured?'★':'☆'}</button>
+  <button class="btn btn-sm btn-quiet" data-act="edit-product" data-id="${p.id}">${T('Edit')}</button>
+  <button class="btn btn-sm ${p.published?'btn-danger':'btn-quiet'}" data-act="toggle-product" data-id="${p.id}" data-published="${p.published?1:0}">${p.published?T('Unpublish'):T('Publish')}</button>
+ </div>`;
+}
+
+/* The desktop table. Ordering, selection and bulk actions stay where they
+   were; the only structural change is that Category now prints the operator's
+   label instead of the raw value, and flags an orphan. */
+function productsTable(data,allShownSelected){
+ return `<div class="table-wrap product-table-wrap"><table class="data-table product-table"><thead><tr><th class="check-col"><input type="checkbox" data-select-all aria-label="${T('Select all shown products')}" ${allShownSelected?'checked':''}></th><th>${T('Product')}</th><th>${T('Category')}</th><th>${T('Price label')}</th><th>${T('Availability')}</th><th>${T('Preview link')}</th><th>${T('Visibility')}</th><th>${T('Order')}</th><th>${T('Actions')}</th></tr></thead><tbody>${data.map(p=>`<tr class="${p.published?'':'is-hidden'}"><td class="check-col"><input type="checkbox" data-select-product="${p.id}" aria-label="${T('Select')} ${esc(p.title)}" ${state.selected.has(Number(p.id))?'checked':''}></td><td><span class="cell-main">${p.featured?'★ ':''}${esc(p.title)}</span><span class="cell-sub">/${esc(p.slug)}</span></td><td>${orphanCategory(p)?`<span class="cell-main cat-orphan">${esc(categoryLabel(p.category))}</span><span class="cell-sub">${T('category removed')}</span>`:esc(categoryLabel(p.category))}</td><td>${esc(p.price_label)}</td><td>${pill(p.status)}</td><td>${safeHttp(p.github_url)?`<a class="cell-sub link-cell" href="${esc(p.github_url)}" target="_blank" rel="noopener noreferrer">${esc(String(p.github_url).replace(/^https:\/\//,'').slice(0,42))}</a>`:`<span class="cell-sub">${T('Built-in preview')}</span>`}</td><td>${pill(p.published?T('Published'):T('Hidden'))}</td><td><div class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">↑</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></div></td><td>${productActions(p)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* The phone card. Everything the table shows that a person actually decides
+   on is here — cover, title, category, price, state — and the controls are
+   full-width buttons instead of a row of 10px chips. */
+function productCards(data,allShownSelected){
+ const cover=p=>p.cover?`<img src="${esc(String(p.cover).replace(/^https:\/\//,'').startsWith('brand')||String(p.cover).startsWith('/')?p.cover:p.cover)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('is-empty');this.remove()">`:'';
+ return `<div class="product-cards">
+  <div class="product-cards-head"><label class="check-line"><input type="checkbox" data-select-all aria-label="${T('Select all shown products')}" ${allShownSelected?'checked':''}> ${T('Select all shown products')}</label></div>
+  ${data.map(p=>`<article class="product-card-admin ${p.published?'':'is-hidden'}" data-card-id="${p.id}">
+   <div class="pca-top">
+    <span class="pca-cover ${p.cover?'':'is-empty'}">${cover(p)}</span>
+    <div class="pca-title">
+     <strong>${p.featured?'★ ':''}${esc(p.title)}</strong>
+     <span class="pca-slug">/${esc(p.slug)}</span>
+     <div class="pca-pills">${pill(p.published?T('Published'):T('Hidden'))} ${pill(p.status)}</div>
+    </div>
+    <label class="pca-select"><input type="checkbox" data-select-product="${p.id}" aria-label="${T('Select')} ${esc(p.title)}" ${state.selected.has(Number(p.id))?'checked':''}></label>
+   </div>
+   <div class="pca-facts">
+    <div><small>${T('Category')}</small><span class="${orphanCategory(p)?'cat-orphan':''}">${esc(categoryLabel(p.category))}${orphanCategory(p)?' ⚠':''}</span></div>
+    <div><small>${T('Price label')}</small><span>${esc(p.price_label||'—')}</span></div>
+    <div><small>${T('Order')}</small><span class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">↑</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></span></div>
+   </div>
+   ${productActions(p)}
+  </article>`).join('')}
+ </div>`;
+}
+
+/* Which layout this viewport gets. 900px is where nine table columns stop being
+   readable; it matches the stylesheet's breakpoint. Reading it in JS means only
+   one of the two is in the DOM — rendering both and hiding one duplicated every
+   product for assistive technology, and a resize re-renders rather than merely
+   revealing what was already there. */
+function compact(){return window.matchMedia('(max-width: 900px)').matches}
 function productsHTML(){
  const q=state.search.toLowerCase();
  const data=state.products
   .filter(p=>(!q||[p.title,p.slug,p.category,p.summary].join(' ').toLowerCase().includes(q))
    &&(state.productFilter==='All'||(state.productFilter==='Published'?!!p.published:state.productFilter==='Featured'?!!p.featured:!p.published))
-   &&(state.categoryFilter==='All'||p.category===state.categoryFilter))
+   &&(state.categoryFilter==='All'||(state.categoryFilter==='__orphan'?orphanCategory(p):p.category===state.categoryFilter)))
   .slice().sort(productSortCompare);
  const counts={all:state.products.length,published:state.products.filter(p=>p.published).length,hidden:state.products.filter(p=>!p.published).length,featured:state.products.filter(p=>p.featured).length};
  const sel=[...state.selected].filter(id=>state.products.some(p=>Number(p.id)===Number(id)));
  const allShownSelected=data.length>0&&data.every(p=>state.selected.has(Number(p.id)));
- return `${pageHead('Catalog management','Products','Create, order, feature and publish the products shown by the AXIASOFT site.',`<button class="btn btn-quiet" data-act="export" data-kind="products">⇩ Export CSV</button><button class="btn btn-primary" data-act="new-product">＋ Add product</button>`)}
- <div class="mini-stats"><div><strong>${fmtNum(counts.all)}</strong><span>${T('Total')}</span></div><div><strong>${fmtNum(counts.published)}</strong><span>${T('Published')}</span></div><div><strong>${fmtNum(counts.hidden)}</strong><span>${T('Hidden')}</span></div><div><strong>${fmtNum(counts.featured)}</strong><span>${T('Featured')}</span></div></div>
- <div class="toolbar"><div class="toolbar-left"><label class="search"><input data-search placeholder="Search title, slug or category…" value="${esc(state.search)}"></label>
+ const cats=siteCategories();
+ return `${pageHead('Catalog management','Products','Create, order, feature and publish the products shown by the AXIASOFT site.',`<button class="btn btn-quiet" data-act="export" data-kind="products">⇩ ${T('Export CSV')}</button><button class="btn btn-primary" data-act="new-product">＋ ${T('Add product')}</button>`)}
+ ${productStats(counts)}
+ <div class="toolbar products-toolbar"><div class="toolbar-left"><label class="search"><input data-search placeholder="${T('Search title, slug or category…')}" value="${esc(state.search)}" autocomplete="off"></label>
  <select class="filter-select" data-product-filter>${['All','Published','Hidden','Featured'].map(x=>`<option ${state.productFilter===x?'selected':''}>${T(x)}</option>`).join('')}</select>
- <select class="filter-select" data-category-filter>${['All','Websites','Applications','Aurion'].map(x=>`<option ${x==='All'?'':'value="'+x+'"'} ${state.categoryFilter===x?'selected':''}>${x==='All'?T('All categories'):T(x)}</option>`).join('')}</select>
+ <select class="filter-select" data-category-filter><option value="All" ${state.categoryFilter==='All'?'selected':''}>${T('All categories')}</option>${cats.map(c=>`<option value="${esc(c.id)}" ${state.categoryFilter===c.id?'selected':''}>${esc(categoryLabel(c.id))}</option>`).join('')}${state.products.some(orphanCategory)?`<option value="__orphan" ${state.categoryFilter==='__orphan'?'selected':''}>${T('No category')}</option>`:''}</select>
  <select class="filter-select" data-product-sort>${[['manual','Manual order'],['newest','Newest first'],['title','Title A–Z'],['category','Category']].map(([v,l])=>`<option value="${v}" ${state.productSort===v?'selected':''}>${T(l)}</option>`).join('')}</select></div>
- <div class="toolbar-right"><span class="muted" style="font-size:10px">${fmtNum(data.length)} of ${fmtNum(counts.all)} products</span>${sel.length?`<button class="btn btn-sm btn-quiet" data-act="bulk-publish">${T('Publish')} ${fmtNum(sel.length)}</button><button class="btn btn-sm btn-danger" data-act="bulk-unpublish">${T('Hide')} ${fmtNum(sel.length)}</button>`:''}</div></div>
- <div class="panel" style="padding:14px">${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th class="check-col"><input type="checkbox" data-select-all aria-label="Select all shown products" ${allShownSelected?'checked':''}></th><th>Product</th><th>Category</th><th>Price label</th><th>Availability</th><th>${T('Preview link')}</th><th>Visibility</th><th>Order</th><th>Actions</th></tr></thead><tbody>${data.map(p=>`<tr class="${p.published?'':'is-hidden'}"><td class="check-col"><input type="checkbox" data-select-product="${p.id}" aria-label="Select ${esc(p.title)}" ${state.selected.has(Number(p.id))?'checked':''}></td><td><span class="cell-main">${p.featured?'★ ':''}${esc(p.title)}</span><span class="cell-sub">/${esc(p.slug)} · ${esc(T(p.summary))}</span></td><td>${esc(T(p.category))}</td><td>${esc(p.price_label)}</td><td>${pill(p.status)}</td><td>${safeHttp(p.github_url)?`<a class="cell-sub link-cell" href="${esc(p.github_url)}" target="_blank" rel="noopener noreferrer">${esc(String(p.github_url).replace(/^https:\/\//,'').slice(0,42))}</a>`:`<span class="cell-sub">${T('Built-in preview')}</span>`}</td><td>${pill(p.published?'Published':'Hidden')}</td><td><div class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">↑</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></div></td><td><div class="row-actions"><button class="btn btn-sm ${p.featured?'btn-primary':'btn-quiet'}" data-act="feature-product" data-id="${p.id}" data-featured="${p.featured?1:0}" title="Feature on the storefront">${p.featured?'★':'☆'}</button><button class="btn btn-sm btn-quiet" data-act="edit-product" data-id="${p.id}">Edit</button><button class="btn btn-sm ${p.published?'btn-danger':'btn-quiet'}" data-act="toggle-product" data-id="${p.id}" data-published="${p.published?1:0}">${p.published?'Unpublish':'Publish'}</button></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">◈</div>No products match these filters. ${counts.all?'Clear the filters, or add a product.':'The catalog is empty — add the first product.'}</div>`}<div class="notice">Product removal is a soft unpublish. A featured product leads the public catalog; the others follow the manual order. File uploads and image management are not enabled.</div></div>`;
+ <div class="toolbar-right"><span class="muted" style="font-size:10px">${fmtNum(data.length)} ${T('of')} ${fmtNum(counts.all)} ${T('products')}</span>${sel.length?`<button class="btn btn-sm btn-quiet" data-act="bulk-publish">${T('Publish')} ${fmtNum(sel.length)}</button><button class="btn btn-sm btn-danger" data-act="bulk-unpublish">${T('Hide')} ${fmtNum(sel.length)}</button>`:''}</div></div>
+ <div class="panel product-panel" style="padding:14px">${data.length?`${compact()?productCards(data,allShownSelected):productsTable(data,allShownSelected)}`:`<div class="empty"><div class="empty-icon">◈</div>${counts.all?T('No products match these filters. Clear the filters, or add a product.'):T('The catalog is empty — add the first product.')}</div>`}
+ <div class="notice">${T('Removing a product unpublishes it. Featured products lead the catalog.')}</div></div>
+ ${categoriesPanel(cats)}
+ `;
 }
+
+/* ------------------------------------------------------------- categories */
+/* The catalog's categories are edited here, not in the shape of the products
+   screen: a short list with one row per category, drag-free reordering through
+   the same ↑ ↓ buttons the products use, and a delete that warns when products
+   still point at the row. Ids are the value products store, so they are shown
+   (greyed, small) but not editable once a category exists - renaming the id
+   would orphan every product in it. The labels are what the site prints. */
+function categoryRow(c,i,count){
+ const used=state.products.filter(p=>p.category===c.id).length;
+ return `<div class="cat-row" data-cat-id="${esc(c.id)}">
+  <span class="cat-handle" aria-hidden="true">◈</span>
+  <div class="cat-labels">
+   <span class="cat-meta"><code>${esc(c.id)}</code> · ${fmtNum(used)} ${T(used===1?'product':'products')}</span>
+   ${used?`<span class="cat-hint">${T('Move its products out to remove it')}</span>`:''}
+  </div>
+  <label class="cat-field"><span>${T('Category name')}</span><input class="cat-input" data-cat-name="${esc(c.id)}" value="${esc(c.name)}" maxlength="40" aria-label="${T('Category name')}"></label>
+  <label class="cat-field"><span>${T('Persian name')}</span><input class="cat-input cat-input-fa" data-cat-name-fa="${esc(c.id)}" value="${esc(c.nameFa)}" maxlength="40" placeholder="${T('optional')}" aria-label="${T('Persian name')}" dir="rtl"></label>
+  <div class="order-ctl"><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="-1" aria-label="${T('Move up')}" ${i===0?'disabled':''}>↑</button><span class="order-num">${fmtNum(i+1)}</span><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="1" aria-label="${T('Move down')}" ${i===count-1?'disabled':''}>↓</button></div>
+  <button class="btn btn-sm ${used?'btn-quiet':'btn-danger'}" data-act="delete-category" data-cat="${esc(c.id)}" data-used="${used}" ${used?'disabled title="'+T('Move its products to another category first')+'"':''}>${T('Remove')}</button>
+ </div>`;
+}
+function categoriesPanel(cats){
+ const orphaned=state.products.filter(orphanCategory);
+ return `<section class="panel cat-panel" id="categoriesPanel">
+  <div class="panel-head"><div><h2>${T('Catalog categories')}</h2><p>${T('The tabs the public catalog offers. The site ships none; the demo carries its own.')}</p></div><span class="muted" style="font-size:10px">${fmtNum(cats.length)} ${T('categories')}</span></div>
+  ${cats.length?`<div class="cat-list">${cats.map((c,i)=>categoryRow(c,i,cats.length)).join('')}</div>`:`<div class="empty" style="padding:18px"><div class="empty-icon">◈</div>${T('No categories yet. The catalog shows one grid and no tab row until you add one.')}</div>`}
+  <form class="cat-add" data-form="category-add"><div class="field"><label>${T('Category name')}</label><input name="name" maxlength="40" required placeholder="${T('e.g. Websites')}"></div><div class="field"><label>${T('Persian name')}</label><input name="nameFa" maxlength="40" dir="rtl" placeholder="${T('optional')}"></div><div class="field"><label>${T('Category id')}</label><input name="id" maxlength="40" pattern="[a-z0-9-]{2,40}" required placeholder="websites"><span class="field-hint">${T('Lowercase letters, digits and hyphens. Products store this id, so it cannot change later.')}</span></div><button class="btn btn-primary">${T('Add category')}</button></form>
+  ${orphaned.length?`<div class="notice">${fmtNum(orphaned.length)} ${T('products point at a category that no longer exists. Edit each one and pick a new category.')}</div>`:''}
+ </section>`;
+}
+
 /* Only plain https URLs are ever rendered as a link, mirroring the storefront's
    safePreview() and the server's clean_github_url(). */
 function safeHttp(u){const v=String(u||'').trim();return /^https:\/\/[^\s<>"']+$/i.test(v)?v:''}
@@ -554,14 +668,26 @@ state.overview=state.overview||await api('/api/admin/overview').catch(()=>null);
 state.lastSync=new Date();
 state.dirty=false}
  else if(state.page==='orders'){state.overview=state.overview||await api('/api/admin/overview');state.orders=state.overview.orders||[]}
- else if(state.page==='products'){state.overview=state.overview||await api('/api/admin/overview');state.products=state.overview.products||[]}
+ else if(state.page==='products'){
+  state.overview=state.overview||await api('/api/admin/overview');
+  state.products=state.overview.products||[];
+  /* This screen prints category labels and edits the category list, so it needs
+     the settings document the site also reads. It is fetched only when it is not
+     already in memory: the Website page loads it too, and an operator moving
+     between the two should not pay for it twice. */
+  if(!state.settings){try{const r=await api('/api/admin/settings');state.settings=r.settings||null}catch(e){state.settings=null}}
+ }
  else if(state.page==='customers'){const r=await api('/api/admin/customers');state.customers=r.customers||[]}
  else if(state.page==='support'){try{state.tickets=await api('/api/support')}catch(e){state.tickets=[]}}
  else if(state.page==='refunds'){try{state.refunds=await api('/api/refunds')}catch(e){state.refunds=[]}}
  else if(state.page==='articles')state.articles=(await api('/api/admin/articles')).articles||[]
  if(state.page==='dashboard')state.agent=await api('/api/admin/agent').catch(()=>null)
  else if(state.page==='activity')state.audit=await api('/api/admin/audit?limit=150')
- }catch(e){if(e.status===401||e.status===403){state.me=null;state.csrf=null;loginView(e.status===403?'Administrator access required. Please sign in with an administrator account.':e.message);return}toast(e.message,true)}finally{state.loading=false}
+ }catch(e){if(e.status===401||e.status===403){state.me=null;state.csrf=null;/* Both paths go through T(): the 403 text is this file's own English, and a
+   401's message comes from the server. Either way a Persian console has to
+   show Persian, and the fallback is the server's wording, untranslated but
+   truthful, rather than an empty red box. */
+  loginView(e.status===403?T('Administrator access required. Please sign in with an administrator account.'):T(e.message));return}toast(e.message,true)}finally{state.loading=false}
  $('#pageContent')&&($('#pageContent').innerHTML=contentHTML());updateNav();
 }
 function updateNav(){ $$('.side-link[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));const title=$('.crumb strong');if(title)title.textContent=({dashboard:'Overview',site:'Website',orders:'Project requests',products:'Products',customers:'Customers',support:'Support',refunds:'Refunds',activity:'Activity log'})[state.page]||'Overview';const side=$('#sidebar');if(side)side.classList.remove('open');$('.side-scrim')?.classList.remove('show') }
@@ -582,7 +708,71 @@ function modalHead(kicker,title,sub=''){return`<div class="modal-head"><div><div
 async function openOrder(id){const o=state.orders.find(x=>x.id===Number(id));if(!o)return;showModal(`${modalHead('Project request',esc(o.number),`${esc(o.product_title)} · submitted ${moneyFreeDate(o.created_at)}`)}<div class="detail-grid"><div class="detail-item"><small>Customer</small><strong>${esc(o.name)}</strong></div><div class="detail-item"><small>Email / phone</small><strong>${esc(o.email)}<br>${esc(o.phone)}</strong></div><div class="detail-item"><small>Contact preference</small><strong>${esc(o.contact_method||'Email')}</strong></div><div class="detail-item"><small>Current status</small><strong>${pill(o.status)}</strong></div><div class="detail-item full"><small>Project details</small><p>${esc(o.description)}</p></div><div class="detail-item full"><small>Additional requirements</small><p>${esc(o.requirements||'No additional requirements supplied.')}</p></div></div><h3 style="font-size:11px;margin:19px 0 9px">Status history</h3><div class="timeline" id="orderTimeline"><div class="skeleton" style="width:70%;margin:8px"></div><div class="skeleton" style="width:50%;margin:8px"></div></div><form data-form="order-update" data-id="${o.id}"><div class="form-grid"><div class="field"><label>Update status</label><select name="status">${ordersStatus.map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Internal status note</label><input name="note" maxlength="1000" placeholder="Optional note for the audit trail"></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Save status update</button></div></form>`,true);
  try{const history=await api(`/api/admin/orders/${Number(id)}/history`);const box=$('#orderTimeline');if(box)box.innerHTML=history.length?history.map(h=>`<div class="timeline-item"><strong>${esc(h.status)}</strong><p>${esc(h.note||'Status recorded')}</p><small>${moneyFreeDate(h.created_at)} · ${esc(h.actor_name||'System')}</small></div>`).join(''):'<div class="muted" style="font-size:9px">No history yet.</div>'}catch(e){const box=$('#orderTimeline');if(box)box.innerHTML=`<div class="muted" style="font-size:9px">${esc(e.message)}</div>`}
 }
-function productForm(p=null){const edit=!!p;showModal(`${modalHead(edit?'Catalog editor':'New catalog product',edit?'Edit product':'Add a product concept',edit?'Changes affect the public product data, its featured slot and its order.':'Add a product to the database-backed catalog.') }<form data-form="product" data-id="${p?.id||''}"><div class="form-grid"><div class="field"><label>Product title</label><input name="title" required maxlength="140" value="${esc(p?.title||'')}"></div><div class="field"><label>URL slug</label><input name="slug" required pattern="[a-z0-9-]{3,100}" maxlength="100" value="${esc(p?.slug||'')}"><span class="field-hint">Lowercase letters, digits and hyphens.</span></div><div class="field"><label>Category</label><select name="category">${['Websites','Applications','Aurion'].map(x=>`<option ${p?.category===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Availability label</label><select name="status"><option value="available" ${p?.status==='available'?'selected':''}>Available</option><option value="showcase" ${p?.status==='showcase'?'selected':''}>Showcase only</option></select></div><div class="field"><label>Price label</label><input name="price_label" maxlength="80" value="${esc(p?.price_label||'Request a quote')}"></div><div class="field full"><label>GitHub preview link</label><input name="github_url" type="url" inputmode="url" maxlength="300" pattern="https://.+" placeholder="https://github.com/your-org/your-project" value="${esc(p?.github_url||'')}"><span class="field-hint">Opened by the product preview button. Must start with https://. Leave empty to show the built-in concept preview.</span></div><div class="field full"><label>Cover image</label>${coverUploader(p?.cover||'')}<span class="field-hint">PNG, JPEG, WebP or GIF, up to 5 MB. Shown on the product card and its detail page. The image is re-encoded on upload, so camera metadata is removed.</span></div><div class="field full"><label>Short summary</label><input name="summary" required maxlength="300" value="${esc(p?.summary||'')}"></div><div class="field full"><label>Full description</label><textarea name="description" required maxlength="3000">${esc(p?.description||'')}</textarea></div><div class="field"><label>Features</label><textarea name="features" placeholder="Separate each item with a comma">${esc((p?.features||[]).join(', '))}</textarea></div><div class="field"><label>Technologies</label><textarea name="technologies" placeholder="Separate each item with a comma">${esc((p?.technologies||[]).join(', '))}</textarea></div><div class="field"><label for="p-position">Catalog order</label><input id="p-position" name="position" type="number" min="0" max="9999" step="1" value="${Number(p?.position)||0}"><span class="field-hint">Lower numbers appear first.</span></div><div class="field" style="align-content:end"><label class="check-line"><input name="featured" type="checkbox" ${p&&p.featured?'checked':''}> Feature this product</label><span class="field-hint">Featured products lead the public catalog.</span></div><div class="field full"><label><input name="published" type="checkbox" ${p&&!p.published?'':'checked'}> Published in product data</label><span class="field-hint">AURION remains a showcase concept; no trading or real license/payment features are enabled.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn btn-primary">${edit?'Save product':'Create product'}</button></div></form>`,true)}
+/* The product form. It was one flat list of twelve fields in DOM order, which
+   is how a form ends up with the price label between the slug and the summary
+   and the description three screens below the title. The same fields are here,
+   grouped into the four decisions an operator actually makes in order:
+
+     Content → Presentation → Links → Publishing
+
+   Each group is a <fieldset> with a legend, so the grouping is real structure
+   for a screen reader and for the stylesheet, not just a heading in the markup.
+   Categories come from the settings document (the operator's list), and a
+   product whose category has been deleted keeps it available as an option so
+   saving the product cannot silently move it somewhere else. */
+async function productForm(p=null){
+ const edit=!!p;
+ /* The categories live in the settings document. Fetch it if this screen has
+    not already, so the form is not limited to the one route that preloads it. */
+ if(!state.settings){
+  try{const r=await api('/api/admin/settings');state.settings=r.settings||null}catch(e){state.settings=null}
+ }
+ const cats=siteCategories();
+ /* A product cannot be saved without a category the site can print, and the
+    category list is the operator's. Rather than let the form submit into a 400
+    from the API, the whole action is refused with the reason on screen and a
+    button that jumps to the editor below. */
+ if(!cats.length){
+  showModal(`${modalHead('Catalog editor',T('Add a category first'),T('Products are filed under a category, and this site has none yet.'))}
+   <p class="muted" style="font-size:11px;line-height:1.8">${T('Categories are the tabs the public catalog offers.')} ${T('Add one below, then come back and add the product.')}</p>
+   <div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">${T('Cancel')}</button><button class="btn btn-primary" type="button" data-act="goto-categories">${T('Go to categories')}</button></div>`);
+  return;
+ }
+ const current=p?.category||(cats[0]?.id||'');
+ const options=cats.map(c=>`<option value="${esc(c.id)}" ${current===c.id?'selected':''}>${esc(categoryLabel(c.id))}</option>`).join('');
+ const missing=current&&!cats.some(c=>c.id===current)
+  ? `<option value="${esc(current)}" selected>${esc(current)} (${T('category removed')})</option>` : '';
+ showModal(`${modalHead(edit?'Catalog editor':'New catalog product',edit?T('Edit product'):T('Add a product concept'),edit?T('Changes affect the public product data, its featured slot and its order.'):T('Add a product to the database-backed catalog.'))}
+ <form data-form="product" data-id="${p?.id||''}" class="product-form">
+  <fieldset class="form-group"><legend>${T('Content')}</legend><div class="form-grid">
+   <div class="field full"><label for="pf-title">${T('Product title')}</label><input id="pf-title" name="title" required maxlength="140" value="${esc(p?.title||'')}" placeholder="${T('Arya — Software with wings.')}"></div>
+   <div class="field full"><label for="pf-summary">${T('Short summary')}</label><input id="pf-summary" name="summary" required maxlength="300" value="${esc(p?.summary||'')}" placeholder="${T('One line the catalog card can print.')}"></div>
+   <div class="field full"><label for="pf-description">${T('Full description')}</label><textarea id="pf-description" name="description" required maxlength="3000" placeholder="${T('What it is, who it is for and what it does.')}">${esc(p?.description||'')}</textarea></div>
+   <div class="field"><label for="pf-features">${T('Features')}</label><textarea id="pf-features" name="features" placeholder="${T('Separate each item with a comma')}">${esc((p?.features||[]).join(', '))}</textarea></div>
+   <div class="field"><label for="pf-tech">${T('Technologies')}</label><textarea id="pf-tech" name="technologies" placeholder="${T('Separate each item with a comma')}">${esc((p?.technologies||[]).join(', '))}</textarea></div>
+  </div></fieldset>
+
+  <fieldset class="form-group"><legend>${T('Presentation')}</legend><div class="form-grid">
+   <div class="field full"><label>${T('Cover image')}</label>${coverUploader(p?.cover||'')}<span class="field-hint">${T('PNG, JPEG, WebP or GIF, up to 5 MB.')} ${T('The image is re-encoded on upload, so camera metadata is removed.')}</span></div>
+   <div class="field"><label for="pf-category">${T('Category')}</label><select id="pf-category" name="category">${options}${missing}</select></div>
+   <div class="field"><label for="pf-price">${T('Price label')}</label><input id="pf-price" name="price_label" maxlength="80" value="${esc(p?.price_label||'Request a quote')}" placeholder="${T('Request a quote')}"></div>
+  </div></fieldset>
+
+  <fieldset class="form-group"><legend>${T('Links & availability')}</legend><div class="form-grid">
+   <div class="field full"><label for="pf-github">${T('GitHub preview link')}</label><input id="pf-github" name="github_url" type="url" inputmode="url" maxlength="300" pattern="https://.+" placeholder="https://github.com/your-org/your-project" value="${esc(p?.github_url||'')}"><span class="field-hint">${T('Preview opens inside the site. Must start with https://.')} ${T('Leave empty to show the built-in concept preview.')}</span></div>
+   <div class="field"><label for="pf-status">${T('Availability label')}</label><select id="pf-status" name="status"><option value="available" ${p?.status==='available'?'selected':''}>${T('Available')}</option><option value="showcase" ${p?.status==='showcase'?'selected':''}>${T('Showcase only')}</option></select></div>
+   <div class="field"><label for="pf-slug">${T('URL slug')}</label><input id="pf-slug" name="slug" required pattern="[a-z0-9-]{3,100}" maxlength="100" value="${esc(p?.slug||'')}"><span class="field-hint">${T('Lowercase letters, digits and hyphens.')}</span></div>
+  </div></fieldset>
+
+  <fieldset class="form-group"><legend>${T('Publishing')}</legend><div class="form-grid">
+   <div class="field"><label for="p-position">${T('Catalog order')}</label><input id="p-position" name="position" type="number" min="0" max="9999" step="1" value="${Number(p?.position)||0}"><span class="field-hint">${T('Lower numbers appear first.')}</span></div>
+   <div class="field" style="align-content:end"><label class="check-line"><input name="featured" type="checkbox" ${p&&p.featured?'checked':''}> ${T('Feature this product')}</label><span class="field-hint">${T('Featured products lead the public catalog.')}</span></div>
+   <div class="field full"><label class="check-line"><input name="published" type="checkbox" ${p&&!p.published?'':'checked'}> ${T('Published in product data')}</label><span class="field-hint">${T('AURION stays a showcase concept; no trading or payment is enabled.')}</span></div>
+  </div></fieldset>
+
+  <div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">${T('Cancel')}</button><button class="btn btn-primary">${edit?T('Save product'):T('Create product')}</button></div>
+ </form>`,true)}
+
 function openTicket(id){const t=state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label><select name="status">${['Open','In progress','Closed'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
 function refundModal(id,decision){const r=state.refunds.find(x=>x.id===Number(id));if(!r)return;showModal(`${modalHead('Refund review',`${decision} request ${esc(r.ref)}`,`Order ${esc(r.order_number)} · submitted ${moneyFreeDate(r.created_at)}`)}<div class="detail-item"><small>Customer's stated reason</small><p>${esc(r.reason)}</p></div><form data-form="refund" data-id="${r.id}" data-decision="${decision}"><div class="field" style="margin-top:12px"><label>Administrative note</label><textarea name="note" maxlength="1000" placeholder="Record the review rationale. This will not trigger a payment."></textarea></div><div class="field" style="margin-top:10px"><label>Transaction reference (optional, record only)</label><input name="transaction_ref" maxlength="120"></div><div class="notice">${decision==='Approved'?'Approval records a decision only.':'Rejection records a decision only.'} The website does not process or confirm payment-provider refunds.</div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn ${decision==='Approved'?'btn-primary':'btn-danger'}">Record ${decision.toLowerCase()}</button></div></form>`)}
 function exportCsv(kind){const data=({orders:state.orders,products:state.products,customers:state.customers,tickets:state.tickets,refunds:state.refunds})[kind]||[];if(!data.length){toast('There are no records to export.');return}const columns=Object.keys(data[0]).filter(k=>!['password_hash','csrf','token_hash'].includes(k));const csv=[columns.map(qcsv).join(','),...data.map(row=>columns.map(k=>qcsv(Array.isArray(row[k])?row[k].join('; '):row[k])).join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`axiasoft-${kind}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('CSV export downloaded.')}
@@ -603,6 +793,9 @@ return}
  if(rteBtn){applyFormat(rteBtn.dataset.rte);return}
  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
  if(act==='close-modal'||(act==='backdrop-close'&&e.target===b)){closeModal();return}
+ if(act==='goto-categories'){closeModal();document.querySelector('#categoriesPanel')?.scrollIntoView({behavior:'smooth',block:'center'});const f=$('[data-form="category-add"] input');if(f)f.focus();return}
+ if(act==='move-category'){moveCategory(b);return}
+ if(act==='delete-category'){deleteCategory(b);return}
  if(act==='toggle-nav'){const s=$('#sidebar');s?.classList.toggle('open');$('.side-scrim')?.classList.toggle('show',s?.classList.contains('open'));return}
  if(act==='close-nav'){$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show');return}
  if(act==='theme'){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);b.textContent=t==='dark'?'◐':'☼';return}
@@ -618,8 +811,8 @@ return}
  if(act==='edit-article'){openArticle(+b.dataset.id);return}
  if(act==='delete-article'){deleteArticle(+b.dataset.id);return}
  if(act==='logout'){logout();return}
- if(act==='new-product'){productForm();return}
- if(act==='edit-product'){const p=state.products.find(x=>x.id===Number(b.dataset.id));if(p)productForm(p);return}
+ if(act==='new-product'){productForm().catch(e=>toast(e.message,true));return}
+ if(act==='edit-product'){const p=state.products.find(x=>x.id===Number(b.dataset.id));if(p)productForm(p).catch(e=>toast(e.message,true));return}
  if(act==='view-order'){openOrder(b.dataset.id);return}
  if(act==='view-ticket'){openTicket(b.dataset.id);return}
  if(act==='refund-decision'){refundModal(b.dataset.id,b.dataset.decision);return}
@@ -735,6 +928,37 @@ async function saveSettings(form){
   if(button){button.disabled=false;button.textContent=button.dataset.old||'Try again'}
  }
 }
+/* One write path for all four category edits. The console sends the whole list
+   in one PUT, the same way brands are saved, so a half-applied reorder is not a
+   state the server can end up in. */
+async function saveCategories(list){
+ const r=await api('/api/admin/settings',{method:'PUT',body:{categories:list}});
+ state.settings=r.settings||{...(state.settings||{}),categories:list};
+ $('#pageContent').innerHTML=contentHTML();
+}
+async function moveCategory(btn){
+ const id=btn.dataset.cat,dir=Number(btn.dataset.dir);
+ const cats=siteCategories().slice();
+ const at=cats.findIndex(c=>c.id===id);
+ const to=at+dir;
+ if(at<0||to<0||to>=cats.length)return;
+ const [row]=cats.splice(at,1);cats.splice(to,0,row);
+ try{await saveCategories(cats)}catch(e){toast(e.message,true)}
+}
+async function deleteCategory(btn){
+ const id=btn.dataset.cat;
+ const used=Number(btn.dataset.used)||0;
+ if(used){
+  /* Deleting a category does not touch its products: they keep the id and are
+     flagged as orphaned on this screen until an operator moves them. The
+     warning says exactly that, because the button is disabled for this case
+     and a disabled button that explains nothing is a dead end. */
+  toast('Move its products to another category first.',true);
+  return;
+ }
+ const cats=siteCategories().filter(c=>c.id!==id);
+ try{await saveCategories(cats);toast('Category removed.')}catch(e){toast(e.message,true)}
+}
 async function toggleFeature(btn){
  const p=state.products.find(x=>x.id===Number(btn.dataset.id));
  if(!p)return;
@@ -771,6 +995,15 @@ async function submitHandler(e){const form=e.target.closest('form[data-form]');i
  if(form.dataset.form==='settings'){await saveSettings(form);return}
  if(form.dataset.form==='brands'){await saveBrands(form);return}
  if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}closeModal();state.overview=null;await fetchPageData();return}
+ if(form.dataset.form==='category-add'){
+  const cats=siteCategories().slice();
+  const id=String(values.id||'').trim().toLowerCase();
+  if(cats.some(c=>c.id===id))throw new Error('That category id is already in use.');
+  cats.push({id,name:String(values.name||'').trim(),nameFa:String(values.nameFa||'').trim()});
+  await saveCategories(cats);
+  toast('Category added.');
+  return;
+ }
  if(form.dataset.form==='order-update'){await api('/api/admin/orders/status',{method:'PUT',body:{id:Number(form.dataset.id),status:values.status,note:values.note||''}});closeModal();toast('Project status and history updated.');state.overview=null;await fetchPageData();return}
  if(form.dataset.form==='ticket-reply'){if(values.message?.trim())await api('/api/admin/tickets/reply',{method:'POST',body:{id:Number(form.dataset.id),message:values.message.trim()}});if(values.status!=='In progress')await api('/api/admin/tickets/status',{method:'PUT',body:{id:Number(form.dataset.id),status:values.status}});closeModal();toast(values.message?.trim()?'Reply added and ticket updated.':'Ticket status updated.');state.tickets=await api('/api/support');$('#pageContent').innerHTML=supportHTML();return}
  if(form.dataset.form==='refund'){await api('/api/admin/refunds/decision',{method:'PUT',body:{id:Number(form.dataset.id),status:form.dataset.decision,note:values.note||'',transaction_ref:values.transaction_ref||''}});closeModal();toast('Refund decision recorded. No payment was processed.');state.refunds=await api('/api/refunds');$('#pageContent').innerHTML=refundsHTML();return}
@@ -797,6 +1030,15 @@ function brandInput(e){
 }
 function inputHandler(e){
  brandInput(e);if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
+if(e.target.matches('[data-cat-name],[data-cat-name-fa]')){
+ const id=e.target.dataset.catName||e.target.dataset.catNameFa;
+ const field=e.target.dataset.catName?'name':'nameFa';
+ const cats=siteCategories().map(c=>c.id===id?{...c,[field]:String(e.target.value||'').trim().slice(0,40)}:c);
+ clearTimeout(inputHandler.catTimer);
+ // Debounced: a rename is typed, and writing on every keystroke would rebuild
+ // the panel and take the caret with it.
+ inputHandler.catTimer=setTimeout(()=>{saveCategories(cats).catch(err=>toast(err.message,true))},700);
+}
 if(e.target.matches('[data-category-filter]')){state.categoryFilter=e.target.value;$('#pageContent').innerHTML=productsHTML()}
 if(e.target.matches('[data-product-sort]')){state.productSort=e.target.value;$('#pageContent').innerHTML=productsHTML()}
 if(e.target.matches('[data-select-product]')){const id=Number(e.target.dataset.selectProduct);e.target.checked?state.selected.add(id):state.selected.delete(id);$('#pageContent').innerHTML=productsHTML()}
@@ -805,6 +1047,19 @@ if(e.target.closest('[data-form="settings"]')){state.dirty=true;if(!$('.dirty-no
 async function logout(){try{await api('/api/logout',{method:'POST',body:{}})}catch{}state.me=null;state.csrf=null;closeModal();loginView()}
 root.addEventListener('click',clickHandler);root.addEventListener('submit',submitHandler);root.addEventListener('input',inputHandler);root.addEventListener('change',inputHandler);overlays.addEventListener('click',clickHandler);overlays.addEventListener('submit',submitHandler);overlays.addEventListener('input',inputHandler);overlays.addEventListener('change',inputHandler);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show')}});
+/* One listener for the breakpoint, not one per render. It only fires on the
+   crossing itself, so a window drag does not rebuild the page every pixel. */
+(() => {
+  const query = window.matchMedia('(max-width: 900px)');
+  const sync = () => {
+    if (state.page === 'products') {
+      const box = $('#pageContent');
+      if (box) box.innerHTML = contentHTML();
+    }
+  };
+  if (query.addEventListener) query.addEventListener('change', sync);
+  else if (query.addListener) query.addListener(sync);
+})();
 window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(p&&PAGES.includes(p)){state.page=p;state.search='';state.statusFilter='All';fetchPageData();updateNav()}});
 (async()=>{document.documentElement.dataset.theme=localStorage.getItem('axia-theme')||'dark';const page=location.hash.slice(1);if(PAGES.includes(page))state.page=page;await loadSession()})();
   /* -------------------------------------------------------------------------

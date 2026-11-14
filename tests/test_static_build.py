@@ -8,6 +8,8 @@ that still reported success. These tests fail loudly instead.
 import json
 import shutil
 import subprocess
+import os
+import re
 import tempfile
 import sys
 import unittest
@@ -336,9 +338,29 @@ class AdminThemeAndLanguageTests(unittest.TestCase):
 
         known = keys_near(self.i18n, 'const fa={') | keys_near(self.i18n, 'Object.assign(fa,{')
         requested = set(re.findall(r"T\('((?:[^'\\]|\\.)*)'\)", self.admin))
+        # keys_near() only reads keys of 2-90 characters, because that is the
+        # range the lookup table supports. A longer string in the console can
+        # therefore never be translated *and* was invisible to this audit: it
+        # escaped both the dictionary and the check. Fail on those directly.
+        too_long = sorted(k for k in requested if len(k) > 90)
+        self.assertEqual(too_long, [],
+                         'translatable keys must be 2-90 characters; split these')
         missing = sorted(requested - known)
         self.assertEqual(missing, [],
                          'these stay English in a Persian console')
+
+    def test_no_console_message_skips_the_dictionary(self):
+        # T() only helps if it is called. Two messages were handed straight to
+        # the login view as English literals, so a Persian console showed a red
+        # English box under a Persian heading. The audit above could not see
+        # them: it reads the strings that did go through T().
+        admin = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+        for match in re.finditer(r'loginView\(([^)]*)\)', admin):
+            argument = match.group(1).strip()
+            if not argument or re.search(r'\bT\(', argument):
+                continue
+            if re.search(r"'[^']{8,}'", argument):
+                self.fail(f'loginView() shows untranslated English: {argument[:80]}')
 
     def test_the_console_never_prints_a_plural_placeholder(self):
         # '(s)' is a note to the developer, not a word. It used to reach the
@@ -363,6 +385,385 @@ class AdminThemeAndLanguageTests(unittest.TestCase):
         # And the rows carry what a card renders.
         self.assertEqual(len(rows[0]['features']), 4)
         self.assertTrue(rows[0]['published'])
+
+
+
+class CategoryTests(unittest.TestCase):
+    """Categories are the operator's data, not the site's source code.
+
+    The catalog used to draw its tabs from a literal ['Websites','Applications']
+    in public/app.js and the console repeated that list in two more places, so
+    renaming one meant editing all three and redeploying. They live in the
+    settings document now, which is why an empty list is a valid answer and not
+    a broken one.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / 'server'))
+        import site_settings
+        self.ss = site_settings
+        self.admin = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.demo = (ROOT / 'public' / 'demo-backend.js').read_text(encoding='utf-8')
+
+    def test_a_site_with_no_categories_publishes_none(self):
+        self.assertEqual(self.ss.merge({})['categories'], [],
+                         'a fresh install must not ship categories of its own')
+
+    def test_a_category_is_an_id_plus_two_labels(self):
+        ok, cats = self.ss.clean_category_list(
+            [{'id': 'websites', 'name': 'Websites', 'nameFa': 'وب‌سایت‌ها'}])
+        self.assertTrue(ok)
+        self.assertEqual(cats, [{'id': 'websites', 'name': 'Websites',
+                                 'nameFa': 'وب‌سایت‌ها'}])
+
+    def test_category_ids_are_checked(self):
+        for bad in ('Web Sites', 'web sites', '', 'A', 'x' * 41, 'web_sites'):
+            ok, _ = self.ss.clean_category_list([{'id': bad, 'name': 'X', 'nameFa': ''}])
+            self.assertFalse(ok, f'{bad!r} should be refused')
+
+    def test_category_names_are_required_and_unique(self):
+        self.assertFalse(self.ss.clean_category_list(
+            [{'id': 'web', 'name': '', 'nameFa': ''}])[0])
+        self.assertFalse(self.ss.clean_category_list(
+            [{'id': 'web', 'name': 'A', 'nameFa': ''},
+             {'id': 'web', 'name': 'B', 'nameFa': ''}])[0])
+
+    def test_an_empty_category_list_is_accepted(self):
+        # Hiding the tab row is a legitimate choice, not an invalid document.
+        self.assertEqual(self.ss.clean_category_list([]), (True, []))
+
+    def test_the_storefront_draws_its_tabs_from_settings(self):
+        self.assertIn('function siteCategories()', self.app)
+        self.assertIn('site.categories', self.app)
+        # The old literals are gone: no tab is hardcoded any more.
+        self.assertNotIn("['All','Websites','Applications']", self.app)
+        self.assertNotIn("category=Websites", self.app)
+
+    def test_the_console_offers_the_operators_own_categories(self):
+        self.assertIn('function siteCategories()', self.admin)
+        self.assertIn("data-cat-name", self.admin)
+        self.assertIn('function categoryLabel', self.admin)
+        # The product form used to hardcode the three display names.
+        self.assertNotIn("['Websites','Applications','Aurion'].map", self.admin)
+
+    def test_the_demo_ships_categories_while_the_site_ships_none(self):
+        sys.path.insert(0, str(ROOT / 'tools'))
+        from demo_catalog import DEMO_CATEGORIES
+        self.assertTrue(DEMO_CATEGORIES)
+        self.assertEqual(self.ss.clean_category_list(DEMO_CATEGORIES)[0], True)
+        # Every demo product sits in one of the demo's categories.
+        from demo_catalog import DEMO_CATALOG
+        ids = {c['id'] for c in DEMO_CATEGORIES}
+        for row in DEMO_CATALOG:
+            self.assertIn(row['category'], ids, f'{row["slug"]} has no category')
+
+    def test_the_demo_backend_validates_categories_like_the_server(self):
+        self.assertIn('categories: \'categories\'', self.demo)
+        self.assertIn('function validateCategories', self.demo)
+        self.assertIn('CATEGORY_ID_RE', self.demo)
+
+
+
+class EmbeddedPreviewTests(unittest.TestCase):
+    """A product preview opens inside the site, full screen.
+
+    The button used to send the visitor to GitHub in a new tab, and a product
+    without a link fell back to a small card at the bottom of its detail page.
+    Both are gone: one layer covers the page, frames the target, and closes back
+    onto the catalog.
+    """
+
+    def setUp(self):
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+
+    def test_a_card_preview_is_a_button_not_a_new_tab(self):
+        self.assertIn('data-preview=', self.app)
+        # The old markup opened the repository in a separate tab.
+        self.assertNotIn('target="_blank" rel="noopener noreferrer">Preview ↗', self.app)
+
+    def test_the_layer_covers_the_viewport(self):
+        layer = self.css[self.css.index('.preview-layer {'):]
+        block = layer[:layer.index('}')]
+        self.assertIn('position: fixed', block)
+        self.assertIn('inset: 0', block)
+        self.assertIn('z-index: 60', block,
+                      'the preview must sit above the modals at 50')
+
+    def test_the_frame_is_sandboxed(self):
+        self.assertIn('sandbox="allow-scripts allow-same-origin allow-popups', self.app)
+        # A frame must never be given the power to navigate the top window.
+        self.assertNotIn('allow-top-navigation', self.app)
+
+    def test_escape_closes_the_layer(self):
+        self.assertIn("event.key === 'Escape'", self.app)
+        self.assertIn('function closePreview', self.app)
+
+    def test_a_product_without_a_link_frames_a_generated_page(self):
+        self.assertIn('data/preview/', self.app)
+        path = ROOT / 'data' / 'preview'
+        if path.is_dir():
+            for page in path.glob('*.html'):
+                text = page.read_text(encoding='utf-8')
+                # Self-contained: no script, no external request.
+                self.assertNotIn('<script', text, f'{page.name} must not run script')
+                self.assertIn('concept preview', text)
+
+
+class CompressionTests(unittest.TestCase):
+    """Static files are served gzipped. The stdlib handler copied them raw."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / 'server'))
+
+    def test_text_is_compressed_and_binary_is_not(self):
+        import app as server_app
+        import tempfile
+        css = Path(tempfile.mkdtemp()) / 'x.css'
+        css.write_text('body{' + 'color:red;' * 400 + '}', encoding='utf-8')
+        body, encoding = server_app.compressed_static(css, 'text/css', 'gzip')
+        self.assertEqual(encoding, 'gzip')
+        self.assertLess(len(body), css.stat().st_size)
+
+        png = Path(tempfile.mkdtemp()) / 'x.png'
+        png.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 2000)
+        raw, encoding = server_app.compressed_static(png, 'image/png', 'gzip')
+        self.assertIsNone(encoding, 'an already-compressed image must be sent as-is')
+        self.assertEqual(raw, png.read_bytes())
+
+    def test_a_client_that_did_not_ask_gets_plain_bytes(self):
+        import app as server_app
+        import tempfile
+        js = Path(tempfile.mkdtemp()) / 'x.js'
+        js.write_text('var a = 1;' * 400, encoding='utf-8')
+        raw, encoding = server_app.compressed_static(js, 'application/javascript', '')
+        self.assertIsNone(encoding)
+        self.assertEqual(raw, js.read_bytes())
+
+    def test_the_cache_key_follows_the_file(self):
+        # A rebuild replaces the file; serving yesterday's compressed body would
+        # be a silent stale-CSS bug.
+        import app as server_app
+        import tempfile
+        target = Path(tempfile.mkdtemp()) / 'x.css'
+        target.write_text('a{' + 'x:1;' * 500 + '}', encoding='utf-8')
+        first, _ = server_app.compressed_static(target, 'text/css', 'gzip')
+        target.write_text('b{' + 'y:2;' * 500 + '}', encoding='utf-8')
+        os.utime(target, (0, 0))
+        second, _ = server_app.compressed_static(target, 'text/css', 'gzip')
+        self.assertNotEqual(first, second)
+
+
+class MarqueeTests(unittest.TestCase):
+    """The promise strip under the hero buttons travels instead of sitting still."""
+
+    def setUp(self):
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+
+    def test_the_list_is_written_twice(self):
+        self.assertIn('function trustMarquee', self.app)
+        self.assertIn('${items}${items}', self.app,
+                      'the loop needs two copies to hide its reset')
+
+    def test_the_scroll_moves_exactly_half_the_track(self):
+        start = self.css.index('@keyframes trustScroll')
+        block = self.css[start:self.css.index('}}', start) + 2]
+        # Half, not a full width: the track holds two copies of the list, so
+        # stopping at -50% hands the second copy exactly where the first began
+        # and the jump back to 0 is invisible.
+        self.assertIn('translateX(-50%)', block)
+
+    def test_the_direction_follows_the_document(self):
+        # translateX is physical, so the rtl belt needs its own keyframe: an
+        # English visitor sees it slide left, a Persian one sees it slide right.
+        self.assertIn('.trust-track{display:flex', self.css)
+        start = self.css.index('@keyframes trustScrollRtl')
+        block = self.css[start:self.css.index('}}', start) + 2]
+        self.assertIn('translateX(50%)', block)
+        self.assertNotIn('translateX(-50%)', block)
+        self.assertRegex(self.css, r'html\[dir="rtl"\]\s*\.trust-track\s*\{\s*animation-name:\s*trustScrollRtl')
+
+    def test_it_stops_for_reduced_motion(self):
+        tail = self.css[self.css.rindex('prefers-reduced-motion'):]
+        self.assertIn('.trust-track { animation: none; }', tail)
+
+
+
+class AdminLayoutTests(unittest.TestCase):
+    """The console's navigation and catalog screen across screen sizes.
+
+    Three separate complaints from the operator, all about the same sidebar:
+    it scrolled away with the page on a short laptop, the hamburger survived on
+    a desktop where there was already a full menu, and the products screen was
+    one wide table on every device.
+    """
+
+    def setUp(self):
+        self.css = (ROOT / 'public' / 'admin' / 'admin.css').read_text(encoding='utf-8')
+        self.js = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+
+    def test_the_sidebar_scrolls_inside_a_short_window(self):
+        start = self.css.index('.sidebar{')
+        block = self.css[start:self.css.index('}', start)]
+        self.assertIn('overflow-y:auto', block)
+        # Without this a flick at the end of the list scrolls the page behind it.
+        self.assertIn('overscroll-behavior:contain', block)
+
+    # The stylesheet is written partly by hand and partly minified, so a rule
+    # may appear as `@media (max-width: 760px)` or `@media(max-width:760px)`.
+    # These helpers read either.
+    def _blocks(self, kind, width):
+        pattern = r'@media\s*\(' + kind + r':\s*' + str(width) + r'px\)\s*\{'
+        for match in re.finditer(pattern, self.css):
+            depth, i = 0, match.end() - 1
+            while i < len(self.css):
+                if self.css[i] == '{':
+                    depth += 1
+                elif self.css[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i += 1
+            yield self.css[match.end():i]
+
+    def test_there_is_no_hamburger_on_a_desktop(self):
+        # The drawer and its toggle are a phone affordance only. !important
+        # because the drawer rule sets display on the same element.
+        self.assertRegex(self.css, r'\.mobile-toggle\s*\{\s*display:\s*none\s*!important')
+        self.assertTrue(any('.mobile-toggle' in b for b in self._blocks('max-width', 760)))
+        # And nothing above that breakpoint may ever reveal it again.
+        for width in (761, 900, 901, 1024, 1200):
+            for block in self._blocks('min-width', width):
+                self.assertNotRegex(block, r'\.mobile-toggle\s*\{[^}]*display:\s*grid')
+
+    def test_the_drawer_keyword_only_applies_below_the_breakpoint(self):
+        blocks = list(self._blocks('max-width', 760))
+        self.assertTrue(blocks, 'no phone breakpoint block found')
+        self.assertTrue(any('.sidebar.open' in b for b in blocks))
+
+    def test_the_catalog_is_a_table_only_where_a_table_fits(self):
+        # Only one layout may exist at a time: rendering both put every product
+        # in the DOM twice.
+        self.assertIn('function compact()', self.js)
+        self.assertIn("matchMedia('(max-width: 900px)')", self.js)
+        self.assertIn("${compact()?productCards(", self.js)
+        self.assertNotIn("${productsTable(data,allShownSelected)}${productCards(", self.js)
+
+    def test_a_resize_swaps_the_layout_without_a_reload(self):
+        self.assertIn("query.addEventListener('change'", self.js)
+
+    def test_the_card_list_carries_the_same_controls_as_the_table(self):
+        # Whatever is reachable in the table has to stay reachable in the cards,
+        # or an action disappears on a phone. The two layouts share the action
+        # block for exactly this reason, so the check is that they both use it.
+        cards = self.js[self.js.index('function productCards('):]
+        cards = cards[:cards.index('\nfunction ', 10)]
+        table = self.js[self.js.index('function productsTable('):]
+        table = table[:table.index('\nfunction ', 10)]
+        for layout, name in ((cards, 'cards'), (table, 'table')):
+            self.assertIn('${productActions(p)}', layout,
+                          f'the {name} layout must use the shared action block')
+        actions = self.js[self.js.index('function productActions('):]
+        actions = actions[:actions.index('\nfunction ', 10)]
+        for hook in ('feature-product', 'edit-product', 'toggle-product'):
+            self.assertIn(hook, actions, f'the shared actions lost {hook}')
+
+
+
+class CacheBusterTests(unittest.TestCase):
+    """Every asset that can change carries a version marker.
+
+    A missing or stale marker is invisible in development — the file is served
+    fresh from disk — and shows up days later as a visitor running old JS against
+    new HTML. This checks the markers exist and, more usefully, that they are not
+    shared by two different files, which is what happened every round when one
+    page kept ?v=static-1 while its neighbour moved on.
+    """
+
+    def setUp(self):
+        self.index = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
+        self.console = (ROOT / 'public' / 'admin' / 'index.html').read_text(encoding='utf-8')
+        self.build = (ROOT / 'tools' / 'build_static.py').read_text(encoding='utf-8')
+
+    def _versions(self, html):
+        found = {}
+        for asset, version in re.findall(r'([\w/-]+\.(?:css|js))\?v=([\w.-]+)', html):
+            found.setdefault(asset, set()).add(version)
+        return found
+
+    def test_every_local_asset_is_versioned(self):
+        for name, html in (('storefront', self.index), ('console', self.console)):
+            for src in re.findall(r'(?:href|src)="(/[^"]+\.(?:css|js))"', html):
+                self.fail(f'{name} loads {src} with no ?v= marker')
+
+    def test_no_asset_is_listed_at_two_versions(self):
+        for name, html in (('storefront', self.index), ('console', self.console)):
+            for asset, versions in self._versions(html).items():
+                self.assertEqual(len(versions), 1,
+                                 f'{name} loads {asset} as {sorted(versions)}')
+
+    def test_the_build_injects_versioned_tags_too(self):
+        # The snapshots and the adapter are written by the build, not present in
+        # the source page, so the source-page check cannot see them.
+        for asset in ('static-config.js', 'static-adapter.js',
+                      'data/products.js', 'data/settings.js', 'demo-backend.js'):
+            self.assertIn(f'{asset}?v=', self.build, f'{asset} is injected unversioned')
+
+    def test_the_markers_differ_between_files(self):
+        # Two files sharing one marker means a bump of either invalidates both,
+        # and the next author is tempted to stop bumping rather than churn.
+        versions = {}
+        for html in (self.index, self.console):
+            for asset, vs in self._versions(html).items():
+                versions.setdefault(asset, set()).update(vs)
+        bumps = [re.search(r'\?v=([\w.-]+)', line) for line in self.build.splitlines()]
+        bumps = [b.group(1) for b in bumps if b and 'static' in b.group(1)]
+        self.assertTrue(len(set(bumps)) > 1,
+                        'the injected snapshots all share one marker')
+
+
+
+class FontTests(unittest.TestCase):
+    """The Persian webfont is a subset, and the full one is never published.
+
+    Vazirmatn ships every Arabic-script glyph upstream supports; the site can
+    only draw the characters in its own strings. The subset is 61% of the size
+    and renders identically, but it only stays small if the build stops there
+    and the full file never reaches the deployed tree.
+    """
+
+    def test_the_shipped_font_is_the_subset(self):
+        subset = ROOT / 'public' / 'fonts' / 'Vazirmatn-Variable.woff2'
+        full = ROOT / 'tools' / 'assets' / 'Vazirmatn-Variable.full.woff2'
+        self.assertTrue(subset.is_file())
+        self.assertTrue(full.is_file(), 'the subset cannot be rebuilt without it')
+        self.assertLess(subset.stat().st_size, full.stat().st_size * 0.75,
+                        'the published font has grown back towards the original')
+
+    def test_the_full_font_is_not_in_the_public_tree(self):
+        # If it were, the build would copy it and every visitor would be one
+        # mistyped href away from downloading it for nothing.
+        self.assertFalse((ROOT / 'public' / 'fonts' /
+                          'Vazirmatn-Variable.full.woff2').exists())
+
+    def test_the_subset_keeps_the_persian_alphabet(self):
+        # fontTools is a build-time dependency of tools/subset_font.py, not of
+        # the site, so the suite still runs where it is not installed.
+        try:
+            from fontTools.ttLib import TTFont
+        except ImportError:
+            self.skipTest('fontTools is not installed')
+        font = TTFont(str(ROOT / 'public' / 'fonts' / 'Vazirmatn-Variable.woff2'))
+        cmap = font.getBestCmap()
+        # The letters Persian prose actually uses, plus its digits and the
+        # zero-width non-joiner that appears inside words like می‌سازیم.
+        for ch in 'ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی':
+            self.assertIn(ord(ch), cmap, f'{ch} is missing from the subset')
+        for ch in '۰۱۲۳۴۵۶۷۸۹':
+            self.assertIn(ord(ch), cmap, f'{ch} is missing from the subset')
+        self.assertIn(0x200C, cmap, 'the zero-width non-joiner must survive')
 
 
 class BrandCatalogTests(unittest.TestCase):

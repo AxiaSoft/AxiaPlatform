@@ -35,9 +35,9 @@ class ApiFlowTests(unittest.TestCase):
         conn.executemany(
             'INSERT INTO products(slug,title,category,summary,description,features,technologies,status,price_label,github_url) '
             'VALUES(?,?,?,?,?,?,?,?,?,?)',
-            [('flow-website', 'Flow Website', 'Websites', 'Summary', 'Description', '[]', '[]',
+            [('flow-website', 'Flow Website', 'websites', 'Summary', 'Description', '[]', '[]',
               'available', 'Request a quote', 'https://github.com/AxiaSoft/flow-website'),
-             ('flow-aurion', 'Flow AURION', 'Aurion', 'Summary', 'Description', '[]', '[]',
+             ('flow-aurion', 'Flow AURION', 'aurion', 'Summary', 'Description', '[]', '[]',
               'showcase', 'Presentation only', '')])
         conn.close()
         cls.servers = []
@@ -97,7 +97,7 @@ class ApiFlowTests(unittest.TestCase):
     def newest_writable_proof(self):
         """A full create-then-commit cycle; fails loudly if the database is wedged."""
         _, products = self.request(self.anon, '/api/products')
-        website = next(p for p in products if p['category'] == 'Websites')
+        website = next(p for p in products if p['category'] == 'websites')
         status, body = self.request(
             self.customer, '/api/orders', 'POST',
             {'product_id': website['id'], 'name': 'Proof Buyer', 'email': 'proof@flow.test',
@@ -120,7 +120,7 @@ class ApiFlowTests(unittest.TestCase):
             self.assertEqual(status, 201, 'signup %d failed after a 409: %s' % (n, body))
 
     def test_duplicate_product_slug_does_not_wedge_the_database(self):
-        product = {'slug': 'wedge-product', 'title': 'Wedge', 'category': 'Websites',
+        product = {'slug': 'wedge-product', 'title': 'Wedge', 'category': 'websites',
                    'summary': 'Summary text', 'description': 'Description text', 'features': ['a'],
                    'technologies': ['b']}
         status, body = self.request(self.admin, '/api/admin/products', 'POST', product, self.admin_csrf)
@@ -141,7 +141,7 @@ class ApiFlowTests(unittest.TestCase):
         self.request(self.anon, '/api/register', 'POST', payload)
         self.request(self.opener(), '/api/register', 'POST', payload)  # 409
         self.request(self.admin, '/api/admin/products', 'POST',
-                     {'slug': 'bad slug!', 'title': 'x', 'category': 'Websites',
+                     {'slug': 'bad slug!', 'title': 'x', 'category': 'websites',
                       'summary': 's', 'description': 'd'}, self.admin_csrf)  # 400
         self.request(self.admin, '/api/admin/orders/status', 'PUT', {'id': 999999, 'status': 'Nonsense'},
                      self.admin_csrf)  # 400
@@ -201,8 +201,8 @@ class ApiFlowTests(unittest.TestCase):
         csrf = self.csrf_for(self.customer)
 
         _, products = self.request(self.anon, '/api/products')
-        website = next(p for p in products if p['category'] == 'Websites')
-        aurion = next(p for p in products if p['category'] == 'Aurion')
+        website = next(p for p in products if p['category'] == 'websites')
+        aurion = next(p for p in products if p['category'] == 'aurion')
 
         status, body = self.request(self.customer, '/api/orders', 'POST',
                                     {'product_id': website['id'], 'name': 'Journey User',

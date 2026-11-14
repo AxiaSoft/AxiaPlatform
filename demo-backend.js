@@ -159,7 +159,7 @@
     contact_email: 'email', contact_phone: 'text', github_url: 'link', footer_note: 'text',
     show_catalog: 'bool', show_services: 'bool', show_aurion: 'bool', show_about: 'bool',
     show_contact: 'bool', show_assistant: 'bool', show_prices: 'bool', default_theme: 'theme',
-    brands: 'brands'
+    brands: 'brands', categories: 'categories'
   };
   var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   var LINK_RE = /^(?:https:\/\/[^\s<>"']+|#\/[a-z0-9/_-]*)$/i;
@@ -189,11 +189,39 @@
           : { ok: false, error: 'Brand validation is unavailable.' };
         if (!verdict.ok) errors[key] = verdict.error;
         else patch[key] = verdict.brands;
+      } else if (kind === 'categories') {
+        var checked = validateCategories(value);
+        if (checked.error) errors[key] = checked.error;
+        else patch[key] = checked.list;
       } else if (typeof value !== 'string' || value.length > 300) {
         errors[key] = 'Invalid text.';
       }
     }
     return errors;
+  }
+
+  /* Mirrors clean_category_list() in server/site_settings.py: same fields, same
+     id alphabet, same ceiling. A category is the operator's own word for a group
+     of products, so it is stored as {id, name, nameFa} rather than as free text. */
+  var CATEGORY_ID_RE = /^[a-z0-9-]{2,40}$/;
+  function validateCategories(value) {
+    if (!Array.isArray(value)) return { error: 'Expected a list of categories.' };
+    if (value.length > 24) return { error: 'Too many categories.' };
+    var out = [], seen = {};
+    for (var i = 0; i < value.length; i++) {
+      var raw = value[i];
+      if (!raw || typeof raw !== 'object') return { error: 'Each category must be an object.' };
+      var id = String(raw.id == null ? '' : raw.id).trim();
+      var name = String(raw.name == null ? '' : raw.name).trim();
+      var nameFa = String(raw.nameFa == null ? '' : raw.nameFa).trim();
+      if (!CATEGORY_ID_RE.test(id)) return { error: 'Category id must be lowercase letters, digits and hyphens.' };
+      if (seen[id]) return { error: 'Category ids must be unique.' };
+      if (!name || name.length > 40) return { error: 'Category name is required (max 40 characters).' };
+      if (nameFa.length > 40) return { error: 'The Persian category name is too long.' };
+      seen[id] = true;
+      out.push({ id: id, name: name, nameFa: nameFa });
+    }
+    return { list: out };
   }
 
   function writeSettings(patch) {
@@ -234,17 +262,17 @@
   // never written automatically and the site never claims they are real; prices
   // are zero where a screen reads one.
   var DEMO_PRODUCTS = [
-    { slug: 'northstar-corporate', title: 'Northstar Corporate', category: 'Websites', price_label: '€4,800 – €7,200',
+    { slug: 'northstar-corporate', title: 'Northstar Corporate', category: 'websites', price_label: '€4,800 – €7,200',
       status: 'available', github_url: 'https://github.com/AxiaSoft/northstar-corporate', published: 1, featured: 1, position: 1 },
-    { slug: 'atlas-client-portal', title: 'Atlas Client Portal', category: 'Applications', price_label: '€6,500 – €11,000',
+    { slug: 'atlas-client-portal', title: 'Atlas Client Portal', category: 'applications', price_label: '€6,500 – €11,000',
       status: 'available', github_url: 'https://github.com/AxiaSoft/atlas-client-portal', published: 1, featured: 0, position: 2 },
-    { slug: 'studio-cms', title: 'Studio CMS', category: 'Websites', price_label: '€3,200 – €5,400',
+    { slug: 'studio-cms', title: 'Studio CMS', category: 'websites', price_label: '€3,200 – €5,400',
       status: 'available', github_url: 'https://github.com/AxiaSoft/studio-cms', published: 1, featured: 0, position: 3 },
-    { slug: 'field-notes', title: 'Field Notes', category: 'Applications', price_label: '€2,900 – €4,600',
+    { slug: 'field-notes', title: 'Field Notes', category: 'applications', price_label: '€2,900 – €4,600',
       status: 'showcase', github_url: '', published: 1, featured: 0, position: 4 },
-    { slug: 'aurion', title: 'AURION', category: 'Aurion', price_label: 'Concept',
+    { slug: 'aurion', title: 'AURION', category: 'aurion', price_label: 'Concept',
       status: 'showcase', github_url: 'https://github.com/AxiaSoft/aurion', published: 1, featured: 0, position: 5 },
-    { slug: 'signal-desk', title: 'Signal Desk', category: 'Applications', price_label: '€5,100 – €8,400',
+    { slug: 'signal-desk', title: 'Signal Desk', category: 'applications', price_label: '€5,100 – €8,400',
       status: 'available', github_url: 'https://github.com/AxiaSoft/signal-desk', published: 0, featured: 0, position: 6 }
   ];
 
