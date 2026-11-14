@@ -108,7 +108,7 @@ class AdminApiTests(unittest.TestCase):
     def test_product_edits_require_csrf_and_keep_complete_catalog_fields(self):
         payload = {'id': self.product_id, 'title': 'Updated test product', 'slug': 'northstar-corporate',
                    'summary': 'Updated summary', 'description': 'Updated description for this project concept.',
-                   'price_label': 'Request a quote', 'category': 'Websites', 'status': 'available',
+                   'price_label': 'Request a quote', 'category': 'websites', 'status': 'available',
                    'cover': '/uploads/covers/abc123.png', 'features': ['One', 'Two'], 'technologies': ['Python'], 'published': True}
         self.assertEqual(self.request(self.admin, '/api/admin/products', 'PUT', payload)[0], 403)
         status, _ = self.request(self.admin, '/api/admin/products', 'PUT', payload, self.csrf)
@@ -119,7 +119,7 @@ class AdminApiTests(unittest.TestCase):
         self.assertEqual(updated['technologies'], ['Python'])
 
     def test_github_preview_link_is_validated_and_published(self):
-        base = {'title': 'Preview Product', 'slug': 'preview-product', 'category': 'Websites',
+        base = {'title': 'Preview Product', 'slug': 'preview-product', 'category': 'websites',
                 'summary': 'Summary', 'description': 'A description long enough to pass.',
                 'status': 'available', 'features': [], 'technologies': [], 'published': True}
 
@@ -199,7 +199,7 @@ class AdminApiTests(unittest.TestCase):
                       'announcement_enabled': False, 'announcement_text': ''}, self.csrf)
 
     def test_products_can_be_featured_and_ordered(self):
-        base = {'title': 'Ordered Product', 'slug': 'ordered-product', 'category': 'Websites',
+        base = {'title': 'Ordered Product', 'slug': 'ordered-product', 'category': 'websites',
                 'summary': 'Summary', 'description': 'A description long enough to pass.',
                 'status': 'available', 'features': [], 'technologies': [], 'published': True}
         created = []

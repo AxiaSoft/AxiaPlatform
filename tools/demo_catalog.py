@@ -14,7 +14,7 @@ DEMO_CATALOG = [
         'slug': 'arya',
         'title': 'Arya — Software with wings.',
         'titleFa': '',
-        'category': 'Websites',
+        'category': 'websites',
         'summary': 'Arya is a complete website build presented under the Arya brand: software with wings.',
         'description': 'Arya is one of the site brands AXIASOFT builds under. Choosing Arya launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Arya rather than as an agency pitch. Scope, pages and content are agreed before the build starts.',
         'cover': 'brand/arya-logo.png',
@@ -30,7 +30,7 @@ DEMO_CATALOG = [
         'slug': 'ersha',
         'title': 'Ersha — Built to stand.',
         'titleFa': '',
-        'category': 'Websites',
+        'category': 'websites',
         'summary': 'Ersha is a complete website build presented under the Ersha brand: built to stand.',
         'description': 'Ersha is one of the site brands AXIASOFT builds under. Choosing Ersha launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Ersha rather than as an agency pitch. Scope, pages and content are agreed before the build starts.',
         'cover': 'brand/ersha-logo.png',
@@ -46,7 +46,7 @@ DEMO_CATALOG = [
         'slug': 'mino',
         'title': 'Mino — Clarity, by design.',
         'titleFa': '',
-        'category': 'Websites',
+        'category': 'websites',
         'summary': 'Mino is a complete website build presented under the Mino brand: clarity, by design.',
         'description': 'Mino is one of the site brands AXIASOFT builds under. Choosing Mino launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Mino rather than as an agency pitch. Scope, pages and content are agreed before the build starts.',
         'cover': 'brand/mino-logo.png',
@@ -62,7 +62,7 @@ DEMO_CATALOG = [
         'slug': 'homa',
         'title': 'Homa — Rise above the noise.',
         'titleFa': '',
-        'category': 'Websites',
+        'category': 'websites',
         'summary': 'Homa is a complete website build presented under the Homa brand: rise above the noise.',
         'description': 'Homa is one of the site brands AXIASOFT builds under. Choosing Homa launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Homa rather than as an agency pitch. Scope, pages and content are agreed before the build starts.',
         'cover': 'brand/homa-logo.png',
@@ -74,4 +74,13 @@ DEMO_CATALOG = [
         'featured': 0,
         'position': 0,
     },
+]
+
+# The categories the demo build offers. The published site ships none — an
+# operator creates them in the console — but a visitor trying the demo without a
+# server still needs the catalog to be browsable, so the demo carries its own
+# list. Ids match the `category` values the products above use.
+DEMO_CATEGORIES = [
+    {'id': 'websites', 'name': 'Websites', 'nameFa': 'وب‌سایت‌ها'},
+    {'id': 'applications', 'name': 'Applications', 'nameFa': 'اپلیکیشن‌ها'},
 ]

@@ -18,6 +18,18 @@
   "show_assistant": true,
   "show_prices": true,
   "default_theme": "dark",
+  "categories": [
+    {
+      "id": "websites",
+      "name": "Websites",
+      "nameFa": "وب‌سایت‌ها"
+    },
+    {
+      "id": "applications",
+      "name": "Applications",
+      "nameFa": "اپلیکیشن‌ها"
+    }
+  ],
   "brands": [
     {
       "id": "arya",

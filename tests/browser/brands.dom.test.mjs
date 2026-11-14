@@ -205,6 +205,13 @@ aw.fetch = async (url) => {
   if (u.includes('/api/me')) body = { user: { id: 1, name: 'Admin', email: 'a@b.test', role: 'admin' }, csrf: 'tok' };
   else if (u.includes('/api/admin/overview')) body = { orders: [], products: [], tickets: [], refunds: [], users: [] };
   else if (u.includes('/api/admin/products')) body = { products: [] };
+  /* The product form files a product under one of the operator's categories, so
+     it needs the settings document. Without it the console correctly refuses to
+     open the form and says why, which is what this stub used to trigger. */
+  else if (u.includes('/api/admin/settings')) body = { settings: { categories: [
+    { id: 'websites', name: 'Websites', nameFa: 'وب‌سایت‌ها' },
+    { id: 'applications', name: 'Applications', nameFa: 'اپلیکیشن‌ها' },
+  ] } };
   else if (u.includes('/api/admin/articles')) body = { articles: [] };
   return { ok: true, status: 200, headers: { get: () => null }, json: async () => body };
 };

@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import formatdate
 from socketserver import ThreadingMixIn
 import base64
+import gzip
 import hashlib
 import hmac
 import http.client
@@ -112,9 +113,57 @@ PER_IP_BUCKETS = {'auth', 'register'}
 # Routes that monitoring may poll freely: never rate limited, never shed.
 UNMETERED_PATHS = {'/api/health'}
 IMMUTABLE_DIRS = ('/fonts/', '/brand/')
+# path+mtime+size -> compressed bytes. Small and fixed: the site ships about a
+# dozen text files. Cleared wholesale rather than evicted, because a rebuild
+# changes every entry at once anyway.
+_GZIP_CACHE = {}
+# Only text is worth compressing; a PNG or a woff2 is already compressed and
+# gzipping it just burns CPU to add a header.
+COMPRESSIBLE_TYPES = ('text/', 'application/javascript', 'application/json',
+                      'application/xml', 'image/svg+xml', 'application/manifest+json')
+COMPRESS_MIN_BYTES = 1024
+
+
+def compressed_static(path, content_type, accept_encoding=''):
+    """Return ``(body, encoding)`` for a static file, gzipped when it pays.
+
+    The handler used to copy every file byte for byte, so a visitor downloaded
+    64KB of CSS and 87KB of JS uncompressed. These compress about four to one;
+    the cache is keyed on the file's mtime so a rebuilt site can never serve
+    yesterday's stylesheet.
+    """
+    try:
+        stat = path.stat()
+        raw = path.read_bytes()
+    except OSError:
+        raise
+    worth = (any(content_type.startswith(prefix) for prefix in COMPRESSIBLE_TYPES)
+             and len(raw) >= COMPRESS_MIN_BYTES)
+    if not worth or 'gzip' not in accept_encoding.lower():
+        return raw, None
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    packed = _GZIP_CACHE.get(key)
+    if packed is None:
+        try:
+            packed = gzip.compress(raw, compresslevel=6, mtime=0)
+        except Exception:
+            return raw, None
+        if len(_GZIP_CACHE) > 96:
+            _GZIP_CACHE.clear()
+        _GZIP_CACHE[key] = packed
+    # A body that does not actually shrink is sent as it is: the encoding
+    # header would cost more than it saves.
+    if len(packed) >= len(raw):
+        return raw, None
+    return packed, 'gzip'
 
 EMAIL_RE = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 SLUG_RE = re.compile(r'[a-z0-9-]{3,100}')
+# A product's category is an id from the operator's own list, so it is checked
+# for shape only — the set of valid ids lives in the settings document and can
+# change without a code change. 'aurion' keeps its special meaning: it marks the
+# showcase concept, which the storefront routes to its own page.
+CATEGORY_ID_RE = re.compile(r'[a-z0-9-]{2,40}')
 # Preview links are opened in a new tab by the storefront, so only plain https
 # URLs on a real host are accepted. This blocks javascript:/data: payloads and
 # anything the browser would have to guess about.
@@ -858,25 +907,26 @@ class Handler(SimpleHTTPRequestHandler):
         suffix = target.suffix.lower()
         ctype = STATIC_TYPES.get(suffix, 'application/octet-stream')
         try:
-            size = target.stat().st_size
-            with target.open('rb') as fh:
-                self._responded = True
-                self.send_response(200)
-                self.send_header('Content-Type', ctype)
-                self.send_header('Content-Length', str(size))
-                if path in IMMUTABLE_DIRS or path.startswith(IMMUTABLE_DIRS):
-                    self.send_header('Cache-Control', 'public, max-age=604800')
-                elif suffix in BIG_ASSET_TYPES:
-                    self.send_header('Cache-Control', 'public, max-age=86400')
-                else:
-                    self.send_header('Cache-Control', 'no-cache')
-                self.end_headers()
-                if self.command != 'HEAD':
-                    while True:
-                        chunk = fh.read(65536)
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
+            payload, encoding = compressed_static(target, ctype,
+                                                  self.headers.get('Accept-Encoding') or '')
+            self._responded = True
+            self.send_response(200)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Content-Length', str(len(payload)))
+            if encoding:
+                self.send_header('Content-Encoding', encoding)
+                # A cache must not hand a gzipped body to a client that did not
+                # ask for one, so the choice is part of the cache key.
+                self.send_header('Vary', 'Accept-Encoding')
+            if path in IMMUTABLE_DIRS or path.startswith(IMMUTABLE_DIRS):
+                self.send_header('Cache-Control', 'public, max-age=604800')
+            elif suffix in BIG_ASSET_TYPES:
+                self.send_header('Cache-Control', 'public, max-age=86400')
+            else:
+                self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            if self.command != 'HEAD':
+                self.wfile.write(payload)
         except (BrokenPipeError, ConnectionResetError):
             pass
         except OSError:
@@ -1253,7 +1303,11 @@ class Handler(SimpleHTTPRequestHandler):
             email = clean(d.get('email'), 254).lower()
             phone = clean(d.get('phone'), 40)
             desc = clean(d.get('description'), 3000)
-            if not product or product['category'] == 'Aurion':
+            # AURION is a showcase concept and cannot be ordered. The check used
+            # to compare against the display name; categories are ids now, so it
+            # matches either spelling and a renamed label cannot make the concept
+            # orderable by accident.
+            if not product or str(product['category']).lower() == 'aurion':
                 self._send_json({'error': 'Select an orderable website or application product.'}, 400); return
             if not name or not EMAIL_RE.fullmatch(email) or len(phone) < 5 or len(desc) < 15:
                 self._send_json({'error': 'Please complete all required fields. Project details must be at least 15 characters.'}, 400); return
@@ -1393,7 +1447,7 @@ class Handler(SimpleHTTPRequestHandler):
                 position = int(d.get('position') or 0)
             except (TypeError, ValueError):
                 self._send_json({'error': 'Position must be a whole number.'}, 400); return
-            if (not SLUG_RE.fullmatch(slug) or not title or cat not in ('Websites', 'Applications', 'Aurion')
+            if (not SLUG_RE.fullmatch(slug) or not title or not CATEGORY_ID_RE.fullmatch(cat)
                     or status not in ('available', 'showcase') or not summary or not description
                     or not isinstance(features, list) or not isinstance(technologies, list)
                     or len(features) > 20 or len(technologies) > 20):
@@ -1444,7 +1498,7 @@ class Handler(SimpleHTTPRequestHandler):
             technologies = d.get('technologies', json.loads(old['technologies']))
             github_url = clean_github_url(d.get('github_url', old['github_url']))
             if (not SLUG_RE.fullmatch(slug) or not title or not summary or not description
-                    or cat not in ('Websites', 'Applications', 'Aurion') or status not in ('available', 'showcase')
+                    or not CATEGORY_ID_RE.fullmatch(cat) or status not in ('available', 'showcase')
                     or not isinstance(features, list) or not isinstance(technologies, list)
                     or len(features) > 20 or len(technologies) > 20):
                 self._send_json({'error': 'Check required product fields, slug, category, status and feature lists.'}, 400); return
