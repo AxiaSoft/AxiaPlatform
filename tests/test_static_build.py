@@ -63,7 +63,14 @@ class ShellBundleOrderTests(unittest.TestCase):
 
 
 class CoverPathTests(unittest.TestCase):
-    """Product covers are stored root-absolute; a sub-path build must rewrite them."""
+    """Two cover shapes, both legal, and neither may double the base.
+
+    A cover uploaded through the console is stored root-absolute ('/brand/x.png')
+    and the build adds the Pages sub-path. A cover that comes from the demo
+    catalog is stored bare ('brand/x.png') and the storefront adds the base
+    through assetUrl(). What must never happen is the prefix stacking up, which
+    once turned every cover into /AxiaPlatform/AxiaPlatform/... and 404ed it.
+    """
 
     def test_prefix_is_applied_verbatim(self):
         base = '/AxiaPlatform/'
@@ -83,18 +90,35 @@ class CoverPathTests(unittest.TestCase):
         self.assertEqual(twice, '/AxiaPlatform/brand/arya-logo.png')
         self.assertEqual(twice.count('/AxiaPlatform'), 1)
 
-    def test_published_catalog_covers_carry_the_prefix_exactly_once(self):
-        # data/products.json is a build output that is committed at the repo
-        # root, so the published copy legitimately carries the prefix. What must
-        # never happen is the prefix stacking up on a rebuild.
+    def test_published_catalog_covers_never_carry_the_base_twice(self):
         import json
         data = json.loads((ROOT / 'data' / 'products.json').read_text(encoding='utf-8'))
         for product in data:
             cover = product.get('cover') or ''
-            if cover:
-                self.assertTrue(cover.startswith('/'), f'{product["slug"]} cover must be root-absolute')
-                self.assertLessEqual(cover.count('/AxiaPlatform/'), 1,
-                                     f'{product["slug"]} cover has a doubled base prefix: {cover}')
+            if not cover:
+                continue
+            self.assertLessEqual(cover.count('/AxiaPlatform/'), 1,
+                                 f'{product["slug"]} cover has a doubled base prefix: {cover}')
+            # Either shape resolves: assetUrl() prefixes a bare path, and an
+            # already-prefixed one is returned unchanged (that is the browser
+            # test in AssetPathTests).
+            self.assertTrue(
+                cover.startswith('brand/') or cover.startswith('/AxiaPlatform/'),
+                f'{product["slug"]} cover is neither bare nor base-prefixed: {cover}')
+
+    def test_every_shipped_cover_file_exists(self):
+        # A cover that 404s still leaves a box on the card, so only a build-up
+        # check catches it.
+        import json
+        data = json.loads((ROOT / 'data' / 'products.json').read_text(encoding='utf-8'))
+        for product in data:
+            cover = (product.get('cover') or '').lstrip('/')
+            if cover.startswith('AxiaPlatform/'):
+                cover = cover[len('AxiaPlatform/'):]
+            if not cover:
+                continue
+            self.assertTrue((ROOT / 'public' / cover).is_file(),
+                            f'{product["slug"]} points at a missing cover: {cover}')
 
 
 if __name__ == '__main__':
@@ -323,6 +347,22 @@ class AdminThemeAndLanguageTests(unittest.TestCase):
         for m in re.finditer(r"T\('([^']*)'\)", self.admin):
             self.assertNotIn('(s)', m.group(1),
                              f'{m.group(1)!r} would print a plural placeholder')
+
+    def test_an_empty_catalog_can_still_be_asked_for(self):
+        # The flag exists so an intentionally empty build stays one command away.
+        missing_db = ROOT / 'tests' / 'does-not-exist.sqlite3'
+        self.assertEqual(
+            build_static.read_catalog(missing_db, '/AxiaPlatform/', demo_catalog=False), [])
+
+    def test_a_build_without_a_database_ships_the_four_builds(self):
+        missing_db = ROOT / 'tests' / 'does-not-exist.sqlite3'
+        rows = build_static.read_catalog(missing_db, '/AxiaPlatform/')
+        self.assertEqual([r['slug'] for r in rows], ['arya', 'ersha', 'mino', 'homa'])
+        # The base is applied once, by the caller, to a bare path.
+        self.assertEqual(rows[0]['cover'], 'brand/arya-logo.png')
+        # And the rows carry what a card renders.
+        self.assertEqual(len(rows[0]['features']), 4)
+        self.assertTrue(rows[0]['published'])
 
 
 class BrandCatalogTests(unittest.TestCase):
@@ -597,30 +637,87 @@ console.log(JSON.stringify([
 """
 
 class CatalogShipsEmptyTests(unittest.TestCase):
-    """The published site ships no products; the demo still has some.
+    """Two builds, two catalog policies.
 
-    The four website builds used to ship inside data/products.json, so they
-    appeared on the live site whether or not the operator wanted them. They are
-    demo content now: the published catalog is empty out of the box and those
-    four live in the browser demo's own seed list, written only when someone
-    presses Load sample catalog.
+    The Python server holds its catalog in SQLite and starts empty: an operator
+    creates products in the console. The serverless build on Pages has no
+    database, so it is the demo and ships a catalog of its own — otherwise a
+    visitor who cannot run the server would find nothing to look at.
+
+    The four website builds live in tools/demo_catalog.py. data/products.json is
+    the build output for whatever the operator published, and is not a source
+    the demo quietly repopulates itself from.
     """
 
     def setUp(self):
         self.snapshot = json.loads((ROOT / 'data' / 'products.json').read_text(encoding='utf-8'))
         self.demo = (ROOT / 'public' / 'demo-backend.js').read_text(encoding='utf-8')
         self.adapter = (ROOT / 'public' / 'static-adapter.js').read_text(encoding='utf-8')
+        self.build = (ROOT / 'tools' / 'build_static.py').read_text(encoding='utf-8')
+        sys.path.insert(0, str(ROOT / 'tools'))
+        from demo_catalog import DEMO_CATALOG
+        self.catalog = DEMO_CATALOG
 
-    def test_the_published_catalog_is_empty(self):
-        self.assertEqual(self.snapshot, [],
-                         'the live site must not ship products; they are created in the console')
+    def test_the_server_starts_with_no_products(self):
+        # The server never reads data/products.json; its catalog is the database.
+        sys.path.insert(0, str(ROOT / 'server'))
+        import db as server_db
+        self.assertEqual(server_db.SEED_PRODUCTS, [],
+                         'the server must not seed products of its own')
 
-    def test_the_demo_still_carries_the_website_builds(self):
-        self.assertIn('DEMO_SITE_PRODUCTS', self.demo)
-        for slug in ('arya', 'ersha', 'mino', 'homa'):
-            self.assertIn(f"slug: {slug!r}" if f"slug: '{slug}'" in self.demo
-                          else f'"slug": "{slug}"', self.demo,
-                          f'{slug} is missing from the demo seed list')
+    def test_the_demo_build_ships_the_website_builds(self):
+        self.assertEqual([row['slug'] for row in self.catalog],
+                         ['arya', 'ersha', 'mino', 'homa'])
+
+    def test_the_demo_catalog_is_a_fallback_not_a_precedence(self):
+        self.assertIn('if not rows and demo_catalog:', self.build)
+        # The implicit "reuse data/products.json" fallback is gone: it let the
+        # catalog repopulate itself from an old build, so no one could tell
+        # which file was the source of truth.
+        self.assertNotIn("published = ROOT / 'data' / 'products.json'", self.build)
+
+    def test_a_datas_own_rows_win_over_the_demo_catalog(self):
+        # An operator with a real catalog must never see demo rows mixed in.
+        import sqlite3
+        tmp = Path(tempfile.mkdtemp()) / 'catalog.sqlite3'
+        conn = sqlite3.connect(tmp)
+        conn.execute(
+            'CREATE TABLE products (id INTEGER PRIMARY KEY, slug TEXT, title TEXT, '
+            'category TEXT, summary TEXT, description TEXT, cover TEXT, features TEXT, '
+            'technologies TEXT, status TEXT, price_label TEXT, published INTEGER, '
+            'created_at TEXT)')
+        conn.execute(
+            "INSERT INTO products VALUES (1,'only-real','Only Real','Websites','s','d',"
+            "'/brand/x.png','[]','[]','available','',1,'')")
+        conn.commit(); conn.close()
+        rows = build_static.read_catalog(tmp, '/AxiaPlatform/')
+        self.assertEqual([r['slug'] for r in rows], ['only-real'])
+
+    def test_the_console_page_loads_the_product_snapshot(self):
+        # demo-backend.js seeds the console's catalog from AXIA_STATIC.products.
+        # Without this tag the demo console opened on an empty catalog while the
+        # public site shipped four products, so the panel disagreed with the site
+        # it manages.
+        built = ROOT / 'admin' / 'index.html'
+        html = built.read_text(encoding='utf-8')
+        self.assertIn('demo-backend.js', html)
+        self.assertIn('data/products.js', html,
+                      'the console cannot seed its catalog without the snapshot')
+        # Order matters: the snapshot has to be defined before demo-backend runs.
+        self.assertLess(html.index('data/products.js'), html.index('demo-backend.js'))
+        self.assertIn('products_tag', self.build,
+                      'the build no longer injects the product snapshot')
+
+    def test_the_demo_catalog_rows_are_complete(self):
+        for row in self.catalog:
+            for field in ('slug', 'title', 'category', 'summary', 'description',
+                          'cover', 'features', 'technologies', 'status', 'price_label'):
+                self.assertTrue(row.get(field) not in (None, ''),
+                                f'{row.get("slug")} has no {field}')
+            # A bare path: the build applies the deploy base once, as it does
+            # for an uploaded cover.
+            self.assertFalse(row['cover'].startswith('/'),
+                             f'{row["slug"]} cover is pre-prefixed')
 
     def test_the_demo_seeds_are_only_written_on_request(self):
         # The seed list is a constant; nothing may call the loader while the page
@@ -631,29 +728,6 @@ class CatalogShipsEmptyTests(unittest.TestCase):
         before = self.demo[:self.demo.index('window.AXIA_DEMO_SAMPLES')]
         self.assertNotIn('AXIA_DEMO_SAMPLES()', before,
                          'the sample catalog is being loaded automatically')
-
-    def test_the_demo_seed_rows_have_the_fields_a_card_needs(self):
-        start = self.demo.index('var DEMO_SITE_PRODUCTS = ')
-        from_ = self.demo.index('[', start)
-        depth, end = 0, -1
-        for i in range(from_, len(self.demo)):
-            if self.demo[i] == '[':
-                depth += 1
-            elif self.demo[i] == ']':
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-        rows = json.loads(self.demo[from_:end + 1])
-        self.assertEqual(len(rows), 4)
-        for row in rows:
-            for field in ('slug', 'title', 'category', 'summary', 'description',
-                          'cover', 'features', 'technologies', 'status', 'price_label'):
-                self.assertIn(field, row, f'{row.get("slug")} has no {field}')
-            # A relative path, not one already carrying the deploy base: the
-            # storefront applies the base through assetUrl().
-            self.assertFalse(row['cover'].startswith('/'),
-                             f'{row["slug"]} cover is pre-prefixed')
 
     def test_the_console_reaches_the_storefront_through_the_demo_store(self):
         # The console writes localStorage; the public page has to read it back,

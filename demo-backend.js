@@ -97,10 +97,12 @@
       } catch (err) { /* fall through to the shipped snapshot */ }
     }
     // First visit: the editable copy starts from the build's product snapshot.
-    // That snapshot is deliberately empty (products are created here), so the
-    // demo catalog starts empty too. `Load sample catalog` in the console's
-    // Maintenance tab adds illustrative rows on request - never automatically,
-    // because the public site must not invent products.
+    // On Pages that snapshot is the demo catalog (tools/demo_catalog.py), so a
+    // visitor who cannot run the server still finds products to look at - the
+    // whole point of a demo. A server-backed build ships an empty snapshot, so
+    // this path yields nothing there and the catalog starts empty as intended.
+    // `Load sample catalog` in the console's Maintenance tab then adds the
+    // illustrative rows on top, by slug, so nothing is duplicated.
     return seedProducts();
   }
 
@@ -228,10 +230,9 @@
   }
 
   /* -------------------------------------------------------- sample data */
-  // Neutral filler rows, used by the dashboard's own sample screens and added
-  // to the catalog by `Load sample catalog` alongside the four website builds
-  // above. They are never written automatically and the site never claims they
-  // are real; prices are zero where a screen reads one.
+  // Neutral filler rows, added to the catalog by `Load sample catalog`. They are
+  // never written automatically and the site never claims they are real; prices
+  // are zero where a screen reads one.
   var DEMO_PRODUCTS = [
     { slug: 'northstar-corporate', title: 'Northstar Corporate', category: 'Websites', price_label: '€4,800 – €7,200',
       status: 'available', github_url: 'https://github.com/AxiaSoft/northstar-corporate', published: 1, featured: 1, position: 1 },
@@ -245,116 +246,6 @@
       status: 'showcase', github_url: 'https://github.com/AxiaSoft/aurion', published: 1, featured: 0, position: 5 },
     { slug: 'signal-desk', title: 'Signal Desk', category: 'Applications', price_label: '€5,100 – €8,400',
       status: 'available', github_url: 'https://github.com/AxiaSoft/signal-desk', published: 0, featured: 0, position: 6 }
-  ];
-
-  /* The four site-website builds, kept only for the browser demo.
-     They used to ship in data/products.json, which meant the public catalog
-     carried them whether or not the operator wanted them there. The published
-     site is now empty out of the box and these exist solely so that a visitor
-     trying the demo console has something to look at. They are written to
-     localStorage on request (Load sample catalog) and never at load time, so
-     the public storefront still invents nothing until asked. */
-  var DEMO_SITE_PRODUCTS = [
-      {
-          "slug": "arya",
-          "title": "Arya — Software with wings.",
-          "titleFa": "",
-          "category": "Websites",
-          "summary": "Arya is a complete website build presented under the Arya brand: software with wings.",
-          "description": "Arya is one of the site brands AXIASOFT builds under. Choosing Arya launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Arya rather than as an agency pitch. Scope, pages and content are agreed before the build starts.",
-          "cover": "brand/arya-logo.png",
-          "features": [
-              "Branded header and title",
-              "Responsive layout",
-              "Content structure agreed first",
-              "No payment on this site"
-          ],
-          "technologies": [
-              "HTML",
-              "CSS",
-              "JavaScript"
-          ],
-          "status": "available",
-          "price_label": "Request a quote",
-          "published": 1,
-          "featured": 0,
-          "position": 0
-      },
-      {
-          "slug": "ersha",
-          "title": "Ersha — Built to stand.",
-          "titleFa": "",
-          "category": "Websites",
-          "summary": "Ersha is a complete website build presented under the Ersha brand: built to stand.",
-          "description": "Ersha is one of the site brands AXIASOFT builds under. Choosing Ersha launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Ersha rather than as an agency pitch. Scope, pages and content are agreed before the build starts.",
-          "cover": "brand/ersha-logo.png",
-          "features": [
-              "Branded header and title",
-              "Responsive layout",
-              "Content structure agreed first",
-              "No payment on this site"
-          ],
-          "technologies": [
-              "HTML",
-              "CSS",
-              "JavaScript"
-          ],
-          "status": "available",
-          "price_label": "Request a quote",
-          "published": 1,
-          "featured": 0,
-          "position": 0
-      },
-      {
-          "slug": "mino",
-          "title": "Mino — Clarity, by design.",
-          "titleFa": "",
-          "category": "Websites",
-          "summary": "Mino is a complete website build presented under the Mino brand: clarity, by design.",
-          "description": "Mino is one of the site brands AXIASOFT builds under. Choosing Mino launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Mino rather than as an agency pitch. Scope, pages and content are agreed before the build starts.",
-          "cover": "brand/mino-logo.png",
-          "features": [
-              "Branded header and title",
-              "Responsive layout",
-              "Content structure agreed first",
-              "No payment on this site"
-          ],
-          "technologies": [
-              "HTML",
-              "CSS",
-              "JavaScript"
-          ],
-          "status": "available",
-          "price_label": "Request a quote",
-          "published": 1,
-          "featured": 0,
-          "position": 0
-      },
-      {
-          "slug": "homa",
-          "title": "Homa — Rise above the noise.",
-          "titleFa": "",
-          "category": "Websites",
-          "summary": "Homa is a complete website build presented under the Homa brand: rise above the noise.",
-          "description": "Homa is one of the site brands AXIASOFT builds under. Choosing Homa launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Homa rather than as an agency pitch. Scope, pages and content are agreed before the build starts.",
-          "cover": "brand/homa-logo.png",
-          "features": [
-              "Branded header and title",
-              "Responsive layout",
-              "Content structure agreed first",
-              "No payment on this site"
-          ],
-          "technologies": [
-              "HTML",
-              "CSS",
-              "JavaScript"
-          ],
-          "status": "available",
-          "price_label": "Request a quote",
-          "published": 1,
-          "featured": 0,
-          "position": 0
-      }
   ];
 
   var STATUSES = ['Submitted', 'Under Review', 'Requirements Analysis', 'Quotation Sent',
@@ -820,26 +711,16 @@
       .observe(document.body, { childList: true, subtree: true });
   });
 
-  /* The console's "Load sample catalog" button. It is never automatic: the
-     published site ships an empty catalog on purpose, and the public storefront
-     must not invent products a visitor could mistake for real ones. */
+  /* The console's "Load sample catalog" button. The four website builds ship
+     with the demo build already; this adds the neutral filler rows on request.
+     Nothing here runs at load time, so the storefront never invents products a
+     visitor could mistake for real ones. */
   window.AXIA_DEMO_SAMPLES = function () {
     var list = readProducts();
-    // The four website builds first: they carry real copy, features and artwork,
-    // so the demo opens on something that looks like a product rather than a
-    // placeholder. They are matched by slug, so pressing the button twice adds
-    // nothing the second time.
-    DEMO_SITE_PRODUCTS.forEach(function (p, i) {
-      if (list.some(function (x) { return x.slug === p.slug; })) return;
-      list.push(normalise({
-        id: nextId(list), slug: p.slug, title: p.title, titleFa: p.titleFa,
-        category: p.category, summary: p.summary, description: p.description,
-        cover: p.cover, features: p.features || [], technologies: p.technologies || [],
-        status: p.status, price_label: p.price_label, github_url: p.github_url || '',
-        published: p.published, featured: p.featured, position: p.position,
-        created_at: ago(70 - i * 4)
-      }));
-    });
+    // The four website builds are already here: the build ships them in
+    // data/products.js and readProducts() seeds from that snapshot, so this
+    // button only adds the neutral fillers. Matching by slug keeps it
+    // idempotent - pressing it twice adds nothing the second time.
     DEMO_PRODUCTS.forEach(function (p, i) {
       if (list.some(function (x) { return x.slug === p.slug; })) return;
       list.push(normalise({

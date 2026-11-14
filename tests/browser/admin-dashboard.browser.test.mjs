@@ -232,12 +232,21 @@ check('a hidden page explains itself', /published/i.test(hiddenPage), hiddenPage
 
 await store.evaluate(() => { location.hash = '#/products'; });
 await pause(1000);
-const emptyCatalog = await store.evaluate(() => document.querySelectorAll('.product-card').length);
-check('the shipped catalog starts empty', emptyCatalog === 0, `cards=${emptyCatalog}`);
+/* The serverless build is the demo, so it ships a catalog: four website builds,
+   with their own covers. The server build starts empty instead — that half is
+   covered by the Python suite, which asserts SEED_PRODUCTS is empty and that
+   read_catalog() only reads the demo list when --demo is in play. */
+const shipped = await store.evaluate(() => ({
+  cards: document.querySelectorAll('.product-card').length,
+  covers: document.querySelectorAll('.product-cover.has-image img').length,
+  titles: [...document.querySelectorAll('.product-card h3')].map((h) => h.textContent.trim()),
+}));
+check('the demo ships the four website builds', shipped.cards === 4, `cards=${shipped.cards}`);
+check('the demo catalog has its own artwork', shipped.covers === 4, `covers=${shipped.covers}`);
+check('the demo catalog is the four brands',
+  shipped.titles.every((t) => /Arya|Ersha|Mino|Homa/.test(t)), shipped.titles.join(' | '));
 
-/* The demo catalog is empty until the operator asks for samples, so that the
-   public site can never invent products. Load them from Maintenance, then the
-   catalog has something to show. */
+/* Load the sample rows from Maintenance, then the catalog has more to show. */
 await admin.evaluate(() => { location.hash = '#site'; });
 await pause(1100);
 await openTab('danger');
@@ -251,6 +260,8 @@ const loaded = await admin.evaluate(() =>
 /* Ten rows now: the four website builds plus the six neutral samples. The four
    are demo-only content, kept out of the published catalog and written here on
    request, so a visitor trying the console has real products with artwork. */
+/* The demo now ships the four website builds, so pressing the button adds only
+   the six neutral samples: ten rows in total, not ten more. */
 check('the maintenance tab can load a sample catalog', loaded === 10, `products=${loaded}`);
 
 await store.reload({ waitUntil: 'networkidle0' });
@@ -263,8 +274,9 @@ const catalog = await store.evaluate(() => ({
   titles: [...document.querySelectorAll('.product-card h3')].map((h) => h.textContent.trim()),
 }));
 // The storefront hides AURION (its own showcase page) and unpublished rows, so
-// ten stored products show as eight cards: the four website builds and the four
-// published neutral samples.
+// the ten stored products show as eight cards. The four website builds were
+// already shipped; the loader adds them by slug only if missing, so the count
+// stays at eight rather than growing to twelve.
 check('the storefront shows the sample catalog', catalog.cards === 8, `cards=${catalog.cards}`);
 check('price labels can be switched off', catalog.prices === 0, `labels=${catalog.prices}`);
 // The sample catalog is written in the console's language, so a Persian
