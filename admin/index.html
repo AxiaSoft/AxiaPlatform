@@ -5,7 +5,7 @@
   <meta name="theme-color" content="#080d18"><meta name="description" content="AXIASOFT administrator console">
   <title>AXIASOFT · Admin Console</title>
   <link rel="preload" href="/AxiaPlatform/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/AxiaPlatform/admin/admin.css?v=console-10">
+  <link rel="stylesheet" href="/AxiaPlatform/admin/admin.css?v=console-12">
   <link rel="stylesheet" href="/AxiaPlatform/effects.css?v=fx-3">
 </head>
 <body data-fx="admin">
@@ -13,8 +13,12 @@
   <div id="overlayRoot"></div>
   <script src="/AxiaPlatform/data/settings.js?v=static-1"></script>
   <script src="/AxiaPlatform/effects.js?v=fx-3" defer></script>
-  <script src="/AxiaPlatform/i18n.js?v=10" defer></script>
-  <script src="/AxiaPlatform/demo-backend.js?v=static-1" defer></script>
-  <script src="/AxiaPlatform/admin/admin.js?v=console-10" defer></script>
+  <script src="/AxiaPlatform/i18n.js?v=12" defer></script>
+  <!-- brands.js supplies the one brand validator the console, the demo backend
+       and the storefront all share. Without it the console could save a brand
+       the site then refuses to render. -->
+  <script src="/AxiaPlatform/brands.js?v=brands-3" defer></script>
+  <script src="/AxiaPlatform/demo-backend.js?v=static-2" defer></script>
+  <script src="/AxiaPlatform/admin/admin.js?v=console-12" defer></script>
 </body>
 </html>

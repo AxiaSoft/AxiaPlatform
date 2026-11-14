@@ -783,7 +783,7 @@ def main() -> int:
     admin_path = out / 'admin' / 'index.html'
     if admin_path.is_file():
         admin_html = admin_path.read_text(encoding='utf-8')
-        demo_tag = f'<script src="{base}demo-backend.js?v=static-1" defer></script>'
+        demo_tag = f'<script src="{base}demo-backend.js?v=static-2" defer></script>'
         if 'demo-backend.js' not in admin_html:
             admin_html = admin_html.replace(
                 f'<script src="{base}admin/admin.js',

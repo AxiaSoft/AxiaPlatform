@@ -152,7 +152,7 @@ function safeHttp(u){const v=String(u||'').trim();return /^https:\/\/[^\s<>"']+$
    bar, the hero copy, contact details, which sections are published, and the
    first-visit theme. Fields write into the same JSON document the server and
    the static build both understand. */
-const SITE_TABS=[['identity','Identity'],['announcement','Announcement'],['hero','Home hero'],['sections','Visibility'],['contact','Contact & links'],['danger','Maintenance']];
+const SITE_TABS=[['identity','Identity'],['brands','Site brands'],['announcement','Announcement'],['hero','Home hero'],['sections','Visibility'],['contact','Contact & links'],['danger','Maintenance']];
 const SECTION_FIELDS=[['show_catalog','Product catalog','The products grid and product pages'],['show_services','Services page','Website, mobile and custom software services'],['show_aurion','AURION showcase','The AURION concept page and its links'],['show_about','About page','The studio story and values'],['show_contact','Contact entry points','Contact links, the header CTA and request buttons'],['show_assistant','Support assistant','The floating AXIA chat guide on the storefront'],['show_prices','Price labels','Indicative price labels on product cards and detail pages']];
 function siteVal(key){return state.settings?.[key]??''}
 function switchField(name,label,hint,on){
@@ -160,6 +160,71 @@ function switchField(name,label,hint,on){
 }
 function fieldText(name,label,value,hint='',extra=''){
  return `<div class="field"><label for="s-${name}">${label}</label><input id="s-${name}" name="${name}" value="${esc(value??'')}" ${extra}><span class="field-hint">${hint}</span></div>`;
+}
+/* ---------------------------------------------------------------- brands */
+/* The site brands are what the Websites tab offers as a starting point: pick
+   one and the whole site wears that name, logo and accent colour. They used to
+   be hardcoded in public/brands.js, which meant a new brand needed a code edit
+   and a redeploy. They are a settings list now, edited here.
+   The editor keeps the working copy in state.siteBrands and only writes on
+   save, so a half-typed brand never reaches the storefront. */
+/* The admin console does not load app.js, so assetUrl() from the storefront is
+   not in scope here. Brand assets are stored root- or base-relative, and the
+   console lives one level down, so they resolve through AXIA_BASE exactly as
+   the storefront resolves them. */
+function brandAsset(path){
+ const raw=String(path||'').trim();
+ if(!raw)return '';
+ if(/^(?:https?:)?\/\//i.test(raw))return raw;
+ // The console page always lives at <deploy base>admin/, so its own path is the
+ // most reliable statement of the base: /AxiaPlatform/admin/ implies
+ // /AxiaPlatform/. AXIA_STATIC.base is preferred when the build shipped
+ // static-config.js to this page, and the derived value covers the case where
+ // it did not — which is how these assets were 404ing at the server root.
+ const fromConfig=String((window.AXIA_STATIC&&window.AXIA_STATIC.base)||'');
+ const fromPath=(location.pathname.replace(/\/admin\/?[^/]*$/,'/'));
+ const base=(fromConfig||fromPath).replace(/\/$/,'')+'/';
+ if(base!=='/'&&raw.startsWith(base))return raw;
+ return base+raw.replace(/^\//,'');
+}
+function brandDraft(){
+ if(!Array.isArray(state.siteBrands))state.siteBrands=(siteVal('brands')||[]).map(b=>({...b}));
+ return state.siteBrands;
+}
+function brandRowHTML(b,i){
+ return `<div class="brand-edit" data-brand-row="${i}">
+  <div class="brand-edit-head">
+   <span class="brand-swatch" style="--swatch:${esc(b.accent||'#1f5fa8')}"><img src="${esc(brandAsset(b.mark))}" alt="" onerror="this.style.display='none'"></span>
+   <div><strong>${esc(b.name||T('New brand'))}</strong><span class="muted">${esc(b.nameFa||'')}</span></div>
+   <div class="brand-edit-actions">
+    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">↑</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-down" data-i="${i}" ${i===brandDraft().length-1?'disabled':''} title="${T('Move down')}">↓</button>
+    <button class="btn btn-sm btn-quiet danger" type="button" data-act="brand-remove" data-i="${i}" title="${T('Remove this brand')}">${T('Remove')}</button>
+   </div>
+  </div>
+  <div class="setting-grid">
+   <div class="field"><label for="b-${i}-id">${T('Id')}</label><input id="b-${i}-id" data-brand="${i}" data-field="id" maxlength="31" value="${esc(b.id)}" placeholder="arya"><span class="field-hint">${T('Lowercase letters, numbers and hyphens. Used in the link.')}</span></div>
+   <div class="field"><label for="b-${i}-name">${T('Name (English)')}</label><input id="b-${i}-name" data-brand="${i}" data-field="name" maxlength="40" value="${esc(b.name)}" placeholder="Arya"></div>
+   <div class="field"><label for="b-${i}-nameFa">${T('Name (Persian)')}</label><input id="b-${i}-nameFa" data-brand="${i}" data-field="nameFa" maxlength="40" value="${esc(b.nameFa)}" placeholder="آریا" dir="rtl"></div>
+   <div class="field"><label for="b-${i}-tagline">${T('Tagline (English)')}</label><input id="b-${i}-tagline" data-brand="${i}" data-field="tagline" maxlength="90" value="${esc(b.tagline)}" placeholder="${T('Software with wings.')}"></div>
+   <div class="field"><label for="b-${i}-taglineFa">${T('Tagline (Persian)')}</label><input id="b-${i}-taglineFa" data-brand="${i}" data-field="taglineFa" maxlength="90" value="${esc(b.taglineFa)}" placeholder="نرم‌افزاری با بال‌های پرواز." dir="rtl"></div>
+   <div class="field"><label for="b-${i}-accent">${T('Accent colour')}</label><input id="b-${i}-accent" type="color" data-brand="${i}" data-field="accent" value="${esc(b.accent||'#1f5fa8')}"><span class="field-hint">${T('Drives buttons, links and the glow behind the header.')}</span></div>
+   <div class="field"><label for="b-${i}-accentSoft">${T('Soft accent')}</label><input id="b-${i}-accentSoft" type="color" data-brand="${i}" data-field="accentSoft" value="${esc(b.accentSoft||b.accent||'#3f8ad8')}"><span class="field-hint">${T('The lighter half of the gradient.')}</span></div>
+   <div class="field"><label for="b-${i}-mark">${T('Header mark')}</label><input id="b-${i}-mark" data-brand="${i}" data-field="mark" maxlength="200" value="${esc(b.mark)}" placeholder="brand/arya-mark.png"><span class="field-hint">${T('Small square emblem shown in the header.')}</span></div>
+   <div class="field"><label for="b-${i}-logo">${T('Card logo')}</label><input id="b-${i}-logo" data-brand="${i}" data-field="logo" maxlength="200" value="${esc(b.logo)}" placeholder="brand/arya-logo.png"><span class="field-hint">${T('Wider lockup for the brand card. Falls back to the mark.')}</span></div>
+  </div>
+ </div>`;
+}
+function brandsTabHTML(){
+ const list=brandDraft();
+ return `<div class="panel form-panel"><div class="panel-head"><div><h2>${T('Site brands')}</h2><p>${T('The starting points on the Websites tab. Picking one wears that brand everywhere.')}</p></div><span class="pill blue">${list.length} ${T(list.length===1?'brand':'brands')}</span></div>
+  <div class="notice">${T('A brand changes the header, the accent and the page title for that visitor only.')} ${T('Order here is the order on the site.')} ${T('Remove a brand to hide it; products are untouched.')}</div>
+  <form data-form="brands"><div class="brand-edit-list">${list.length?list.map(brandRowHTML).join(''):'<div class="empty">'+T('No brands yet. The Websites tab will not offer a brand picker until you add one.')+'</div>'}</div>
+  <div class="form-actions">
+   <button class="btn btn-primary" type="submit">${T('Save brands')}</button>
+   <button class="btn btn-quiet" type="button" data-act="brand-add">+ ${T('Add brand')}</button>
+   <button class="btn btn-quiet" type="button" data-act="settings-reset">Discard changes</button>
+  </div></form></div>`;
 }
 function siteTabHTML(){
  const t=state.siteTab;
@@ -172,6 +237,7 @@ function siteTabHTML(){
    <div class="field"><label for="s-announcement_tone">Colour</label><select id="s-announcement_tone" name="announcement_tone">${[['info','Blue — general news'],['promo','Green — launch or offer'],['warning','Amber — service notice']].map(([v,l])=>`<option value="${v}" ${tone===v?'selected':''}>${l}</option>`).join('')}</select><span class="field-hint">Sets the bar's accent colour only.</span></div></div>
    <div class="form-actions"><button class="btn btn-primary" type="submit">Save announcement</button><button class="btn btn-quiet" type="button" data-act="settings-reset">Discard changes</button></div></form></div>`;
  }
+ if(t==='brands'){return brandsTabHTML()}
  if(t==='hero'){
   return `<div class="panel form-panel"><div class="panel-head"><div><h2>Home hero</h2><p>The first three lines a visitor reads.</p></div><button class="btn btn-sm btn-quiet" data-act="preview-site" data-target="#/">Preview ↗</button></div>
    <form data-form="settings"><div class="setting-grid">${fieldText('hero_title','Headline',siteVal('hero_title'),'Shown in white. Keep it under about 45 characters so it does not wrap awkwardly.','maxlength="90" required')}${fieldText('hero_accent','Highlighted line',siteVal('hero_accent'),'Shown in the gradient, directly under the headline.','maxlength="90"')}
@@ -541,6 +607,10 @@ return}
  if(act==='close-nav'){$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show');return}
  if(act==='theme'){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);b.textContent=t==='dark'?'◐':'☼';return}
  if(act==='refresh'){refreshAll();return}
+ if(act==='brand-add'){const list=brandDraft();if(list.length>=12){toast('Twelve brands is the maximum.');return}list.push({id:'',name:'',nameFa:'',tagline:'',taglineFa:'',accent:'#1f5fa8',accentSoft:'#3f8ad8',mark:'',logo:''});state.dirty=true;$('#pageContent').innerHTML=contentHTML();const last=$('.brand-edit:last-child [data-field="id"]');last?.focus();return}
+ if(act==='brand-remove'){const i=Number(b.dataset.i);brandDraft().splice(i,1);state.dirty=true;$('#pageContent').innerHTML=contentHTML();return}
+ if(act==='brand-up'){const i=Number(b.dataset.i);const list=brandDraft();if(i>0){[list[i-1],list[i]]=[list[i],list[i-1]];state.dirty=true;$('#pageContent').innerHTML=contentHTML()}return}
+ if(act==='brand-down'){const i=Number(b.dataset.i);const list=brandDraft();if(i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];state.dirty=true;$('#pageContent').innerHTML=contentHTML()}return}
  if(act==='new-article'){state.articleDraft={title:'',slug:'',summary:'',tags:[],body:'',status:'draft'};$('#pageContent').innerHTML=contentHTML();return}
  if(act==='close-article'){state.articleDraft=null;$('#pageContent').innerHTML=contentHTML();return}
  if(act==='article-preview'){previewArticle();return}
@@ -556,7 +626,7 @@ return}
  if(act==='export'){exportCsv(b.dataset.kind);return}
  if(act==='toggle-product'){toggleProduct(b);return}
  if(act==='settings-refresh'){state.dirty=false;state.settings=null;fetchPageData().then(()=>toast('Settings reloaded.'));return}
- if(act==='settings-reset'){if(state.savedSettings)state.settings={...state.savedSettings};state.dirty=false;$('#pageContent').innerHTML=contentHTML();toast('Unsaved changes discarded.');return}
+ if(act==='settings-reset'){if(state.savedSettings)state.settings={...state.savedSettings};state.siteBrands=null;state.dirty=false;$('#pageContent').innerHTML=contentHTML();toast('Unsaved changes discarded.');return}
  if(act==='preview-site'){window.open(String(b.dataset.target||'/'),'_blank','noopener');return}
  if(act==='feature-product'){toggleFeature(b);return}
  if(act==='move-product'){moveProduct(b);return}
@@ -608,6 +678,37 @@ function exportSettings(){
  link.click();
  URL.revokeObjectURL(link.href);
  toast('settings.json downloaded.');
+}
+/* Saves the whole brand list in one request. The list is a single setting, so a
+   partial save would leave the storefront with a brand the console no longer
+   shows — all or nothing is the only safe shape.
+   Validation runs in the browser first so a typo is reported next to the field
+   it belongs to rather than as one generic server error. */
+async function saveBrands(form){
+ const list=brandDraft();
+ // A blank row is what "+ Add brand" leaves behind; dropping it here means the
+ // common case (add, then change your mind) needs no Remove click.
+ const cleaned=list.filter(b=>String(b.name||'').trim()||String(b.id||'').trim());
+ const verdict=window.AXIA_BRANDS_VALIDATE?window.AXIA_BRANDS_VALIDATE(cleaned):{ok:true,brands:cleaned};
+ const old=$('.error-note',form);if(old)old.remove();
+ if(!verdict.ok){
+  const note=document.createElement('div');note.className='error-note';note.textContent=verdict.error;form.prepend(note);
+  note.scrollIntoView({block:'center'});return;
+ }
+ const button=$('button[type="submit"]',form);
+ if(button){button.disabled=true;button.dataset.old=button.textContent;button.textContent='Saving…'}
+ try{
+  const r=await api('/api/admin/settings',{method:'PUT',body:{brands:verdict.brands}});
+  state.settings=r.settings||{...state.settings,brands:verdict.brands};
+  state.savedSettings={...state.settings};
+  state.siteBrands=null;
+  state.dirty=false;
+  $('#pageContent').innerHTML=contentHTML();
+  toast('Site brands saved. The Websites tab now offers them.');
+ }catch(e){
+  const note=document.createElement('div');note.className='error-note';note.textContent=e.message;form.prepend(note);
+  if(button){button.disabled=false;button.textContent=button.dataset.old||'Try again'}
+ }
 }
 async function saveSettings(form){
  const payload={};
@@ -668,12 +769,34 @@ async function changeCustomerStatus(btn){const c=state.customers.find(x=>x.id===
 async function submitHandler(e){const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();const submit=$('button[type="submit"]',form)||$('button:not([type="button"])',form);if(submit){submit.disabled=true;submit.dataset.old=submit.textContent;submit.textContent='Saving…'}const values=Object.fromEntries(new FormData(form));try{
  if(form.dataset.form==='login'){const data=await api('/api/login',{method:'POST',body:{email:values.email,password:values.password}});state.me=data.user;if(state.me.role!=='admin'){deniedView();return}const s=await api('/api/me');state.csrf=s.csrf;state.page=location.hash.slice(1)||'dashboard';if(!PAGES.includes(state.page))state.page='dashboard';shell();await fetchPageData();toast('Administrator session established.');return}
  if(form.dataset.form==='settings'){await saveSettings(form);return}
+ if(form.dataset.form==='brands'){await saveBrands(form);return}
  if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}closeModal();state.overview=null;await fetchPageData();return}
  if(form.dataset.form==='order-update'){await api('/api/admin/orders/status',{method:'PUT',body:{id:Number(form.dataset.id),status:values.status,note:values.note||''}});closeModal();toast('Project status and history updated.');state.overview=null;await fetchPageData();return}
  if(form.dataset.form==='ticket-reply'){if(values.message?.trim())await api('/api/admin/tickets/reply',{method:'POST',body:{id:Number(form.dataset.id),message:values.message.trim()}});if(values.status!=='In progress')await api('/api/admin/tickets/status',{method:'PUT',body:{id:Number(form.dataset.id),status:values.status}});closeModal();toast(values.message?.trim()?'Reply added and ticket updated.':'Ticket status updated.');state.tickets=await api('/api/support');$('#pageContent').innerHTML=supportHTML();return}
  if(form.dataset.form==='refund'){await api('/api/admin/refunds/decision',{method:'PUT',body:{id:Number(form.dataset.id),status:form.dataset.decision,note:values.note||'',transaction_ref:values.transaction_ref||''}});closeModal();toast('Refund decision recorded. No payment was processed.');state.refunds=await api('/api/refunds');$('#pageContent').innerHTML=refundsHTML();return}
  }catch(err){const old=$('.error-note',form);if(old)old.remove();const note=document.createElement('div');note.className='error-note';note.textContent=err.message;form.prepend(note);if(submit){submit.disabled=false;submit.textContent=submit.dataset.old||'Try again'}}}
-function inputHandler(e){if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
+/* Typing in the brand editor writes straight into the draft, because every
+   other control in this tab re-renders the panel and would otherwise throw the
+   half-typed value away. The draft is what Save sends. */
+function brandInput(e){
+ const el=e.target.closest('[data-brand]');
+ if(!el)return;
+ const list=brandDraft(),row=list[Number(el.dataset.brand)];
+ if(!row)return;
+ row[el.dataset.field]=el.value;
+ state.dirty=true;
+ // Keep the header line in step without a full re-render, which would steal
+ // the caret out of the field being typed into.
+ const card=el.closest('.brand-edit');
+ if(card&&(el.dataset.field==='name'||el.dataset.field==='nameFa')){
+  const strong=$('strong',card),muted=$('.muted',card);
+  if(strong)strong.textContent=row.name||T('New brand');
+  if(muted)muted.textContent=row.nameFa||'';
+ }
+ if(el.dataset.field==='accent'){const sw=$('.brand-swatch',card);if(sw)sw.style.setProperty('--swatch',row.accent)}
+}
+function inputHandler(e){
+ brandInput(e);if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
 if(e.target.matches('[data-category-filter]')){state.categoryFilter=e.target.value;$('#pageContent').innerHTML=productsHTML()}
 if(e.target.matches('[data-product-sort]')){state.productSort=e.target.value;$('#pageContent').innerHTML=productsHTML()}
 if(e.target.matches('[data-select-product]')){const id=Number(e.target.dataset.selectProduct);e.target.checked?state.selected.add(id):state.selected.delete(id);$('#pageContent').innerHTML=productsHTML()}
