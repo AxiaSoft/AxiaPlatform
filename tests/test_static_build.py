@@ -233,3 +233,89 @@ class HomeLayoutTests(unittest.TestCase):
         # source alone.
         home = self._home(self.built)
         self.assertIn('categoryCards()', home)
+
+
+class AdminThemeAndLanguageTests(unittest.TestCase):
+    """The console's light theme and its two languages.
+
+    Two defects, both invisible to the server tests and both reported from a
+    browser:
+
+      * in light mode every panel wore a dark fill. The light block redefined
+        the theme variables, but .panel, .stat-card, .login-card, .hero-strip
+        and .trend each hardcoded a dark colour instead of reading one, so a
+        grey slab landed on a white page.
+      * the language direction was one-way. AXIA_T translated to Persian
+        regardless of the current language, so an English console printed
+        'ذخیره' where it meant 'Save', and strings with no Persian entry stayed
+        English in a Persian console.
+
+    These assert the wiring rather than the appearance, because the appearance
+    depends on which theme a visitor picked.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.css = (ROOT / 'public' / 'admin' / 'admin.css').read_text(encoding='utf-8')
+        cls.i18n = (ROOT / 'public' / 'i18n.js').read_text(encoding='utf-8')
+        cls.admin = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+
+    def test_no_panel_paints_a_hardcoded_dark_surface(self):
+        import re
+        # Any background in the admin sheet whose colour is dark and literal is
+        # a light-theme defect waiting to happen. The two overlays (modal and
+        # side scrim) are dark on purpose in both themes.
+        allowed = {'.modal-backdrop', '.side-scrim'}
+        offenders = []
+        for m in re.finditer(r'([^{}\n]+)\{([^{}]*)\}', self.css):
+            selector, body = m.group(1).strip(), m.group(2)
+            if selector in allowed or '[data-theme' in selector:
+                continue
+            for value in re.findall(r'background(?:-color)?\s*:\s*([^;}]*)', body):
+                for rgb in re.findall(r'rgba?\(\s*(\d{1,2})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})', value):
+                    if sum(int(v) for v in rgb) < 120:
+                        offenders.append((selector[:40], value.strip()[:50]))
+        self.assertEqual(offenders, [],
+                         'these surfaces would stay dark under the light theme')
+
+    def test_the_light_block_redefines_the_surface_variables(self):
+        import re
+        light = re.search(r':root\[data-theme="light"\]\{([^}]*)\}', self.css)
+        self.assertIsNotNone(light)
+        for var in ('--panel-deep', '--trend-bg', '--sidebar-bg', '--hero-tint'):
+            self.assertIn(var + ':', light.group(1),
+                          f'{var} must be redefined for light mode or its surface keeps the dark fill')
+
+    def test_the_translator_respects_the_current_language(self):
+        self.assertIn("document.documentElement.lang!=='fa'", self.i18n,
+                      'AXIA_T must return the English source when the page is English')
+
+    def test_every_string_the_console_translates_has_a_persian_entry(self):
+        import re
+
+        def keys_near(src, marker):
+            i = src.index(marker)
+            j = src.index('{', i)
+            depth = 0
+            for k in range(j, len(src)):
+                if src[k] == '{':
+                    depth += 1
+                elif src[k] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return set(re.findall(r"[‘'\"]([^‘'\"\\]{2,90})[’'\"]\s*:", src[j:k + 1]))
+            return set()
+
+        known = keys_near(self.i18n, 'const fa={') | keys_near(self.i18n, 'Object.assign(fa,{')
+        requested = set(re.findall(r"T\('((?:[^'\\]|\\.)*)'\)", self.admin))
+        missing = sorted(requested - known)
+        self.assertEqual(missing, [],
+                         'these stay English in a Persian console')
+
+    def test_the_console_never_prints_a_plural_placeholder(self):
+        # '(s)' is a note to the developer, not a word. It used to reach the
+        # screen: 'project request(s) need a first review.'
+        import re
+        for m in re.finditer(r"T\('([^']*)'\)", self.admin):
+            self.assertNotIn('(s)', m.group(1),
+                             f'{m.group(1)!r} would print a plural placeholder')
