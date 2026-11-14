@@ -84,8 +84,26 @@ def app_script_re(base: str) -> re.Pattern:
         r'(\s*)<script src="(?:' + re.escape(base) + r'|/)?app\.js[^"]*" defer></script>')
 
 
-def read_catalog(db_path: Path, base: str = '/') -> list[dict]:
-    """Return published products, falling back to the bundled seed data."""
+def read_catalog(db_path: Path, base: str = '/', demo_catalog: bool = True) -> list[dict]:
+    """Return the products this build should ship.
+
+    This script builds the *serverless* site — the one on GitHub Pages, with no
+    Python behind it. That site is the demo: a visitor who cannot start the
+    server still needs something to look at, so a build with an empty database
+    ships tools/demo_catalog.py.
+
+    The server itself is the opposite: its catalog is SQLite and it starts empty,
+    with products created in the console. It never reads this output, so the two
+    cannot drift into each other.
+
+    Rows from a real database always win; the demo list only fills the gap.
+    ``demo_catalog=False`` keeps that gap empty for anyone who wants a build with
+    nothing in it.
+
+    The old fallback was implicit - an unreadable database silently reloaded the
+    committed data/products.json, so the catalog could repopulate itself from a
+    stale build and it was never clear which file was the source of truth.
+    """
     rows: list[dict] = []
     if db_path.is_file():
         try:
@@ -102,23 +120,23 @@ def read_catalog(db_path: Path, base: str = '/') -> list[dict]:
                 conn.close()
         except sqlite3.Error as exc:
             print(f'  database not readable ({exc}); using the committed catalog', file=sys.stderr)
-    if not rows:
-        # The database is gitignored, so a clean checkout has no catalog. The
-        # published build at the repo root is committed, and its snapshot is
-        # what the live site currently serves - reuse it rather than shipping an
-        # empty catalog. Undo the base prefix the previous build added, so the
-        # next build re-applies it once instead of stacking it.
-        published = ROOT / 'data' / 'products.json'
-        if published.is_file():
-            try:
-                rows = json.loads(published.read_text(encoding='utf-8')) or []
-            except Exception:
-                rows = []
-            prefix = base.rstrip('/')
-            for row in rows:
-                cover = row.get('cover')
-                if isinstance(cover, str) and prefix and cover.startswith(prefix + '/'):
-                    row['cover'] = cover[len(prefix):]
+    if not rows and demo_catalog:
+        # No database on a Pages build, so the demo catalog is the whole source.
+        # Covers are stored bare ('brand/arya-logo.png') and get the base prefix
+        # below, exactly once, the same way an uploaded cover does.
+        sys.path.insert(0, str(ROOT / 'tools'))
+        try:
+            from demo_catalog import DEMO_CATALOG
+        except Exception as exc:
+            print(f'  demo catalog unreadable ({exc}); shipping an empty catalog',
+                  file=sys.stderr)
+            DEMO_CATALOG = []
+        for index, row in enumerate(DEMO_CATALOG, start=1):
+            item = dict(row)
+            item.setdefault('id', index)
+            item.setdefault('github_url', '')
+            item.setdefault('created_at', '')
+            rows.append(item)
     if not rows:
         try:
             sys.path.insert(0, str(ROOT / 'server'))
@@ -619,6 +637,8 @@ def main() -> int:
     print(f'  base   : {base}')
     print(f'  output : {out}')
 
+    # Everything this script produces is the no-server site, so the demo catalog
+    # applies by default; a database with rows still takes precedence.
     products = read_catalog(Path(args.db), base)
     print(f'  catalog: {len(products)} published product(s)')
 
@@ -783,18 +803,27 @@ def main() -> int:
     admin_path = out / 'admin' / 'index.html'
     if admin_path.is_file():
         admin_html = admin_path.read_text(encoding='utf-8')
-        demo_tag = f'<script src="{base}demo-backend.js?v=static-3" defer></script>'
+        demo_tag = f'<script src="{base}demo-backend.js?v=static-4" defer></script>'
         if 'demo-backend.js' not in admin_html:
             admin_html = admin_html.replace(
                 f'<script src="{base}admin/admin.js',
                 demo_tag + '\n  <script src="' + base + 'admin/admin.js')
         # The settings screen reads its starting values before the API answers,
-        # so the snapshot has to be present on this page too.
+        # so the snapshot has to be present on this page too. The product
+        # snapshot belongs here for the same reason: demo-backend.js seeds the
+        # console's catalog from it, and without it the demo console opened on
+        # an empty catalog even though the storefront shipped four products.
+        # Both tags go before effects.js, which nothing depends on.
         settings_tag = f'<script src="{base}data/settings.js?v=static-1"></script>'
         if 'data/settings.js' not in admin_html:
             admin_html = admin_html.replace(
                 f'<script src="{base}effects.js',
                 settings_tag + '\n  <script src="' + base + 'effects.js')
+        products_tag = f'<script src="{base}data/products.js?v=static-1"></script>'
+        if 'data/products.js' not in admin_html:
+            admin_html = admin_html.replace(
+                settings_tag,
+                products_tag + '\n  ' + settings_tag)
         admin_path.write_text(admin_html, encoding='utf-8')
 
     # ---- SEO files --------------------------------------------------------- #

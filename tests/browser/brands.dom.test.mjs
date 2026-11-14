@@ -8,15 +8,15 @@ const DIST = process.env.STATIC_DIST || '/tmp/site2/AxiaPlatform/';
 const read = (p) => readFileSync(DIST + p, 'utf8');
 const settings = JSON.parse(read('data/settings.json'));
 
-/* The published catalog is intentionally empty: products are created in the
-   console, not shipped. The four website builds that this suite exercises are
-   demo content now, so they are read out of the demo backend's own seed list —
-   the same rows a `Load sample catalog` click installs. */
+/* The four website builds this suite exercises ship with the demo build, in the
+   generated catalog snapshot — the same file the console seeds from and the
+   storefront renders. Reading it here keeps the fixture on the real shipped
+   data instead of on a hand-kept copy. */
 const products = (() => {
-  const src = read('demo-backend.js');
-  const start = src.indexOf('var DEMO_SITE_PRODUCTS = ');
-  if (start < 0) throw new Error('DEMO_SITE_PRODUCTS is missing from demo-backend.js');
-  const from = src.indexOf('[', start);
+  const src = read('data/products.js');
+  const at = src.indexOf('window.AXIA_STATIC.products = ');
+  if (at < 0) throw new Error('data/products.js has no products snapshot');
+  const from = src.indexOf('[', at);
   let depth = 0, end = -1;
   for (let i = from; i < src.length; i++) {
     if (src[i] === '[') depth++;
@@ -26,8 +26,8 @@ const products = (() => {
   // Match the shape the storefront receives from /api/products.
   return rows.map((row, i) => ({
     ...row,
-    id: i + 1,
-    created_at: '2026-01-01 00:00:00',
+    id: row.id ?? i + 1,
+    created_at: row.created_at || '2026-01-01 00:00:00',
   }));
 })();
 if (products.length !== 4) throw new Error('expected the four website builds, found ' + products.length);
