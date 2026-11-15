@@ -892,6 +892,108 @@ class MarqueeBehaviourTests(unittest.TestCase):
         self.assertIn('.trust-strip{pointer-events:none}', css)
 
 
+
+
+class PageFrameTests(unittest.TestCase):
+    """The footer rests on the bottom edge, and the About page has one column.
+
+    A short route used to leave the footer floating mid-screen with dead space
+    beneath it. The fix is a body column with main taking the slack — which only
+    works if there is exactly one body rule, because two would fight by source
+    order.
+    """
+
+    def setUp(self):
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+
+    def test_the_body_is_a_column(self):
+        body = re.search(r'body\{([^}]*)\}', self.css)
+        self.assertIsNotNone(body)
+        rules = body.group(1)
+        self.assertIn('display:flex', rules)
+        self.assertIn('flex-direction:column', rules)
+        self.assertIn('min-height:100vh', rules)
+
+    def test_there_is_one_body_rule(self):
+        # Two blocks would work only by source order, and the second repeated a
+        # property the first already set.
+        self.assertEqual(len(re.findall(r'[\n;}]body\{', self.css)), 1)
+
+    def test_main_takes_the_slack_and_the_footer_does_not_grow(self):
+        self.assertIn('main{position:relative;flex:1 0 auto}', self.css)
+        self.assertIn('.footer{flex:none}', self.css)
+        # A fixed footer would float over content; this one scrolls away.
+        footer = re.search(r'\.footer\{([^}]*)\}', self.css)
+        self.assertNotIn('position:fixed', footer.group(1))
+
+    def test_the_blog_shell_has_the_same_shape(self):
+        # blog.py writes its own <main>/<footer> pair and loads the same
+        # stylesheet, so the rule has to hold there too.
+        blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
+        self.assertIn('<main class="blog-main" id="main">', blog)
+        self.assertIn('<footer class="footer">', blog)
+
+    def test_the_about_page_has_no_approach_card(self):
+        start = self.app.index('function about(')
+        about = self.app[start:self.app.index('\nfunction ', start + 10)]
+        self.assertNotIn('feature-panel', about)
+        self.assertNotIn('Our approach', about)
+        # What is left still says something: the values column and its list.
+        self.assertIn('Our values', about)
+        self.assertIn('Built to be clear', about)
+        self.assertIn('feature-list', about)
+
+
+class MobileMenuTests(unittest.TestCase):
+    """The hamburger is the only navigation a phone gets.
+
+    The top bar's links are hidden below 650px, so anything missing from the
+    drawer is unreachable on a phone — not merely less convenient.
+    """
+
+    def setUp(self):
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+
+    def _menu(self):
+        start = self.app.index("nav.className='mobile-nav'")
+        return self.app[start:self.app.index("document.body.append(nav)", start)]
+
+    def test_the_drawer_lists_every_destination(self):
+        menu = self._menu()
+        for label, target in (('Products', '#/products'), ('Services', '#/services'),
+                              ('AURION', '#/aurion'), ('About', '#/about'),
+                              ('Start a project', '#/contact')):
+            self.assertIn(f'href="{target}">{label}</a>', menu, f'{label} is missing')
+
+    def test_the_drawer_reaches_the_blog(self):
+        # The blog is a real directory, not a hash route, so it is the one entry
+        # whose target the build may rewrite with the deploy base.
+        self.assertRegex(self._menu(), r'<a href="[^"]*/blog/"[^>]*>Blog</a>')
+
+    def test_the_blog_entry_sits_where_the_top_bar_puts_it(self):
+        # The top bar has always read Products · Services · Blog · AURION ·
+        # About. The drawer had it after AURION, which is the kind of small
+        # difference that makes a phone feel like a different site.
+        menu = self._menu()
+        self.assertRegex(menu, r'Services</a><a href="[^"]*/blog/">Blog</a><a href="#/aurion">AURION</a>')
+
+    def test_the_drawer_and_the_top_bar_agree_on_the_order(self):
+        # Two hand-maintained lists that drift are how the blog went missing in
+        # the first place. The top bar lives in index.html, the drawer in app.js,
+        # so the check has to read both.
+        index = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
+        nav = re.search(r'<nav class="nav-links"[^>]*>(.*?)</nav>', index, re.S)
+        self.assertIsNotNone(nav, 'no top-bar nav to compare against')
+        top = re.findall(r'>([^<>]+)</a>', nav.group(1))
+        drawer = [d for d in re.findall(r'>([^<>]+)</a>', self._menu()) if d in top]
+        self.assertEqual(drawer, top,
+                         'the drawer and the top bar list the site differently')
+        # And every one of them is actually reachable from the drawer.
+        self.assertEqual(len(drawer), len(top))
+
+
 class BrandCatalogTests(unittest.TestCase):
     """The site brands are data, not source.
 
