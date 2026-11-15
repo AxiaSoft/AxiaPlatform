@@ -123,7 +123,7 @@ class PurgeTest(unittest.TestCase):
         from pathlib import Path
         d = Path(tempfile.mkdtemp())
         self.assertFalse(uploads.purge('/uploads/covers/../../secret.png', upload_dir=d))
-        self.assertFalse(uploads.purge('/brand/axiasoft-original.png', upload_dir=d))
+        self.assertFalse(uploads.purge('/brand/axiasoft-original.webp', upload_dir=d))
 
     def test_a_missing_file_is_not_an_error(self):
         import tempfile

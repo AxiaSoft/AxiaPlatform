@@ -158,3 +158,58 @@ html[lang="fa"] .blog-prose { text-align: justify; text-justify: inter-word; }
   transition: top 140ms ease;
 }
 .skip-link:focus { top: 0; outline: 2px solid #5b8cff; outline-offset: 2px; }
+
+/* ---- shared shell parity ------------------------------------------------
+   The article pages reuse styles.css for the shell, but were written before
+   the storefront grew a theme switch and a mobile drawer, so their header
+   had neither. These rules give the blog the same two controls with the same
+   look, and keep the drawer's stacking above the sticky topbar. */
+.blog-body .mobile-nav {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  flex-direction: column;
+  padding: 88px 9vw 30px;
+  background: var(--bg);
+  gap: 0;
+}
+.blog-body .mobile-nav[hidden] { display: none; }
+.blog-body .mobile-nav a {
+  font-size: 21px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+.blog-body .mobile-nav .close-mobile {
+  position: absolute;
+  top: 18px;
+  inset-inline-end: 6vw;
+  font-size: 20px;
+  cursor: pointer;
+}
+/* The storefront hides the desktop nav below 650px and shows the menu button.
+   Same breakpoint here, or the two headers disagree across a resize. */
+@media (max-width: 650px) {
+  .blog-body .nav-links { display: none; }
+  .blog-body .nav-cta { display: none; }
+  .blog-body .mobile-menu { display: grid; }
+  .blog-body .topbar { height: 66px; padding: 0 5vw; }
+}
+@media (min-width: 651px) {
+  .blog-body .mobile-menu,
+  .blog-body .mobile-nav { display: none !important; }
+}
+
+/* The reading column already had a comfortable measure; the mismatch was
+   vertical rhythm and the surface treatment, not the width. Cards and the
+   hero now use the storefront's radii and shadows through the shared tokens. */
+.blog-card { border-radius: var(--radius); box-shadow: var(--shadow); }
+.blog-tag {
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--surface3);
+  padding: 4px 10px;
+  font-size: 10px;
+  color: var(--muted);
+}
