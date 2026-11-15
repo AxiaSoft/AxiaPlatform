@@ -11,38 +11,61 @@ With no configuration at all, Xiona answers from `server/agent.py`'s
 refunds, AURION, services, contact, accounts, privacy and the blog. Retrieval is
 keyword overlap with the visitor's question, in English or Persian.
 
-That mode is honest and instant, but the wording is fixed: it assembles the
-approved sentences and does not paraphrase.
+That mode is honest and instant, but it is retrieval, not intelligence: the
+wording is fixed, it assembles the approved sentences rather than paraphrasing
+them, and a question the site has not written down gets an "I do not have an
+approved answer" reply. **To get a real assistant, configure a model — see
+below.** Without one, Xiona is a search box that speaks in sentences, and it
+will feel like one.
 
 ## Adding a real model
 
 Any OpenAI-compatible endpoint works. Set three environment variables and the
-agent starts phrasing its answers with that model, still grounded in the same
-facts:
+agent starts answering with that model:
 
 ```bash
 export AXIA_AGENT_KEY=your-key
-export AXIA_AGENT_URL=https://api.groq.com/openai/v1   # provider base URL
-export AXIA_AGENT_MODEL=llama-3.3-70b-versatile        # provider model name
+export AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
+export AXIA_AGENT_MODEL=gemini-2.0-flash
 ```
 
+The model is what makes Xiona an assistant rather than a search box:
+
+- It answers questions the site never wrote down, and it may reason, compare and
+  recommend. Facts about AXIASOFT still come from the site's published text,
+  which is handed to it as context; it is told never to invent a price, a
+  delivery date or an account detail.
+- It replies in the visitor's language. The language is detected on the server
+  from the same pass that scores the retrieval, and passed to the model
+  explicitly rather than left to be guessed.
+
 If the provider is slow, misconfigured or returns an error, the agent falls back
-to the local answer automatically — a visitor never sees a stack trace, and the
-console reports which mode is active.
+to the retrieved answer automatically — a visitor never sees a stack trace, and
+the console reports which mode is active (`/api/agent` returns
+`provider: "model"` when a model answered).
 
 ## Where to get a free key
 
 | Provider | Free allowance | Base URL | Example model |
 |---|---|---|---|
 | **Groq** | Generous free tier, very fast | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
-| **Google AI Studio** | Free tier for Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
+| **Google AI Studio** ⭐ | Free tier for Gemini, best Persian | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
 | **OpenRouter** | Free models (`:free` suffix) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3.3-70b-instruct:free` |
 | **Mistral** | Free "experiment" tier | `https://api.mistral.ai/v1` | `mistral-small-latest` |
 | **Cerebras** | Free tier, very fast | `https://api.cerebras.ai/v1` | `llama3.3-70b` |
 | **Ollama** (local) | Unlimited, runs on your machine | `http://localhost:11434/v1` | `llama3.2` |
 
-Groq is the easiest starting point: sign in at <https://console.groq.com>, create
-an API key, and paste it as `AXIA_AGENT_KEY`.
+**Google AI Studio is the recommended starting point**, especially for a Persian
+site: sign in at <https://aistudio.google.com/apikey>, create a key, and use the
+three variables above. Its free tier is enough for a brochure site, and its
+Persian is noticeably better than the free Groq models.
+
+Groq is a good alternative if you want speed: sign in at
+<https://console.groq.com>, create an API key, and set
+`AXIA_AGENT_URL=https://api.groq.com/openai/v1` with a Llama model.
+
+The key is read from the environment on the server. It is never sent to the
+browser, never written into a built file, and never returned by `/api/agent`.
 
 For a fully offline setup, install [Ollama](https://ollama.com), run
 `ollama pull llama3.2`, and set `AXIA_AGENT_URL=http://localhost:11434/v1` with
@@ -52,8 +75,9 @@ any non-empty `AXIA_AGENT_KEY` (Ollama ignores the value).
 
 - It has no database access. Orders, refunds and tickets are session-scoped and
   the agent cannot read or change them.
-- It does not invent prices, delivery dates or customer details. Asked something
-  outside the facts, it says so and offers a human.
+- It does not invent prices, delivery dates or customer details. With no model
+  configured it says so plainly; with one configured, the model is told the same
+  rule and the site text it is given is the only source for studio facts.
 - It does not call the provider with account data — only the visitor's question
   and the recent turns of that conversation, capped at eight.
 

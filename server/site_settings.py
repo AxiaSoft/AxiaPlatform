@@ -29,6 +29,7 @@ GROUPS = {
     # a settings form knows the key exists and is not silently droppable.
     'brands': ['brands'],
     'categories': ['categories'],
+    'faq': ['faq'],
 }
 
 SPEC = {
@@ -67,6 +68,13 @@ SPEC = {
     # An empty list is a valid answer - it means the catalog is not split into
     # categories at all, and the storefront hides the tab row.
     'categories': {'type': 'categories'},
+
+    # The AURION questions, owned by the console. They were a literal array in
+    # public/app.js, which meant every edit to a sentence about pricing was a
+    # deploy. The console writes them; both the AURION page and its plan
+    # landing read them. An empty list means "no questions", which the pages
+    # render by omitting the section entirely.
+    'faq': {'type': 'faq'},
 }
 
 # A brand is a small record, not free text, so it is checked field by field.
@@ -75,6 +83,13 @@ BRAND_FIELDS = ('id', 'name', 'nameFa', 'tagline', 'taglineFa',
 BRAND_MAX = 12
 CATEGORY_FIELDS = ('id', 'name', 'nameFa')
 CATEGORY_MAX = 24
+# A question has a short heading and a paragraph of answer, in both languages.
+# The limits are generous enough for a real answer and small enough that pasting
+# an entire policy document into one field is refused outright.
+FAQ_FIELDS = ('q', 'qFa', 'a', 'aFa')
+FAQ_MAX = 20
+FAQ_QUESTION_MAX = 160
+FAQ_ANSWER_MAX = 900
 # Category ids appear in a URL query (?category=sites) and in the data attribute
 # the tab button carries, so they stay in the same alphabet as product slugs.
 ID_RE = re.compile(r'^[a-z0-9-]{2,40}$')
@@ -125,6 +140,26 @@ DEFAULTS = {
     # shipping them meant the site carried somebody's drawings whether or not
     # they were wanted. An operator uploads their own marks in the console; the
     # storefront draws a monogram from the brand's initial until one exists.
+    # The three questions the AURION page shipped with, now editable. They are
+    # the default so a fresh install renders the site as it looked before the
+    # console owned them, and an operator starts from real copy rather than a
+    # blank editor. Emptying the list in the console removes the section, which
+    # is a real choice and is stored as such.
+    'faq': [
+        {'q': 'Does AURION place trades?',
+         'qFa': 'آیا اوریون معامله انجام می‌دهد؟',
+         'a': 'No. This showcase does not connect to a broker or execute trades.',
+         'aFa': 'نه. این نمایش به کارگزاری متصل نمی‌شود و معامله‌ای اجرا نمی‌کند.'},
+        {'q': 'Can I purchase or activate a license?',
+         'qFa': 'می‌توانم مجوز بخرم یا فعال کنم؟',
+         'a': 'Not in this development phase. The packages are visual examples only.',
+         'aFa': 'در این مرحلهٔ توسعه نه. بسته‌ها فقط نمونهٔ نمایشی هستند.'},
+        {'q': 'Does it work with MetaTrader?',
+         'qFa': 'با متاتریدر کار می‌کند؟',
+         'a': 'AURION is a concept for a MetaTrader environment. No live integration is available.',
+         'aFa': 'اوریون مفهومی برای محیط متاتریدر است. هیچ یکپارچه‌سازی زنده‌ای در دسترس نیست.'},
+    ],
+
     'brands': [
         {'id': 'arya', 'name': 'Arya', 'nameFa': 'آریا',
          'tagline': 'Software with wings.', 'taglineFa': 'نرم‌افزاری با بال‌های پرواز.',
@@ -218,6 +253,45 @@ def clean_brand_list(value):
     return True, out
 
 
+def clean_faq(raw, seen):
+    """Validate one question/answer pair. Returns ``(entry, error)``.
+
+    An entry needs an English question and answer. The Persian pair is
+    optional: when it is empty the storefront shows the English text in both
+    languages rather than a blank card, which is what an operator who only
+    wrote one language would expect.
+    """
+    if not isinstance(raw, dict):
+        return None, 'Each question must be an object.'
+    item = {field: str(raw.get(field) or '').strip() for field in FAQ_FIELDS}
+    if not item['q'] or len(item['q']) > FAQ_QUESTION_MAX:
+        return None, f'A question is required (max {FAQ_QUESTION_MAX} characters).'
+    if item['q'] in seen:
+        return None, 'Questions must be unique.'
+    if not item['a'] or len(item['a']) > FAQ_ANSWER_MAX:
+        return None, f'An answer is required (max {FAQ_ANSWER_MAX} characters).'
+    for field in ('qFa', 'aFa'):
+        limit = FAQ_QUESTION_MAX if field == 'qFa' else FAQ_ANSWER_MAX
+        if len(item[field]) > limit:
+            return None, 'A Persian field is longer than its limit.'
+    return item, None
+
+
+def clean_faq_list(value):
+    if not isinstance(value, list):
+        return False, None
+    if len(value) > FAQ_MAX:
+        return False, None
+    out, seen = [], set()
+    for raw in value:
+        item, error = clean_faq(raw, seen)
+        if error:
+            return False, None
+        seen.add(item['q'])
+        out.append(item)
+    return True, out
+
+
 def clean_category(raw, seen_ids):
     """Validate one catalog category. Returns ``(category, error)``.
 
@@ -270,6 +344,8 @@ def clean_value(name, value):
         return clean_brand_list(value)
     if kind == 'categories':
         return clean_category_list(value)
+    if kind == 'faq':
+        return clean_faq_list(value)
     if kind == 'bool':
         parsed = _as_bool(value)
         return (parsed is not None), parsed

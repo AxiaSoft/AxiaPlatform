@@ -420,6 +420,27 @@ class Engine:
             out.append(doc['title'])
         return out
 
+    def summary(self, limit=12):
+        """A short digest of the whole site, for a model with no retrieval hits.
+
+        When a question matches nothing, the useful thing to hand the model is
+        not silence but the shape of the site: what it sells, what it does not,
+        and where the policies live. Each entry is one line, drawn from the
+        same documents the index holds, so nothing here can say something the
+        site does not publish.
+        """
+        lines, seen = [], set()
+        for doc in self.docs:
+            topic = doc['topic']
+            if not doc['title'] or topic in seen or topic == 'article':
+                continue
+            seen.add(topic)
+            first = (doc.get('text') or '').strip().split('\n')[0][:220]
+            lines.append(f"- {doc['title']} ({doc['route']}): {first}")
+            if len(lines) >= limit:
+                break
+        return '\n'.join(lines)
+
     def carries_question(self, terms, absent):
         """Does a word the site knows actually answer this question?"""
         for term in terms:

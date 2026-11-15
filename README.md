@@ -68,11 +68,10 @@ Open `http://localhost:8000`. The app creates `data/axiasoft.sqlite3` and seeds 
 To create the administrator account, open a second terminal and run:
 
 ```bash
-cd server
-python3 provision_admin.py
+python3 server/provision_admin.py
 ```
 
-The script prompts for a name, email and password (the password is not echoed). It writes a password hash to the local database, never a default password. Keep credentials and the SQLite database out of Git.
+Run it from the repository root, or `cd server` and run `python3 provision_admin.py`; both work, and so does `python3 -m server.provision_admin`. The script prompts for a name, email and password (the password is not echoed). It writes a password hash to the local database, never a default password. Keep credentials and the SQLite database out of Git.
 
 Optional settings: `PORT` (default `8000`) and `AXIA_DB` (database file path). For a containerized local run, use `docker compose up --build`, then open the same URL. Provision an admin inside the container with `docker compose exec axiasoft python server/provision_admin.py`. Docker persists SQLite data in a named volume.
 
@@ -288,17 +287,53 @@ git push -u origin main
 
 Replace the remote URL with your own repository URL. A `.gitignore` now excludes databases, `__pycache__`, `.env` files and backups, so runtime data stays out of the repository. To make the site reachable to other people, deploy the container/app to a Python-capable server; pushing source to GitHub does not itself publish a running website.
 
+## Xiona: giving the assistant a real model
+
+Xiona answers from what the site publishes. On its own that is retrieval, not
+intelligence: it assembles approved sentences, replies in a fixed voice, and
+says "I do not have an approved answer" to anything the site has not written
+down. To make it a real assistant, give it a model. Any OpenAI-compatible
+provider works; **Google AI Studio is the recommended one** because its free
+tier is adequate for a brochure site and its Persian is good.
+
+1. Create a key at <https://aistudio.google.com/apikey>.
+2. Copy `.env.example` to `.env` and paste the key:
+
+```
+AXIA_AGENT_KEY=your-key-here
+AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
+AXIA_AGENT_MODEL=gemini-2.0-flash
+```
+
+3. Restart `./run_local.sh`. The console's Maintenance tab shows
+   *"A live model is answering — gemini-2.0-flash"* when it is active.
+
+`.env` is git-ignored, and a variable already exported in the shell wins over
+the file, so a one-off `AXIA_AGENT_KEY=... ./run_local.sh` still works. The key
+stays on the server: it is never sent to the browser, never written into the
+static build, and never returned by `/api/agent`.
+
+With a model configured Xiona will answer questions the site never wrote down,
+compare products, recommend one, and reply in the language the visitor used.
+Without one it falls back to retrieval, which is what the GitHub Pages build
+does because there is no server there.
+
+See [`docs/agent.md`](docs/agent.md) for the provider table, the local-Ollama
+option and what the agent is not allowed to do.
+
 ## Separate administrator console
 
 A dedicated, responsive control panel is available at `/admin/` (for example, `http://localhost:8000/admin/`). It uses the same server-managed administrator session as the public site and includes an operations dashboard, project request workflow and status history, catalog management, customer directory/access controls, support inbox and replies, refund-decision records, audit activity, search/filtering, and CSV exports. It also supports the persisted English/Persian locale and RTL mode.
 
 Administrator-only APIs enforce the role on the server; changes require the session CSRF token. Customer account suspension revokes active sessions. Refund decisions are records only—this console does not process payments. Product uploads, payment handling, and production-grade user/role administration are not implemented.
 
-No default administrator or password is created. To provision one locally, from this project's `server` directory run:
+No default administrator or password is created. To provision one locally, run this from the repository root:
 
 ```bash
-python3 provision_admin.py
+python3 server/provision_admin.py
 ```
+
+(`cd server && python3 provision_admin.py` also works. `python3 -m server.provision_admin` used to fail with `No module named 'app'`; it works now.)
 
 The script prompts for credentials without echoing the password. Existing customer accounts require an explicit `PROMOTE` confirmation; their existing sessions are then revoked. Never add real credentials to source control or chat.
 

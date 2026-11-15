@@ -1049,7 +1049,7 @@ class BrandCatalogTests(unittest.TestCase):
     def test_a_product_without_a_cover_falls_back_to_a_logo(self):
         # The administrator's rule: no cover must never mean an empty plate.
         self.assertIn('is-emblem', self.app_js)
-        self.assertIn('axiasoft-original.png', self.app_js)
+        self.assertIn('axiasoft-original.webp', self.app_js)
         styles = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
         self.assertIn('.product-cover.is-emblem', styles)
         self.assertIn('.product-cover.is-default', styles)
@@ -1402,3 +1402,546 @@ class CatalogShipsEmptyTests(unittest.TestCase):
         self.assertIn("'axia-demo-products-v1'", self.demo)
         self.assertIn("'axia-demo-products-v1'", self.adapter)
         self.assertIn('demoProducts()', self.adapter)
+
+
+class WebpLogoOnlyTests(unittest.TestCase):
+    """Every shipped studio logo is a WebP, and nothing points at a PNG.
+
+    The three originals were 157 KB, 15 KB and 10 KB as PNG and 28 KB, 5.7 KB
+    and 5.4 KB as WebP — the AURION mark alone was 5.6x smaller. Both files were
+    in the tree, so a page that asked for the PNG got the heavy one even though
+    the light one was sitting next to it. The PNGs are gone now, which means a
+    stale reference anywhere is a 404 rather than a silent slow page, so every
+    place that names a logo is checked here.
+    """
+
+    BRAND = ROOT / 'public' / 'brand'
+
+    def test_no_png_logos_remain_in_the_tree(self):
+        self.assertEqual(sorted(p.name for p in self.BRAND.glob('*.png')), [])
+
+    def test_the_webp_files_are_present(self):
+        for name in ('axiasoft-original.webp', 'axiasoft-wordmark.webp',
+                     'aurion-original.webp'):
+            self.assertTrue((self.BRAND / name).is_file(), f'{name} is missing')
+
+    def test_each_webp_is_actually_a_webp(self):
+        # A file renamed to .webp is the failure mode a browser reports as a
+        # broken image, not as a wrong format, so the magic bytes are checked.
+        for path in sorted(self.BRAND.glob('*.webp')):
+            with open(path, 'rb') as handle:
+                head = handle.read(12)
+            self.assertEqual(head[:4], b'RIFF', f'{path.name} is not a RIFF file')
+            self.assertEqual(head[8:12], b'WEBP', f'{path.name} is not a WebP')
+
+    def test_no_source_file_references_a_logo_png(self):
+        offenders = []
+        for path in list(ROOT.glob('public/**/*.js')) + list(ROOT.glob('public/**/*.html')) \
+                + list(ROOT.glob('server/**/*.py')):
+            text = path.read_text(encoding='utf-8', errors='ignore')
+            for name in ('axiasoft-original.png', 'axiasoft-wordmark.png',
+                         'aurion-original.png'):
+                if name in text:
+                    offenders.append(f'{path.relative_to(ROOT)}: {name}')
+        self.assertEqual(offenders, [], 'these still load the heavy PNG logo')
+
+    def test_the_storefront_does_not_need_a_picture_fallback(self):
+        # <picture><source ...webp><img ...png> was the old pattern. With the
+        # PNGs deleted the fallback would 404 on any browser that ignored the
+        # source, so the markup names the WebP directly now.
+        index = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
+        # The <link rel=preload type="image/webp"> is legitimate and stays; it
+        # is the <picture><source> wrapper that has no purpose without a PNG.
+        self.assertNotIn('<source', index,
+                         'a <source> fallback is back; there is no PNG to fall back to')
+        self.assertNotIn('</picture>', index)
+
+
+class ContactFormTests(unittest.TestCase):
+    """The contact page asks three questions and can actually be sent.
+
+    The old copy said "choose a development starting point and share context",
+    which named no control and handed the visitor an empty page: there was
+    nothing to type into. A form that a visitor cannot see is not a contact
+    page, and a form with no endpoint is a decoration, so both are asserted.
+    """
+
+    def setUp(self):
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.styles = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        self.app_py = (ROOT / 'server' / 'app.py').read_text(encoding='utf-8')
+
+    def test_the_contact_page_renders_a_form(self):
+        start = self.app_js.index('function contact(')
+        end = self.app_js.index('\nfunction ', start + 10)
+        body = self.app_js[start:end]
+        self.assertIn('id="contact-form"', body)
+        for field in ('name="name"', 'name="email"', 'name="message"'):
+            self.assertIn(field, body)
+
+    def test_each_field_explains_what_to_write(self):
+        start = self.app_js.index('function contact(')
+        end = self.app_js.index('\nfunction ', start + 10)
+        body = self.app_js[start:end]
+        self.assertEqual(body.count('class="field-help"'), 3,
+                         'every field needs a hint, or the page asks without saying what for')
+
+    def test_the_send_button_is_wired_to_the_endpoint(self):
+        self.assertIn("api('/api/contact'", self.app_js)
+        self.assertIn("if p == '/api/contact':", self.app_py)
+
+    def test_the_endpoint_needs_no_account_and_files_a_ticket(self):
+        start = self.app_py.index("if p == '/api/contact':")
+        end = self.app_py.index("if p == '/api/login':", start)
+        block = self.app_py[start:end]
+        self.assertIn("INSERT INTO tickets", block)
+        # user_id stays NULL: a visitor who has not registered still writes in.
+        self.assertNotIn('self.require_user', block)
+
+    def test_the_server_refuses_a_too_short_message(self):
+        start = self.app_py.index("if p == '/api/contact':")
+        end = self.app_py.index("if p == '/api/login':", start)
+        block = self.app_py[start:end]
+        self.assertIn('len(message) < 20', block)
+
+    def test_the_old_vague_copy_is_gone(self):
+        self.assertNotIn('Choose a development starting point and share context', self.app_js)
+
+    def test_the_form_has_styling(self):
+        for rule in ('.contact-grid', '.contact-form', '.contact-steps',
+                     '.field-help', '.contact-products'):
+            self.assertIn(rule, self.styles, f'{rule} is not styled')
+
+
+class TextColourTests(unittest.TestCase):
+    """Body text is black on light and white on dark, no third hue.
+
+    --muted and --faint were blue-grey (#57677e / #8290a4), and on the near-white
+    surfaces of the light theme they read as taupe. They are now alpha weights
+    of the text colour, so secondary copy is still quieter than body copy but
+    no longer a different colour family.
+    """
+
+    def setUp(self):
+        self.styles = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        self.admin = (ROOT / 'public' / 'admin' / 'admin.css').read_text(encoding='utf-8')
+
+    def test_dark_theme_text_is_white(self):
+        self.assertIn('--text:#ffffff', self.styles)
+        self.assertIn('--text:#ffffff', self.admin)
+
+    def test_light_theme_text_is_black(self):
+        self.assertIn('--text:#000000', self.styles)
+        self.assertIn('--text:#000000', self.admin)
+
+    def test_secondary_text_is_a_weight_of_the_text_colour(self):
+        self.assertIn('--muted:rgba(255,255,255,.74)', self.styles)
+        self.assertIn('--faint:rgba(255,255,255,.56)', self.styles)
+        self.assertIn('--muted:rgba(0,0,0,.74)', self.styles)
+        self.assertIn('--faint:rgba(0,0,0,.56)', self.styles)
+
+    def test_no_blue_grey_body_tokens_are_left(self):
+        for stale in ('#57677e', '#9aa9bf', '#6c7b92', '#8290a4'):
+            self.assertNotIn(stale, self.styles, f'{stale} is the taupe this replaced')
+            self.assertNotIn(stale, self.admin)
+
+
+class BlogShellParityTests(unittest.TestCase):
+    """The article pages are part of the site, not a microsite.
+
+    They were built as a separate shell: always dark regardless of the visitor's
+    choice, no theme switch, no mobile menu, and their own type sizes. A reader
+    who crossed from the storefront into an article found a different site. The
+    shell is now the storefront's, from styles.css.
+    """
+
+    def setUp(self):
+        self.blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
+
+    def test_the_blog_does_not_pin_its_theme_in_markup(self):
+        # data-theme="dark" on <html> overrode the visitor's saved choice before
+        # any script could read it.
+        self.assertNotIn('<html lang="{lang}" dir="{direction}" data-theme="dark">', self.blog)
+
+    def test_the_blog_reads_the_saved_theme_before_paint(self):
+        self.assertIn("localStorage.getItem('axia-theme')", self.blog)
+        self.assertIn('prefers-color-scheme: light', self.blog)
+
+    def test_the_blog_has_a_theme_switch(self):
+        self.assertIn('id="theme-toggle"', self.blog)
+
+    def test_the_blog_has_the_same_mobile_drawer_links(self):
+        self.assertIn('id="blog-mobile-nav"', self.blog)
+        for route in ('#/products', '#/services', '#/aurion', '#/about', '#/contact'):
+            self.assertIn(f'href="{{root}}/{route}"', self.blog)
+
+    def test_the_drawer_is_hidden_initially_and_toggles(self):
+        self.assertIn('id="blog-mobile-nav" hidden', self.blog)
+        self.assertIn('drawer.hidden = !on', self.blog)
+
+    def test_the_blog_loads_the_shared_stylesheet(self):
+        self.assertIn('styles.css?v=site-', self.blog)
+
+
+class AurionPlanLandingTests(unittest.TestCase):
+    """The AURION button opens a plan page, and the plans live in one place.
+
+    The button said "Explore packages" and scrolled to a strip on the same page;
+    there was no landing to open and the four durations were a literal array
+    inline in the template. The array is now AURION_PLANS, rendered by
+    aurionPlanGrid() into both the product page and /aurion/plans, so the two
+    cannot drift.
+    """
+
+    def setUp(self):
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.styles = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+
+    def test_the_button_opens_the_plan_page(self):
+        start = self.app_js.index('function aurion(')
+        end = self.app_js.index('\nfunction ', start + 10)
+        body = self.app_js[start:end]
+        self.assertIn('href="#/aurion/plans"', body)
+        self.assertIn('View the AURION plans', body)
+        self.assertNotIn('Explore packages', body)
+
+    def test_the_plan_route_exists(self):
+        self.assertIn("path==='/aurion/plans'", self.app_js)
+
+    def test_the_plan_route_respects_the_visibility_setting(self):
+        self.assertIn("'#/aurion/plans':'show_aurion'", self.app_js)
+
+    def test_one_renderer_feeds_both_pages(self):
+        self.assertIn('AURION_PLANS', self.app_js)
+        self.assertIn('function aurionPlanGrid()', self.app_js)
+        # Both call sites, or the pages have gone back to separate copies.
+        self.assertEqual(self.app_js.count('${aurionPlanGrid()}'), 2)
+
+    def test_all_four_durations_are_offered(self):
+        for months in ("['1','Month'", "['3','Months'", "['6','Months'", "['12','Months'"):
+            self.assertIn(months, self.app_js)
+
+    def test_the_landing_is_styled(self):
+        for rule in ('.plan-table', '.plan-faq', '.plans-more'):
+            self.assertIn(rule, self.styles)
+
+    def test_the_landing_still_says_nothing_is_for_sale(self):
+        start = self.app_js.index('function aurionPlans()')
+        end = self.app_js.index('\nfunction ', start + 10)
+        body = self.app_js[start:end]
+        self.assertIn('No live trading, broker connection', body)
+
+
+class XionaModelTests(unittest.TestCase):
+    """Xiona asks a real model, in the visitor's language.
+
+    Three separate faults made the assistant look broken. (1) The browser only
+    called /api/agent when local retrieval found *nothing*, so on a site that
+    documents itself the model was almost never reached. (2) The server skipped
+    the model when retrieval returned no-match, so the one class of question a
+    model could have answered got the canned refusal instead. (3) The prompt
+    said "reply in the language of the question" without saying which language
+    that was, so Persian questions came back in English about a third of the
+    time.
+    """
+
+    def setUp(self):
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.agent = (ROOT / 'server' / 'agent.py').read_text(encoding='utf-8')
+
+    def test_the_browser_prefers_the_server_answer(self):
+        start = self.app_js.index('async function sendChat(')
+        end = self.app_js.index('\n// Responsive mobile navigation', start)
+        body = self.app_js[start:end]
+        # The server call comes before the local fallback is chosen.
+        self.assertLess(body.index("fetch('/api/agent'"), body.index("answer.source==='knowledge'"))
+
+    def test_the_server_asks_the_model_even_without_a_retrieval_hit(self):
+        start = self.agent.index('def answer(')
+        end = self.agent.index('\ndef status(', start)
+        body = self.agent[start:end]
+        self.assertNotIn("local['source'] in ('empty', 'empty-index', 'no-match')", body)
+        self.assertIn('ask_provider(', body)
+
+    def test_the_language_is_stated_rather_than_inferred(self):
+        self.assertIn('Reply in {language}', self.agent)
+        self.assertIn('LANGUAGE_NAMES', self.agent)
+        self.assertIn("language=local.get('language')", self.agent)
+
+    def test_a_missing_retrieval_hit_still_gets_site_context(self):
+        self.assertIn('index.summary()', self.agent)
+        engine = (ROOT / 'server' / 'xiona_engine.py').read_text(encoding='utf-8')
+        self.assertIn('def summary(', engine)
+
+    def test_the_prompt_no_longer_forbids_answering(self):
+        # "Answer only from it" made every uncovered question a refusal.
+        self.assertNotIn('Answer only from it', self.agent)
+        self.assertIn('Be genuinely useful', self.agent)
+
+    def test_the_provider_is_configurable_and_documents_gemini(self):
+        self.assertIn('generativelanguage.googleapis.com', self.agent)
+        self.assertIn('gemini-', self.agent)
+
+    def test_the_key_never_reaches_the_browser(self):
+        # Naming the environment variable in a sentence for the operator is
+        # fine (the console does, to say what to set). Holding a value is not.
+        import re
+        # A Google AI Studio key starts AIza; an OpenAI key is sk-...
+        secret = re.compile(r'(AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9]{20,})')
+        for path in list(ROOT.glob('public/**/*.js')) + list(ROOT.glob('public/**/*.html')):
+            text = path.read_text(encoding='utf-8', errors='ignore')
+            self.assertIsNone(secret.search(text),
+                              f'{path.relative_to(ROOT)} appears to contain an API key')
+        # And no client file may read the key out of an environment it cannot see.
+        self.assertNotIn('process.env.AXIA_AGENT_KEY',
+                         (ROOT / 'public' / 'app.js').read_text(encoding='utf-8'))
+
+
+class FaqConsoleTests(unittest.TestCase):
+    """The AURION questions are edited in the console, not in the source.
+
+    They were three literal pairs inside the aurion() template, so changing a
+    sentence about licences meant a code change and a deploy. They are a site
+    setting now: validated on the server, edited in its own console tab, and
+    read by both the product page and the plan landing.
+    """
+
+    def setUp(self):
+        self.settings = (ROOT / 'server' / 'site_settings.py').read_text(encoding='utf-8')
+        self.admin_js = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+
+    def test_the_server_knows_the_setting(self):
+        import site_settings
+        self.assertIn('faq', site_settings.SPEC)
+        self.assertIn('faq', site_settings.GROUPS)
+        self.assertIn('faq', site_settings.DEFAULTS)
+
+    def test_the_default_is_the_three_questions_the_site_shipped_with(self):
+        # An empty default would delete the section from every existing
+        # install on the day this shipped. The three questions the page had
+        # before the console owned them are the default instead.
+        import site_settings
+        faq = site_settings.DEFAULTS['faq']
+        self.assertEqual(len(faq), 3)
+        self.assertIn('Does AURION place trades?', [x['q'] for x in faq])
+        for item in faq:
+            self.assertTrue(item['qFa'], 'the Persian question is missing')
+            self.assertTrue(item['aFa'], 'the Persian answer is missing')
+
+    def test_validation_requires_a_question_and_an_answer(self):
+        import site_settings
+        ok, _ = site_settings.clean_value('faq', [{'q': '', 'a': 'x'}])
+        self.assertFalse(ok)
+        ok, _ = site_settings.clean_value('faq', [{'q': 'A', 'a': ''}])
+        self.assertFalse(ok)
+        ok, value = site_settings.clean_value('faq', [{'q': 'A', 'a': 'B'}])
+        self.assertTrue(ok)
+        self.assertEqual(value[0]['q'], 'A')
+
+    def test_duplicate_questions_are_refused(self):
+        import site_settings
+        ok, _ = site_settings.clean_value('faq', [{'q': 'A', 'a': 'x'}, {'q': 'A', 'a': 'y'}])
+        self.assertFalse(ok)
+
+    def test_an_over_long_answer_is_refused(self):
+        import site_settings
+        ok, _ = site_settings.clean_value('faq', [{'q': 'A', 'a': 'x' * 901}])
+        self.assertFalse(ok)
+
+    def test_the_console_has_a_tab_and_an_editor(self):
+        self.assertIn("['faq','Questions']", self.admin_js)
+        self.assertIn('function faqTabHTML()', self.admin_js)
+        self.assertIn('function faqRowHTML(', self.admin_js)
+
+    def test_the_editor_has_both_languages(self):
+        for field in ('data-field="q"', 'data-field="a"', 'data-field="qFa"', 'data-field="aFa"'):
+            self.assertIn(field, self.admin_js)
+
+    def test_the_storefront_reads_the_setting(self):
+        self.assertIn('function faqList()', self.app_js)
+        self.assertIn("Array.isArray(site&&site.faq)", self.app_js)
+
+    def test_both_aurion_pages_use_the_shared_list(self):
+        self.assertEqual(self.app_js.count('${faqList()'), 2)
+
+    def test_the_hardcoded_questions_are_gone(self):
+        self.assertNotIn("'Does AURION place trades?'", self.app_js)
+
+
+class ProvisionAdminTests(unittest.TestCase):
+    """Provisioning works however the script is invoked.
+
+    `python3 -m server.provision_admin` put the repository root on sys.path, so
+    `from app import hash_password` looked for a top-level app.py, found none,
+    and died with "No module named 'app'". The directory holding the script is
+    now added explicitly, which covers every invocation.
+    """
+
+    def setUp(self):
+        self.src = (ROOT / 'server' / 'provision_admin.py').read_text(encoding='utf-8')
+
+    def test_the_script_adds_its_own_directory_to_the_path(self):
+        self.assertIn('sys.path.insert(0, _HERE)', self.src)
+        self.assertIn('os.path.dirname(os.path.abspath(__file__))', self.src)
+
+    def test_a_broken_checkout_gets_a_sentence_not_a_traceback(self):
+        self.assertIn('except ModuleNotFoundError', self.src)
+        self.assertIn('Run this script from the repository root', self.src)
+
+    def test_it_runs_as_a_module(self):
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, '-m', 'server.provision_admin'],
+            cwd=str(ROOT), input='', capture_output=True, text=True, timeout=60)
+        combined = result.stdout + result.stderr
+        self.assertNotIn("No module named 'app'", combined)
+        # It should reach the first prompt, then hit EOF because we fed it nothing.
+        self.assertIn('Administrator email', combined)
+
+
+class AgentEnvFileTests(unittest.TestCase):
+    """A key can live in .env instead of being exported.
+
+    The documented setup was three shell exports. That works in a terminal and
+    fails in every other way people actually start this app — an IDE run
+    button, a service manager, a compose file. `.env` is the convention
+    everybody already expects, and it is ignored by Git.
+    """
+
+    def setUp(self):
+        import agent
+        self.agent = agent
+
+    def _env(self, text):
+        import tempfile, pathlib
+        p = pathlib.Path(tempfile.mkdtemp()) / '.env'
+        p.write_text(text, encoding='utf-8')
+        return str(p)
+
+    def test_a_key_is_read_from_the_file(self):
+        import os
+        path = self._env('AXIA_TEST_KEY_ONE=abc123\n')
+        self.agent.load_env_file(path)
+        self.assertEqual(os.environ.get('AXIA_TEST_KEY_ONE'), 'abc123')
+        del os.environ['AXIA_TEST_KEY_ONE']
+
+    def test_a_real_environment_variable_wins(self):
+        import os
+        os.environ['AXIA_TEST_KEY_TWO'] = 'from-shell'
+        try:
+            self.agent.load_env_file(self._env('AXIA_TEST_KEY_TWO=from-file\n'))
+            self.assertEqual(os.environ['AXIA_TEST_KEY_TWO'], 'from-shell')
+        finally:
+            del os.environ['AXIA_TEST_KEY_TWO']
+
+    def test_comments_and_junk_are_skipped(self):
+        import os
+        loaded = self.agent.load_env_file(self._env(
+            '# a comment\nnot a pair\n=novalue\nAXIA_TEST_KEY_THREE=ok\n'))
+        self.assertEqual(loaded.get('AXIA_TEST_KEY_THREE'), 'ok')
+        self.assertEqual(len(loaded), 1)
+        del os.environ['AXIA_TEST_KEY_THREE']
+
+    def test_a_missing_file_is_not_an_error(self):
+        self.assertEqual(self.agent.load_env_file('/definitely/not/here/.env'), {})
+
+    def test_values_are_trimmed_and_unquoted(self):
+        import os
+        self.agent.load_env_file(self._env('AXIA_TEST_KEY_FOUR=  "padded"  \n'))
+        self.assertEqual(os.environ['AXIA_TEST_KEY_FOUR'], 'padded')
+        del os.environ['AXIA_TEST_KEY_FOUR']
+
+    def test_the_example_file_ships_and_names_gemini(self):
+        example = ROOT / '.env.example'
+        self.assertTrue(example.is_file())
+        text = example.read_text(encoding='utf-8')
+        self.assertIn('generativelanguage.googleapis.com', text)
+        self.assertIn('AXIA_AGENT_KEY=', text)
+        # It must not ship a value that could be mistaken for a working key.
+        line = [l for l in text.splitlines() if l.startswith('AXIA_AGENT_KEY=')][0]
+        self.assertEqual(line.strip(), 'AXIA_AGENT_KEY=')
+
+    def test_the_example_is_not_gitignored(self):
+        import subprocess
+        result = subprocess.run(['git', 'check-ignore', '.env.example'],
+                                cwd=str(ROOT), capture_output=True, text=True)
+        # check-ignore reports a match for the `!.env.example` negation too, so
+        # the useful test is whether git would actually add it.
+        added = subprocess.run(['git', 'add', '--dry-run', '.env.example'],
+                               cwd=str(ROOT), capture_output=True, text=True)
+        self.assertIn('.env.example', added.stdout + added.stderr)
+
+
+class XionaLanguageTests(unittest.TestCase):
+    """A Persian question gets a Persian answer, and vice versa.
+
+    The prompt used to say "reply in the language of the question" without
+    saying which language that was, and the model guessed wrong often enough to
+    be reported as a bug. The language is now detected once — the same pass
+    that scores retrieval — and written into the prompt.
+    """
+
+    def setUp(self):
+        import agent
+        self.agent = agent
+
+    def test_persian_is_detected(self):
+        self.assertTrue(self.agent._looks_persian('چطور یک وب‌سایت بسازم؟'))
+        self.assertFalse(self.agent._looks_persian('How do I build a website?'))
+
+    def test_the_prompt_states_the_language(self):
+        self.assertEqual(self.agent.LANGUAGE_NAMES['fa'], 'Persian (فارسی)')
+        self.assertEqual(self.agent.LANGUAGE_NAMES['en'], 'English')
+
+    def test_a_persian_question_produces_a_persian_instruction(self):
+        # Runs ask_provider against a local stub, so the assertion is about the
+        # prompt that actually leaves the process.
+        import json, os, threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        seen = {}
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                n = int(self.headers.get('Content-Length') or 0)
+                seen['body'] = json.loads(self.rfile.read(n))
+                out = json.dumps({'choices': [{'message': {'content': 'پاسخ.'}}]}).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(out)))
+                self.end_headers()
+                self.wfile.write(out)
+
+            def log_message(self, *a):
+                pass
+
+        server = HTTPServer(('127.0.0.1', 0), Handler)
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        saved = {k: os.environ.get(k) for k in
+                 ('AXIA_AGENT_KEY', 'AXIA_AGENT_URL', 'AXIA_AGENT_MODEL')}
+        os.environ.update(AXIA_AGENT_KEY='k', AXIA_AGENT_URL=f'http://127.0.0.1:{port}/v1',
+                          AXIA_AGENT_MODEL='test-model')
+        try:
+            text, error = self.agent.ask_provider('چطور شروع کنم؟', language='fa')
+            self.assertIsNone(error)
+            system = seen['body']['messages'][0]['content']
+            self.assertIn('Reply in Persian', system)
+            self.assertIn('AXIASOFT', system)
+        finally:
+            server.shutdown()
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def test_an_answer_reports_which_side_produced_it(self):
+        import os
+        saved = os.environ.pop('AXIA_AGENT_KEY', None)
+        try:
+            result = self.agent.answer('What is AURION?')
+            self.assertIn(result['provider'], ('on-site', 'local'))
+        finally:
+            if saved is not None:
+                os.environ['AXIA_AGENT_KEY'] = saved

@@ -1,8 +1,43 @@
-"""Securely create or promote an administrator account for this development app."""
+"""Securely create or promote an administrator account for this development app.
+
+Run it from the repository root:
+
+    python3 server/provision_admin.py
+
+or from inside server/:
+
+    python3 provision_admin.py
+
+Both work. `python3 -m server.provision_admin` also works, and that is the one
+case that used to fail: run as a module, Python puts the *repository root* on
+sys.path, so `from app import ...` looked for a top-level app.py and found the
+project's own app.js next to none. The directory holding this file is added
+explicitly below, which makes the import correct however the file is invoked,
+and a clear error replaces the module traceback if the server files are
+somewhere unexpected.
+"""
 import getpass
+import os
 import re
-from app import hash_password
-from db import connect, init
+import sys
+
+# `app` and `db` live beside this file, not beside the working directory. When
+# this script is executed directly Python already knows that; when it is
+# imported as server.provision_admin it does not. Adding the directory here
+# covers both without depending on how the caller invoked it.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
+try:
+    from app import hash_password
+    from db import connect, init
+except ModuleNotFoundError as exc:  # pragma: no cover - only on a broken checkout
+    raise SystemExit(
+        f'Could not import the server modules from {_HERE} ({exc}).\n'
+        'Run this script from the repository root:\n'
+        '    python3 server/provision_admin.py'
+    )
 
 
 def main():

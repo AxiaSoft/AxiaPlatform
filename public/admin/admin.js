@@ -22,12 +22,12 @@ function pillClass(s){const x=String(s||'').toLowerCase();if(['delivered','close
 function pill(s){return`<span class="pill ${pillClass(s)}">${esc(s||'Unknown')}</span>`}
 function iconFor(page){return({dashboard:'◫',site:'⚙',orders:'▤',products:'◈',customers:'♙',support:'✳',refunds:'↩',activity:'◷'})[page]||'•'}
 function loginView(error=''){
- root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.png" alt="" width="37" height="37" decoding="async"></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div><span style="margin-left:auto"><button id="languageToggle" class="language-btn" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button></span></div><div class="eyebrow">Restricted workspace</div><h1>Administrator sign in</h1><p class="muted">Use your AXIASOFT administrator account to access operational records and tools.</p>${error?`<div class="error-note" role="alert">${esc(error)}</div>`:''}<form data-form="login"><div class="field" style="margin-bottom:12px"><label for="loginEmail">Administrator email</label><input id="loginEmail" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="name@company.com"></div><div class="field"><label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required maxlength="256" placeholder="Your password"></div><button class="btn btn-primary" style="width:100%;margin-top:18px;min-height:42px">Sign in securely <span>↗</span></button></form><div class="secure-note"><span class="secure-dot"></span> Server-verified administrator role · secure session</div><p class="setup-command">No default administrator credentials are provided. To create or reset an admin account, run <code>python3 provision_admin.py</code> from the server directory.</p></section></main>`;
+ root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.webp" alt="" width="37" height="37" decoding="async"></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div><span style="margin-left:auto"><button id="languageToggle" class="language-btn" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button></span></div><div class="eyebrow">Restricted workspace</div><h1>Administrator sign in</h1><p class="muted">Use your AXIASOFT administrator account to access operational records and tools.</p>${error?`<div class="error-note" role="alert">${esc(error)}</div>`:''}<form data-form="login"><div class="field" style="margin-bottom:12px"><label for="loginEmail">Administrator email</label><input id="loginEmail" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="name@company.com"></div><div class="field"><label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required maxlength="256" placeholder="Your password"></div><button class="btn btn-primary" style="width:100%;margin-top:18px;min-height:42px">Sign in securely <span>↗</span></button></form><div class="secure-note"><span class="secure-dot"></span> Server-verified administrator role · secure session</div><p class="setup-command">No default administrator credentials are provided. To create or reset an admin account, run <code>python3 provision_admin.py</code> from the server directory.</p></section></main>`;
 }
-function deniedView(){root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.png" alt="" width="37" height="37" decoding="async"></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div></div><div class="eyebrow">Access restricted</div><h1>Administrator access required</h1><p class="muted">This account does not have the required administrator role. The server has denied protected data access.</p><div class="head-actions"><button class="btn btn-quiet" data-act="logout">Sign out</button><a class="btn btn-primary" href="/#/">Return to website</a></div></section></main>`}
+function deniedView(){root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.webp" alt="" width="37" height="37" decoding="async"></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div></div><div class="eyebrow">Access restricted</div><h1>Administrator access required</h1><p class="muted">This account does not have the required administrator role. The server has denied protected data access.</p><div class="head-actions"><button class="btn btn-quiet" data-act="logout">Sign out</button><a class="btn btn-primary" href="/#/">Return to website</a></div></section></main>`}
 function shell(){
  const nav=[['dashboard','Overview'],['site','Website'],['products','Products'],['articles','Blog articles'],['orders','Project requests'],['customers','Customers'],['support','Support'],['refunds','Refunds'],['activity','Activity log']];
- root.innerHTML=`<div class="admin-shell"><div class="side-scrim" data-act="close-nav"></div><aside class="sidebar" id="sidebar"><a href="/" class="side-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.png" alt="" width="37" height="37" decoding="async"></span><span><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></span></a><div class="side-label">Workspace</div><nav class="nav-list">${nav.map(([id,label])=>`<button class="side-link ${state.page===id?'active':''}" data-page="${id}"><span class="nav-glyph">${iconFor(id)}</span><span>${T(label)}</span>${id==='refunds'&&state.overview?.counts?.refunds?`<span class="nav-count">${fmtNum(state.overview.counts.refunds)}</span>`:''}${id==='orders'&&state.overview?.counts?.pending?`<span class="nav-count">${fmtNum(state.overview.counts.pending)}</span>`:''}</button>`).join('')}</nav><div class="side-label" style="margin-top:23px">Website</div><a class="side-link" href="/"><span class="nav-glyph">↗</span><span>Open public website</span></a><div class="sidebar-bottom"><div class="sidebar-foot"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min"><strong>${esc(state.me?.name||'Administrator')}</strong><small>${esc(state.me?.email||'')}</small></div><button class="icon-btn" data-act="logout" title="Sign out" aria-label="Sign out">⇥</button></div></div></aside><section class="workspace"><header class="topbar"><div class="top-left"><button class="icon-btn mobile-toggle" data-act="toggle-nav" aria-label="Open navigation">☰</button><div class="crumb">AXIASOFT <span style="color:var(--faint)">/</span> <strong>${nav.find(x=>x[0]===state.page)?.[1]||'Overview'}</strong></div></div><div class="top-right"><button class="language-btn" id="languageToggle" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button><button class="icon-btn" data-act="theme" title="Toggle color theme" aria-label="Toggle color theme">${document.documentElement.dataset.theme==='dark'?'◐':'☼'}</button><button class="icon-btn" data-act="refresh" title="Refresh data" aria-label="Refresh data">↻</button><div class="top-user"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min-top"><strong>${esc(state.me?.name||'Administrator')}</strong><small>Administrator</small></div></div></div></header><main class="content" id="pageContent"><div class="panel" style="height:190px"><div class="skeleton" style="width:170px;margin:14px 0"></div><div class="skeleton" style="width:78%;height:50px;margin:14px 0"></div><div class="skeleton" style="width:55%"></div></div></main></section></div>`;
+ root.innerHTML=`<div class="admin-shell"><div class="side-scrim" data-act="close-nav"></div><aside class="sidebar" id="sidebar"><a href="/" class="side-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.webp" alt="" width="37" height="37" decoding="async"></span><span><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></span></a><div class="side-label">Workspace</div><nav class="nav-list">${nav.map(([id,label])=>`<button class="side-link ${state.page===id?'active':''}" data-page="${id}"><span class="nav-glyph">${iconFor(id)}</span><span>${T(label)}</span>${id==='refunds'&&state.overview?.counts?.refunds?`<span class="nav-count">${fmtNum(state.overview.counts.refunds)}</span>`:''}${id==='orders'&&state.overview?.counts?.pending?`<span class="nav-count">${fmtNum(state.overview.counts.pending)}</span>`:''}</button>`).join('')}</nav><div class="side-label" style="margin-top:23px">Website</div><a class="side-link" href="/"><span class="nav-glyph">↗</span><span>Open public website</span></a><div class="sidebar-bottom"><div class="sidebar-foot"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min"><strong>${esc(state.me?.name||'Administrator')}</strong><small>${esc(state.me?.email||'')}</small></div><button class="icon-btn" data-act="logout" title="Sign out" aria-label="Sign out">⇥</button></div></div></aside><section class="workspace"><header class="topbar"><div class="top-left"><button class="icon-btn mobile-toggle" data-act="toggle-nav" aria-label="Open navigation">☰</button><div class="crumb">AXIASOFT <span style="color:var(--faint)">/</span> <strong>${nav.find(x=>x[0]===state.page)?.[1]||'Overview'}</strong></div></div><div class="top-right"><button class="language-btn" id="languageToggle" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button><button class="icon-btn" data-act="theme" title="Toggle color theme" aria-label="Toggle color theme">${document.documentElement.dataset.theme==='dark'?'◐':'☼'}</button><button class="icon-btn" data-act="refresh" title="Refresh data" aria-label="Refresh data">↻</button><div class="top-user"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min-top"><strong>${esc(state.me?.name||'Administrator')}</strong><small>Administrator</small></div></div></div></header><main class="content" id="pageContent"><div class="panel" style="height:190px"><div class="skeleton" style="width:170px;margin:14px 0"></div><div class="skeleton" style="width:78%;height:50px;margin:14px 0"></div><div class="skeleton" style="width:55%"></div></div></main></section></div>`;
 }
 function chartSvg(rows){
  const months=[];const now=new Date();for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({year:d.getFullYear(),month:d.getMonth(),label:new Intl.DateTimeFormat(document.documentElement.lang==='fa'?'fa-IR':'en',{month:'short'}).format(d),value:0})}
@@ -266,7 +266,7 @@ function safeHttp(u){const v=String(u||'').trim();return /^https:\/\/[^\s<>"']+$
    bar, the hero copy, contact details, which sections are published, and the
    first-visit theme. Fields write into the same JSON document the server and
    the static build both understand. */
-const SITE_TABS=[['identity','Identity'],['brands','Site brands'],['announcement','Announcement'],['hero','Home hero'],['sections','Visibility'],['contact','Contact & links'],['danger','Maintenance']];
+const SITE_TABS=[['identity','Identity'],['brands','Site brands'],['announcement','Announcement'],['hero','Home hero'],['sections','Visibility'],['contact','Contact & links'],['faq','Questions'],['danger','Maintenance']];
 const SECTION_FIELDS=[['show_catalog','Product catalog','The products grid and product pages'],['show_services','Services page','Website, mobile and custom software services'],['show_aurion','AURION showcase','The AURION concept page and its links'],['show_about','About page','The studio story and values'],['show_contact','Contact entry points','Contact links, the header CTA and request buttons'],['show_assistant','Support assistant','The floating AXIA chat guide on the storefront'],['show_prices','Price labels','Indicative price labels on product cards and detail pages']];
 function siteVal(key){return state.settings?.[key]??''}
 function switchField(name,label,hint,on){
@@ -360,6 +360,44 @@ function brandAssetField(i, which, current, hint){
    <span class="brand-asset-status" data-brand-asset-status role="status"></span>
   </div>`;
 }
+function faqDraft(){
+ if(!Array.isArray(state.siteFaq))state.siteFaq=(siteVal('faq')||[]).map(x=>({...x}));
+ return state.siteFaq;
+}
+function faqRowHTML(x,i){
+ /* Both languages on every row. The Persian pair is optional — the storefront
+    falls back to the English text — but keeping the two inputs side by side is
+    what stops an operator from writing an English answer and forgetting there
+    is a Persian site. */
+ return `<div class="brand-edit" data-faq-row="${i}">
+  <div class="brand-edit-head">
+   <span class="brand-swatch" style="--swatch:#2f6fd0"><span class="brand-swatch-glyph" aria-hidden="true">?</span></span>
+   <div><strong>${esc(x.q||T('New question'))}</strong><span class="muted">${esc(x.qFa||'')}</span></div>
+   <div class="brand-edit-actions">
+    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">↑</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-down" data-i="${i}" ${i===faqDraft().length-1?'disabled':''} title="${T('Move down')}">↓</button>
+    <button class="btn btn-sm btn-quiet danger" type="button" data-act="faq-remove" data-i="${i}">${T('Remove')}</button>
+   </div>
+  </div>
+  <div class="setting-grid">
+   <div class="field full"><label for="f-${i}-q">${T('Question (English)')}</label><input id="f-${i}-q" data-faq="${i}" data-field="q" maxlength="160" value="${esc(x.q||'')}" placeholder="Does AURION place trades?"><span class="field-hint">${T('Shown on the AURION page and its plan landing.')}</span></div>
+   <div class="field full"><label for="f-${i}-a">${T('Answer (English)')}</label><textarea id="f-${i}-a" data-faq="${i}" data-field="a" maxlength="900" rows="3" placeholder="No. This showcase does not connect to a broker or execute trades.">${esc(x.a||'')}</textarea><span class="field-hint">${T('Two or three sentences is the sweet spot. This is the whole answer a visitor reads.')}</span></div>
+   <div class="field full"><label for="f-${i}-qFa">${T('Question (Persian)')}</label><input id="f-${i}-qFa" data-faq="${i}" data-field="qFa" maxlength="160" dir="rtl" value="${esc(x.qFa||'')}" placeholder="آیا اوریون معامله انجام می‌دهد؟"><span class="field-hint">${T('Leave empty to show the English question on the Persian site.')}</span></div>
+   <div class="field full"><label for="f-${i}-aFa">${T('Answer (Persian)')}</label><textarea id="f-${i}-aFa" data-faq="${i}" data-field="aFa" maxlength="900" rows="3" dir="rtl" placeholder="نه. این نمایش به کارگزاری متصل نمی‌شود و معامله‌ای اجرا نمی‌کند.">${esc(x.aFa||'')}</textarea><span class="field-hint">${T('Leave empty to show the English answer on the Persian site.')}</span></div>
+  </div>
+ </div>`;
+}
+function faqTabHTML(){
+ const list=faqDraft();
+ return `<div class="panel form-panel"><div class="panel-head"><div><h2>${T('Frequently asked questions')}</h2><p>${T('The questions under the AURION plans, shown on both the product page and its landing.')}</p></div></div>
+  <div class="notice">${T('An empty list removes the questions section entirely.')} ${T('Order here is the order on the site.')}</div>
+  <form data-form="faq"><div class="brand-edit-list">${list.length?list.map(faqRowHTML).join(''):'<div class="empty">'+T('No questions yet. The AURION page will not show a questions section until you add one.')+'</div>'}</div>
+  <div class="form-actions">
+   <button class="btn btn-primary" type="submit">${T('Save questions')}</button>
+   <button class="btn btn-quiet" type="button" data-act="faq-add">+ ${T('Add question')}</button>
+   <button class="btn btn-quiet" type="button" data-act="settings-reset">${T('Discard changes')}</button>
+  </div></form></div>`;
+}
 function brandsTabHTML(){
  const list=brandDraft();
  return `<div class="panel form-panel"><div class="panel-head"><div><h2>${T('Site brands')}</h2><p>${T('The starting points on the Websites tab. Picking one wears that brand everywhere.')}</p></div><span class="pill blue">${list.length} ${T(list.length===1?'brand':'brands')}</span></div>
@@ -383,6 +421,7 @@ function siteTabHTML(){
    <div class="form-actions"><button class="btn btn-primary" type="submit">Save announcement</button><button class="btn btn-quiet" type="button" data-act="settings-reset">Discard changes</button></div></form></div>`;
  }
  if(t==='brands'){return brandsTabHTML()}
+ if(t==='faq'){return faqTabHTML()}
  if(t==='hero'){
   return `<div class="panel form-panel"><div class="panel-head"><div><h2>Home hero</h2><p>The first three lines a visitor reads.</p></div><button class="btn btn-sm btn-quiet" data-act="preview-site" data-target="#/">Preview ↗</button></div>
    <form data-form="settings"><div class="setting-grid">${fieldText('hero_title','Headline',siteVal('hero_title'),'Shown in white. Keep it under about 45 characters so it does not wrap awkwardly.','maxlength="90" required')}${fieldText('hero_accent','Highlighted line',siteVal('hero_accent'),'Shown in the gradient, directly under the headline.','maxlength="90"')}
@@ -409,10 +448,10 @@ function siteTabHTML(){
     <div class="danger-card"><strong>Publish every hidden product</strong><p>Puts all hidden products back in the public catalog. Order history is untouched.</p><button class="btn btn-quiet" data-act="bulk-publish-all">Publish all</button></div>
     <div class="danger-card"><strong>Hide the whole catalog</strong><p>Removes the products page from the site navigation and shows a short notice there.</p><button class="btn btn-danger" data-act="hide-catalog">Hide catalog</button></div>
     <div class="danger-card"><strong>Support agent (Xiona)</strong>
-     <p>${state.agent? (state.agent.configured
-        ? 'Connected to an OpenAI-compatible model ('+esc(state.agent.model||'')+'). Answers are grounded in the '+state.agent.topics+' approved site facts.'
-        : 'Running in local retrieval mode: '+state.agent.topics+' approved facts, no API key, no outbound request. Set AXIA_AGENT_KEY to let a model phrase the answers.')
-        : 'Status unavailable in this mode.'}</p>
+     <p>${state.agent? (state.agent.provider==='model'
+        ? T('A live model is answering')+' — '+esc(state.agent.model||'')+' @ '+esc(state.agent.model_base||'')+'. '+T('Grounded in')+' '+state.agent.topics+' '+T('published site facts.')
+        : T('Local retrieval only')+': '+state.agent.topics+' '+T('approved facts, no API key, no outbound request.')+' '+T('Set AXIA_AGENT_KEY and AXIA_AGENT_URL to let a model answer.'))
+        : T('Status unavailable in this mode.')}</p>
      <p class="form-hint">Free options: Groq, Google AI Studio (Gemini), OpenRouter free tier, Mistral, Cerebras, or a local Ollama — all OpenAI-compatible.</p></div>
    <div class="danger-card"><strong>Load sample catalog</strong><p>Demo only: adds six illustrative products with GitHub preview links so the catalog and dashboard have something to show.</p><button class="btn btn-quiet" data-act="demo-samples">Load samples</button></div>
     <div class="danger-card"><strong>Reset demo data</strong><p>Only in the GitHub Pages demo: clears the browser copy of products and settings, then reloads. Nothing in the repository changes.</p><button class="btn btn-danger" data-act="demo-reset">Reset demo</button></div>
@@ -849,6 +888,10 @@ return}
  if(act==='brand-remove'){const i=Number(b.dataset.i);brandDraft().splice(i,1);state.dirty=true;$('#pageContent').innerHTML=contentHTML();return}
  if(act==='brand-up'){const i=Number(b.dataset.i);const list=brandDraft();if(i>0){[list[i-1],list[i]]=[list[i],list[i-1]];state.dirty=true;$('#pageContent').innerHTML=contentHTML()}return}
  if(act==='brand-down'){const i=Number(b.dataset.i);const list=brandDraft();if(i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];state.dirty=true;$('#pageContent').innerHTML=contentHTML()}return}
+ if(act==='faq-add'){const list=faqDraft();if(list.length>=20){toast(T('Twenty questions is the maximum.'));return}list.push({q:'',qFa:'',a:'',aFa:''});state.dirty=true;$('#pageContent').innerHTML=contentHTML();const last=$('[data-faq-row]:last-child [data-field="q"]');last?.focus();return}
+ if(act==='faq-remove'){const i=Number(b.dataset.i);faqDraft().splice(i,1);state.dirty=true;$('#pageContent').innerHTML=contentHTML();return}
+ if(act==='faq-up'){const i=Number(b.dataset.i);const list=faqDraft();if(i>0){[list[i-1],list[i]]=[list[i],list[i-1]];state.dirty=true;$('#pageContent').innerHTML=contentHTML()}return}
+ if(act==='faq-down'){const i=Number(b.dataset.i);const list=faqDraft();if(i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];state.dirty=true;$('#pageContent').innerHTML=contentHTML()}return}
  if(act==='new-article'){state.articleDraft={title:'',slug:'',summary:'',tags:[],body:'',status:'draft'};$('#pageContent').innerHTML=contentHTML();return}
  if(act==='close-article'){state.articleDraft=null;$('#pageContent').innerHTML=contentHTML();return}
  if(act==='article-preview'){previewArticle();return}
@@ -948,6 +991,36 @@ async function saveBrands(form){
   if(button){button.disabled=false;button.textContent=button.dataset.old||'Try again'}
  }
 }
+
+async function saveFaq(form){
+ /* Same contract as the brand editor: the draft is the source of truth, a
+    blank row is dropped (that is what "Add question" leaves behind), and the
+    server answer is adopted wholesale so the console shows what was actually
+    stored rather than what was typed. */
+ const list=faqDraft().filter(x=>String(x.q||'').trim()||String(x.a||'').trim());
+ const old=$('.error-note',form);if(old)old.remove();
+ const incomplete=list.find(x=>!String(x.q||'').trim()||!String(x.a||'').trim());
+ if(incomplete){
+  const note=document.createElement('div');note.className='error-note';
+  note.textContent=T('Every question needs an English question and answer. The Persian pair is optional.');
+  form.prepend(note);note.scrollIntoView?.({block:'center'});return;
+ }
+ const button=$('button[type="submit"]',form);
+ if(button){button.disabled=true;button.dataset.old=button.textContent;button.textContent=T('Saving…')}
+ try{
+  const r=await api('/api/admin/settings',{method:'PUT',body:{faq:list}});
+  state.settings=r.settings||{...state.settings,faq:list};
+  state.savedSettings={...state.settings};
+  state.siteFaq=null;
+  state.dirty=false;
+  $('#pageContent').innerHTML=contentHTML();
+  toast(T('Questions saved. The AURION pages now show these.'));
+ }catch(e){
+  const note=document.createElement('div');note.className='error-note';note.textContent=e.message;form.prepend(note);
+  if(button){button.disabled=false;button.textContent=button.dataset.old||T('Try again')}
+ }
+}
+
 async function saveSettings(form){
  const payload={};
  for(const el of form.elements){
@@ -1035,9 +1108,10 @@ async function moveProduct(btn){
 }
 async function toggleProduct(btn){const p=state.products.find(x=>x.id===Number(btn.dataset.id));if(!p)return;const publish=!p.published;if(!confirm(publish?'Publish this product in public product data?':'Unpublish this product? Existing order history is preserved.'))return;try{if(publish){await api('/api/admin/products',{method:'PUT',body:{id:p.id,published:true}})}else{await api('/api/admin/products',{method:'DELETE',body:{id:p.id}})}toast(publish?'Product published.':'Product unpublished; history is preserved.');state.overview=null;await fetchPageData()}catch(e){toast(e.message,true)}}
 async function changeCustomerStatus(btn){const c=state.customers.find(x=>x.id===Number(btn.dataset.id));if(!c)return;const active=!c.active;if(!confirm(active?`Reactivate sign-in for ${c.name}?`:`Suspend ${c.name}? This will revoke active sessions.`))return;try{await api('/api/admin/customers/status',{method:'PUT',body:{id:c.id,active}});toast(active?'Customer reactivated.':'Customer suspended; sessions revoked.');const r=await api('/api/admin/customers');state.customers=r.customers;$('#pageContent').innerHTML=customersHTML()}catch(e){toast(e.message,true)}}
-async function submitHandler(e){const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();const submit=$('button[type="submit"]',form)||$('button:not([type="button"])',form);if(submit){submit.disabled=true;submit.dataset.old=submit.textContent;submit.textContent='Saving…'}const values=Object.fromEntries(new FormData(form));try{
+async function submitHandler(e){const form=e.target.closest('form[data-form]');if(!form){console.log('no form found');return}e.preventDefault();const submit=$('button[type="submit"]',form)||$('button:not([type="button"])',form);if(submit){submit.disabled=true;submit.dataset.old=submit.textContent;submit.textContent='Saving…'}const values=Object.fromEntries(new FormData(form));try{
  if(form.dataset.form==='login'){const data=await api('/api/login',{method:'POST',body:{email:values.email,password:values.password}});state.me=data.user;if(state.me.role!=='admin'){deniedView();return}const s=await api('/api/me');state.csrf=s.csrf;state.page=location.hash.slice(1)||'dashboard';if(!PAGES.includes(state.page))state.page='dashboard';shell();await fetchPageData();toast('Administrator session established.');return}
  if(form.dataset.form==='settings'){await saveSettings(form);return}
+ if(form.dataset.form==='faq'){await saveFaq(form);return}
  if(form.dataset.form==='brands'){await saveBrands(form);return}
  if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}closeModal();state.overview=null;await fetchPageData();return}
  if(form.dataset.form==='category-add'){
@@ -1056,6 +1130,22 @@ async function submitHandler(e){const form=e.target.closest('form[data-form]');i
 /* Typing in the brand editor writes straight into the draft, because every
    other control in this tab re-renders the panel and would otherwise throw the
    half-typed value away. The draft is what Save sends. */
+function faqInput(e){
+ const el=e.target.closest('[data-faq]');
+ if(!el)return;
+ const list=faqDraft(),row=list[Number(el.dataset.faq)];
+ if(!row)return;
+ row[el.dataset.field]=el.value;
+ state.dirty=true;
+ // Same reason as brandInput: update the header line in place rather than
+ // re-rendering, or the caret jumps out of the field on every keystroke.
+ const card=el.closest('.brand-edit');
+ if(card&&(el.dataset.field==='q'||el.dataset.field==='qFa')){
+  const strong=$('strong',card),muted=$('.muted',card);
+  if(strong)strong.textContent=row.q||T('New question');
+  if(muted)muted.textContent=row.qFa||'';
+ }
+}
 function brandInput(e){
  const el=e.target.closest('[data-brand]');
  if(!el)return;
@@ -1074,7 +1164,7 @@ function brandInput(e){
  if(el.dataset.field==='accent'){const sw=$('.brand-swatch',card);if(sw)sw.style.setProperty('--swatch',row.accent)}
 }
 function inputHandler(e){
- brandInput(e);if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
+ brandInput(e);faqInput(e);if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
 if(e.target.matches('[data-cat-name],[data-cat-name-fa]')){
  const id=e.target.dataset.catName||e.target.dataset.catNameFa;
  const field=e.target.dataset.catName?'name':'nameFa';

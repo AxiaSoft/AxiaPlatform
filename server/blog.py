@@ -244,6 +244,8 @@ COPY = {
     'fa': {
         'nav_products': 'محصولات', 'nav_services': 'خدمات', 'nav_blog': 'وبلاگ',
         'nav_about': 'درباره ما', 'nav_cta': 'شروع پروژه', 'skip': 'پرش به محتوا',
+        'nav_aurion': 'AURION', 'theme_toggle': 'تغییر حالت روشن و تاریک',
+        'open_menu': 'باز کردن منو', 'close_menu': 'بستن منو',
         'blog_title': 'وبلاگ AXIASOFT', 'blog_h1a': 'یادداشت‌هایی دربارهٔ ساختن',
         'blog_h1b': 'محصول دیجیتال',
         'blog_lede': 'از طراحی و مهندسی تا جزئیاتی که یک وب‌سایت یا اپلیکیشن را قابل‌اعتماد می‌کند.',
@@ -258,6 +260,8 @@ COPY = {
     'en': {
         'nav_products': 'Products', 'nav_services': 'Services', 'nav_blog': 'Blog',
         'nav_about': 'About', 'nav_cta': 'Start a project', 'skip': 'Skip to content',
+        'nav_aurion': 'AURION', 'theme_toggle': 'Toggle color theme',
+        'open_menu': 'Open menu', 'close_menu': 'Close menu',
         'blog_title': 'AXIASOFT Blog', 'blog_h1a': 'Notes on building',
         'blog_h1b': 'digital products',
         'blog_lede': 'From design and engineering to the details that make a website or application trustworthy.',
@@ -356,7 +360,7 @@ def head_tags(title, description, canonical, origin, base, kind, article=None, i
         en_url, fa_url = canonical, (alt_url or canonical)
     else:
         fa_url, en_url = canonical, (alt_url or canonical)
-    image = f'{origin}{base}/brand/axiasoft-wordmark.png'
+    image = f'{origin}{base}/brand/axiasoft-wordmark.webp'
     if article and article.get('cover'):
         cover = str(article['cover'])
         image = cover if cover.startswith('http') else f'{origin}{base}/{cover.lstrip("/")}'
@@ -443,32 +447,79 @@ def shell(head, body, lang='fa', base='', slug=''):
     tail = f'{slug}/' if slug else ''
     other_lang_url = (f'{root}/blog/{tail}' if lang == 'en' else f'{root}/en/blog/{tail}')
     return f'''<!doctype html>
-<html lang="{lang}" dir="{direction}" data-theme="dark">
+<html lang="{lang}" dir="{direction}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
   <meta name="theme-color" content="#080d18">
   {head}
+  <script>
+  /* The article pages are server-rendered, so they cannot wait for app.js to
+     pick a theme: doing that would flash dark on a light visitor. The same
+     key and the same system fallback the storefront uses are read here, in
+     the head, before anything is painted. */
+  (function(){{try{{var t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}}catch(e){{document.documentElement.dataset.theme='dark';}}}})();
+  </script>
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{root}/styles.css?v=site-16">
-  <link rel="stylesheet" href="{root}/blog.css?v=4">
+  <link rel="stylesheet" href="{root}/styles.css?v=site-17">
+  <link rel="stylesheet" href="{root}/blog.css?v=5">
 </head>
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
 <a class="skip-link" href="#main">{t['skip']}</a>
 <header class="topbar">
-  <a href="{root}/" class="brand" aria-label="AXIASOFT home"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.png" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.png" alt="AXIASOFT"></a>
+  <a href="{root}/" class="brand" aria-label="AXIASOFT home"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
   <nav class="nav-links" aria-label="{t['nav_products']}"><a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/about">{t['nav_about']}</a></nav>
-  <div class="nav-actions"><a class="blog-lang" href="{other_lang_url}" hreflang="{other_lang}" lang="{other_lang}" rel="alternate">{switch_label}</a><a class="button button-small button-primary" href="{root}/#/contact">{t['nav_cta']} <span>↗</span></a></div>
+  <div class="nav-actions"><a class="blog-lang" href="{other_lang_url}" hreflang="{other_lang}" lang="{other_lang}" rel="alternate">{switch_label}</a><button class="icon-button theme-toggle" id="theme-toggle" aria-label="{t['theme_toggle']}" title="{t['theme_toggle']}"><span class="theme-icon">◐</span></button><a class="button button-small button-primary nav-cta" href="{root}/#/contact">{t['nav_cta']} <span>↗</span></a><button class="mobile-menu icon-button" id="blog-menu" aria-label="{t['open_menu']}" aria-expanded="false">☰</button></div>
 </header>
+<nav class="mobile-nav" id="blog-mobile-nav" hidden aria-label="{t['nav_products']}">
+  <button class="icon-button close-mobile" id="blog-menu-close" aria-label="{t['close_menu']}">×</button>
+  <a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/aurion">{t['nav_aurion']}</a><a href="{root}/#/about">{t['nav_about']}</a><a href="{root}/#/contact">{t['nav_cta']}</a>
+</nav>
 <main class="blog-main" id="main">{body}</main>
 <footer class="footer">
-  <div class="footer-top"><a class="brand" href="{root}/"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.png" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.png" alt="AXIASOFT"></a>
+  <div class="footer-top"><a class="brand" href="{root}/"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
   <p>{t['tagline']}</p>
   <div class="footer-links"><a href="{root}/#/contact">{t['contact']}</a><a href="{blog_home}">{t['feed']}</a><a href="{root}/#/privacy">{t['privacy']}</a></div></div>
   <div class="footer-bottom"><span>© AXIASOFT</span><span>{t['made']} <span class="blue">✦</span></span></div>
 </footer>
+<script>
+/* The article pages are static HTML, so the two header controls the
+   storefront gets from app.js are wired here instead. Small on purpose: a
+   theme switch that writes the same key, and a drawer that matches the one
+   the storefront opens, because a visitor on a phone should not lose the
+   navigation when they follow a link into the blog. */
+(function () {{
+  var root = document.documentElement;
+  var toggle = document.getElementById('theme-toggle');
+  if (toggle) {{
+    var paint = function () {{ toggle.querySelector('.theme-icon').textContent = root.dataset.theme === 'dark' ? '◐' : '☼'; }};
+    paint();
+    toggle.addEventListener('click', function () {{
+      var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try {{ localStorage.setItem('axia-theme', next); }} catch (e) {{}}
+      paint();
+    }});
+  }}
+  var open = document.getElementById('blog-menu');
+  var close = document.getElementById('blog-menu-close');
+  var drawer = document.getElementById('blog-mobile-nav');
+  if (open && drawer) {{
+    var show = function (on) {{
+      drawer.hidden = !on;
+      drawer.classList.toggle('open', on);
+      open.setAttribute('aria-expanded', String(on));
+      document.body.style.overflow = on ? 'hidden' : '';
+    }};
+    show(false);
+    open.addEventListener('click', function () {{ show(true); }});
+    if (close) {{ close.addEventListener('click', function () {{ show(false); }}); }}
+    drawer.addEventListener('click', function (e) {{ if (e.target.tagName === 'A') {{ show(false); }} }});
+  }}
+}})();
+</script>
 </body></html>'''
 
 

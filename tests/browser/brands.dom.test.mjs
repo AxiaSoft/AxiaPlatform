@@ -107,7 +107,7 @@ await new Promise((r) => setTimeout(r, 500));
 ck('the choice is remembered', w.localStorage.getItem('axia-brand') === 'homa');
 /* With no artwork to load, the header keeps the studio mark and shows the
    brand's initial beside it — the name swap below is what identifies the brand. */
-ck('the header mark stays the studio emblem', doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png');
+ck('the header mark stays the studio emblem', doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.webp');
 ck('the header shows the brand name', doc.querySelector('#brand-name').textContent.trim() === 'هما',
    doc.querySelector('#brand-name').textContent);
 ck('the accent colour changes',
@@ -129,7 +129,7 @@ await new Promise((r) => setTimeout(r, 500));
 ck('pressing the active brand returns to the full catalog', doc.querySelectorAll('.product-card').length === 4);
 ck('the preference is cleared', w.localStorage.getItem('axia-brand') === null);
 ck('the AXIASOFT mark is restored',
-   doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png');
+   doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.webp');
 ck('the wordmark returns', doc.querySelector('#brand-wordmark').hidden === false);
 ck('the brand attribute is removed', !doc.documentElement.hasAttribute('data-brand'));
 
@@ -158,7 +158,7 @@ ck('its accent reaches the page',
 click(picked.w, picked.doc.querySelector('#brand-link'));
 await new Promise((r) => setTimeout(r, 500));
 ck('pressing the header logo restores the AXIASOFT mark',
-   picked.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png',
+   picked.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.webp',
    picked.doc.querySelector('#brand-mark img').getAttribute('src'));
 ck('the brand attribute is gone', !picked.doc.documentElement.hasAttribute('data-brand'),
    picked.doc.documentElement.getAttribute('data-brand'));
@@ -181,13 +181,13 @@ ck('a stored brand is running on arrival',
 click(returning.w, returning.doc.querySelector('#brand-link'));
 await new Promise((r) => setTimeout(r, 500));
 ck('a returning visitor can also press the logo to get AXIASOFT back',
-   returning.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png');
+   returning.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.webp');
 
 /* The home page is the AXIASOFT studio page, so arriving there drops a product
    brand. Without this the header could show Homa above AXIASOFT's own hero. */
 const homeWithBrand = await boot('#/', 'fa', 'homa');
 ck('the home page does not wear a product brand',
-   homeWithBrand.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png',
+   homeWithBrand.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.webp',
    homeWithBrand.doc.querySelector('#brand-mark img').getAttribute('src'));
 
 /* With no brand running the link must keep doing its ordinary job. */

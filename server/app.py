@@ -1251,6 +1251,32 @@ class Handler(SimpleHTTPRequestHandler):
             self.audit({'id': uid}, 'register', 'user', uid)
             self._send_json({'user': public_user(db.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone())}, 201); return
 
+        if p == '/api/contact':
+            # The public contact form. No account is needed: someone who is
+            # still deciding whether to write should not have to register
+            # first. The row lands in the same tickets table the console
+            # already reads, with user_id left empty, so an operator answers
+            # it from the support queue like any other message.
+            if method != 'POST':
+                self._send_json({'error': 'Method not allowed'}, 405); return
+            if not self.rate('contact'):
+                return
+            name = clean(d.get('name'), 120)
+            email = clean(d.get('email'), 200).lower()
+            message = clean(d.get('message'), 3000)
+            if len(name) < 2:
+                self._send_json({'error': 'Please add your name so we know who we are answering.'}, 400); return
+            if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
+                self._send_json({'error': 'That email address does not look complete. Please check it.'}, 400); return
+            if len(message) < 20:
+                self._send_json({'error': 'Please describe the project in at least 20 characters.'}, 400); return
+            refno = ref('AXC')
+            db.execute('INSERT INTO tickets(ref,user_id,email,subject,message) VALUES(?,?,?,?,?)',
+                       (refno, None, email, f'Contact form — {name}'[:140], message))
+            db.execute('COMMIT')
+            self._send_json({'ref': refno,
+                             'message': 'Thank you. Your message is with us; we reply within two working days.'}, 201); return
+
         if p == '/api/login':
             if method != 'POST':
                 self._send_json({'error': 'Method not allowed'}, 405); return

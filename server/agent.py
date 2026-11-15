@@ -24,7 +24,23 @@ Environment (all optional):
   AXIA_AGENT_KEY     API key. Unset = local retrieval mode, which is the default.
   AXIA_AGENT_URL     Base URL, default https://api.openai.com/v1
   AXIA_AGENT_MODEL   Model name, default gpt-4o-mini
-  AXIA_AGENT_TIMEOUT Seconds before falling back to the local answer, def. 12
+  AXIA_AGENT_TIMEOUT Seconds before falling back to the local answer, def. 20
+
+Using Google AI Studio (Gemini) instead of OpenAI:
+
+  AXIA_AGENT_KEY=<your AI Studio key>
+  AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
+  AXIA_AGENT_MODEL=gemini-2.0-flash
+
+Gemini exposes an OpenAI-compatible surface at that base URL, so nothing else
+changes. Any other provider that speaks /chat/completions works the same way.
+
+The key is read from the environment on the server only. It is never sent to
+the browser, never baked into a built file, and never returned by /api/agent.
+
+Instead of exporting, you can put the same lines in `.env` at the repository
+root (copy `.env.example`). That file is git-ignored; a value already in the
+environment always wins over it.
 
 Nothing here reads orders, refunds, payments or account details.
 """
@@ -36,6 +52,52 @@ import urllib.request
 
 MAX_QUESTION = 800
 MAX_HISTORY = 8
+
+
+def load_env_file(path=None):
+    """Read a .env file into os.environ, without overriding real variables.
+
+    The documented setup is three shell exports, which is fine in a terminal
+    and awkward everywhere else: a service manager, an IDE run button, a
+    `docker compose up` that was given a file. Reading `.env` next to the
+    repository root closes that gap, and it is deliberately timid — a value
+    already in the environment wins, so an operator who exported a key for one
+    run never has it quietly replaced by a stale file.
+
+    Only simple KEY=VALUE lines are understood. No interpolation, no `export`
+    prefix, no quoting games: this is a convenience, not a .env parser, and
+    anything more clever would be a place for a key to go somewhere unexpected.
+    """
+    if path is None:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(root, '.env')
+    try:
+        with open(path, encoding='utf-8') as handle:
+            lines = handle.readlines()
+    except OSError:
+        return {}
+    loaded = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        key = key.strip()
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', key):
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        if key in os.environ:
+            continue
+        os.environ[key] = value
+        loaded[key] = value
+    return loaded
+
+
+# Read once, at import: `status()` and `answer()` both look at os.environ, and
+# they must agree about whether a model is configured.
+load_env_file()
 
 # --------------------------------------------------------------------------- #
 # Knowledge
@@ -68,27 +130,73 @@ def engine():
     return get_engine(products_fn, articles_fn, stamp_fn())
 
 
+# The prompt is the contract with the model, and it had two faults that showed
+# up as bugs a visitor could feel. It said "answer only from the text below",
+# which turned every question the site had not already written down into a
+# refusal — an assistant that cannot answer "which one should I pick?" is not
+# an assistant. And it said "reply in the language of the question" without
+# telling the model what that was, which it got right perhaps two times in
+# three; the rest of the time a Persian question came back in English.
+#
+# So: the site text is the source for facts about AXIASOFT, but the model is
+# allowed to reason, compare and recommend. The language is stated explicitly
+# rather than inferred, because the caller already knows it — xiona_engine
+# detects it to score the retrieval, and the same detection is passed here.
+# Anything about money, orders, accounts or delivery dates is still off limits:
+# the model must never invent those.
 SYSTEM_PROMPT = (
-    'You are Xiona, the assistant for AXIASOFT, a small software studio in Nuremberg. '
-    'The text below is what this site actually publishes. Answer only from it: do not add '
-    'prices, dates, customer names or account details, and never claim access to orders or '
-    'payments. If the text does not cover the question, say you do not have an approved '
-    'answer and offer a human. Reply in the language of the question, in at most four '
-    'sentences, plainly and without marketing filler.\n\nPUBLISHED:\n'
+    'You are Xiona, the assistant for AXIASOFT, an independent software studio in Nuremberg. '
+    'AXIASOFT builds websites, mobile applications and custom software, and AURION is its '
+    'trading-robot companion concept — a showcase only, with no broker connection, no '
+    'execution and nothing for sale.\n\n'
+    'HOW TO ANSWER\n'
+    '- Be genuinely useful. You may explain, compare, reason and recommend. '
+    'If a visitor asks which product or plan fits them, say which one and why.\n'
+    '- Facts about AXIASOFT — products, prices, policies, what exists and what does not — '
+    'must come from the PUBLISHED text below. Do not invent a product, a price, a delivery '
+    'date, a customer name or an account detail, and never claim access to orders, payments '
+    "or the visitor's data.\n"
+    '- If the visitor asks for something the site genuinely does not cover and you cannot '
+    'answer from general knowledge, say so in one sentence and point them to the contact '
+    'page. Do not recite a refusal when a helpful answer is available.\n'
+    '- Keep it to at most four sentences. Plain language, no marketing filler, no bullet '
+    'lists unless the visitor asked for a list.\n\n'
+    'LANGUAGE\n'
+    'Reply in {language}. That is the language the visitor used; use it even if the '
+    'PUBLISHED text below is in the other language. Write Persian in Persian script, '
+    'never transliterated. Keep product names (AXIASOFT, AURION) and technical terms '
+    '(MetaTrader, API) as they are.\n\n'
+    'PUBLISHED:\n{context}'
 )
+
+LANGUAGE_NAMES = {'fa': 'Persian (فارسی)', 'en': 'English'}
 
 
 def _provider_configured():
     return bool(os.environ.get('AXIA_AGENT_KEY'))
 
 
-def ask_provider(question, history=None, context=''):
-    """Ask an OpenAI-compatible endpoint. Returns (text, error)."""
+def ask_provider(question, history=None, context='', language=None):
+    """Ask a language model. Returns ``(text, error)``.
+
+    The endpoint is OpenAI-compatible, which is the useful common denominator:
+    OpenAI itself, Google Gemini's compatibility layer, Groq, OpenRouter, a
+    local Ollama, and anything else that speaks /chat/completions all work by
+    changing two environment variables. There is deliberately no per-provider
+    code path here — the differences that matter (base URL, model name) are
+    already configuration.
+    """
     key = os.environ.get('AXIA_AGENT_KEY')
     base = (os.environ.get('AXIA_AGENT_URL') or 'https://api.openai.com/v1').rstrip('/')
     model = os.environ.get('AXIA_AGENT_MODEL') or 'gpt-4o-mini'
-    timeout = float(os.environ.get('AXIA_AGENT_TIMEOUT') or 12)
-    messages = [{'role': 'system', 'content': SYSTEM_PROMPT + (context or '(nothing matched)')}]
+    timeout = float(os.environ.get('AXIA_AGENT_TIMEOUT') or 20)
+    # The caller knows the language from the same detection that scored the
+    # retrieval, so it is stated rather than left for the model to infer.
+    if language not in LANGUAGE_NAMES:
+        language = 'fa' if _looks_persian(question) else 'en'
+    system = SYSTEM_PROMPT.format(language=LANGUAGE_NAMES[language],
+                                  context=(context or '(nothing matched)'))
+    messages = [{'role': 'system', 'content': system}]
     for turn in (history or [])[-MAX_HISTORY:]:
         role = 'user' if turn.get('role') == 'user' else 'assistant'
         content = str(turn.get('text') or '')[:MAX_QUESTION]
@@ -96,29 +204,50 @@ def ask_provider(question, history=None, context=''):
             messages.append({'role': role, 'content': content})
     messages.append({'role': 'user', 'content': question})
 
-    body = json.dumps({'model': model, 'messages': messages, 'temperature': 0.2,
-                       'max_tokens': 260}).encode('utf-8')
+    body = json.dumps({'model': model, 'messages': messages, 'temperature': 0.4,
+                       'max_tokens': 400}).encode('utf-8')
     request = urllib.request.Request(
         base + '/chat/completions', data=body, method='POST',
         headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode('utf-8'))
-        text = (payload.get('choices') or [{}])[0].get('message', {}).get('content', '')
+        choice = (payload.get('choices') or [{}])[0]
+        text = (choice.get('message') or {}).get('content', '')
         text = (text or '').strip()
         return (text, None) if text else (None, 'empty response')
     except urllib.error.HTTPError as exc:
+        # The status is the only part that is safe to log: a provider body can
+        # echo the key or the prompt back, and this error string is served to
+        # the browser.
         return None, f'provider returned {exc.code}'
     except Exception as exc:  # network, DNS, timeout, bad JSON
         return None, type(exc).__name__
 
 
+def _looks_persian(text):
+    """True when the text contains Persian letters.
+
+    A copy of the test in xiona_engine, kept here so this module can decide a
+    language without importing the whole index — ask_provider is also used by
+    the blog translator, which has no index at all.
+    """
+    return bool(re.search(r'[\u0600-\u06FF]', str(text or '')))
+
+
 def answer(question, history=None):
     """Public entry point. Always returns an answer and how it was produced.
 
-    The local engine answers first. That is not a fallback path any more: it is
-    the assistant. A configured model may rephrase the retrieved material, but
-    it never sees a question the site cannot answer and never adds a fact.
+    Retrieval still runs first, because it is what supplies the model with the
+    facts it is allowed to state and with the citations the UI shows. But the
+    model is no longer skipped when retrieval finds nothing: a question the
+    site never wrote down ("which product suits a small shop?") used to be
+    answered with "I do not have an approved answer" *without the model ever
+    being asked*, which is the exact failure this fixes. Now the model is asked
+    whenever one is configured; retrieval only decides how much context it gets.
+
+    With no key configured the local engine is the whole assistant, which is
+    the behaviour of the static build and of a fresh checkout.
     """
     question = str(question or '').strip()[:MAX_QUESTION]
     index = engine()
@@ -127,16 +256,26 @@ def answer(question, history=None):
     # `topics` stays part of the response shape: it names the pages an answer
     # drew on, which the console surfaces and the browser logs.
     local['topics'] = [c['topic'] for c in local.get('citations') or []]
-    if not _provider_configured() or local['source'] in ('empty', 'empty-index', 'no-match'):
+    if not _provider_configured():
         local['provider'] = 'on-site'
         return local
 
-    context = '\n'.join(f"- {c['title']}: {local['answer']}" for c in local.get('citations') or [])
-    text, error = ask_provider(question, history, context)
+    # Context is built from the retrieval result when there is one, and from a
+    # whole-site summary when there is not. Handing the model nothing at all
+    # would let it invent AXIASOFT facts; handing it the summary keeps every
+    # claim about the studio grounded while still letting it answer the
+    # question that retrieval missed.
+    if local.get('citations'):
+        context = '\n'.join(f"- {c['title']}: {local['answer']}" for c in local['citations'])
+    else:
+        context = index.summary() or '(nothing matched)'
+
+    text, error = ask_provider(question, history, context, language=local.get('language'))
     if text:
         return {'answer': text, 'source': 'model', 'language': local['language'],
                 'citations': local.get('citations') or [], 'provider': 'model'}
-    # A provider failure must not look like a refusal: the local answer stands.
+    # A provider failure must not look like a refusal: the local answer stands,
+    # and `detail` names the reason so an operator can see it in the console.
     local['detail'] = error
     local['provider'] = 'on-site'
     return local
@@ -149,10 +288,13 @@ def status():
     return {
         # 'local' is the historical name for "no provider, answers on-site";
         # the assistant is always local now, so it is always true.
-        'provider': 'local',
-        'engine': 'on-site',
+        # A model is a real mode now, not a coat of paint on retrieval, so the
+        # console should be able to tell whether it is on.
+        'provider': 'model' if _provider_configured() else 'local',
+        'engine': 'model+on-site' if _provider_configured() else 'on-site',
         'configured': True,
-        'model': os.environ.get('AXIA_AGENT_MODEL') if _provider_configured() else None,
+        'model': (os.environ.get('AXIA_AGENT_MODEL') or 'gpt-4o-mini') if _provider_configured() else None,
+        'model_base': (os.environ.get('AXIA_AGENT_URL') or 'https://api.openai.com/v1').rstrip('/') if _provider_configured() else None,
         'chunks': state['chunks'],
         # The console counts topics; with a live index the count is the number of
         # distinct sections it learned, which is more useful than a fixed 10.
