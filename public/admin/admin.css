@@ -493,3 +493,31 @@ html[lang="fa"] .article-row h3{line-height:1.65}
 .cat-field { display: grid; gap: 4px; min-width: 0; }
 .cat-field > span { font-size: 8px; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); }
 @media (min-width: 901px) { .cat-field > span { display: none; } }
+
+/* -------------------------------------------------------------- brand assets */
+/* A brand image slot: preview, picker, remove, and a path box for a file that
+   is already in the repository. The preview is fixed-size so a tall logo and a
+   wide one do not change the height of the row. */
+.brand-asset { display: grid; gap: 8px; }
+.brand-asset-preview {
+  display: grid; place-items: center;
+  width: 100%; height: 96px;
+  border: 1px dashed var(--line); border-radius: 12px;
+  background: var(--surface3);
+  overflow: hidden;
+}
+.brand-asset-preview img { max-width: 82%; max-height: 82%; object-fit: contain; }
+.brand-asset-empty { color: var(--faint); font-size: 18px; }
+.brand-asset-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.brand-asset-path {
+  flex: 1; min-width: 120px; min-height: 32px;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--bg2); color: var(--text);
+  padding: 0 9px; font-size: 10px; direction: ltr; unicode-bidi: embed;
+}
+.brand-asset-status { font-size: 9px; color: var(--muted); }
+.brand-asset-status.is-error { color: var(--red); }
+.brand-swatch-glyph { font-size: 17px; font-weight: 700; color: #fff; line-height: 1; text-transform: uppercase; }
+@media (max-width: 720px) {
+  .brand-asset-preview { height: 78px; }
+}

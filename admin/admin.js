@@ -305,10 +305,20 @@ function brandDraft(){
  if(!Array.isArray(state.siteBrands))state.siteBrands=(siteVal('brands')||[]).map(b=>({...b}));
  return state.siteBrands;
 }
+/* The little square at the top of a brand row. It shows the uploaded mark when
+   there is one and the brand's initial when there is not, so the row is never a
+   blank tile and an operator can see at a glance which brands still need an
+   image. */
+function brandSwatch(b){
+ const path=b.mark||b.logo||'';
+ if(path)return `<img src="${esc(brandAsset(path))}" alt="" onerror="this.replaceWith(document.createTextNode('·'))">`;
+ const initial=String(b.name||b.nameFa||'·').trim()[0].toUpperCase();
+ return `<span class="brand-swatch-glyph" aria-hidden="true">${esc(initial)}</span>`;
+}
 function brandRowHTML(b,i){
  return `<div class="brand-edit" data-brand-row="${i}">
   <div class="brand-edit-head">
-   <span class="brand-swatch" style="--swatch:${esc(b.accent||'#1f5fa8')}"><img src="${esc(brandAsset(b.mark))}" alt="" onerror="this.style.display='none'"></span>
+   <span class="brand-swatch" style="--swatch:${esc(b.accent||'#1f5fa8')}">${brandSwatch(b)}</span>
    <div><strong>${esc(b.name||T('New brand'))}</strong><span class="muted">${esc(b.nameFa||'')}</span></div>
    <div class="brand-edit-actions">
     <button class="btn btn-sm btn-quiet" type="button" data-act="brand-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">↑</button>
@@ -324,10 +334,31 @@ function brandRowHTML(b,i){
    <div class="field"><label for="b-${i}-taglineFa">${T('Tagline (Persian)')}</label><input id="b-${i}-taglineFa" data-brand="${i}" data-field="taglineFa" maxlength="90" value="${esc(b.taglineFa)}" placeholder="نرم‌افزاری با بال‌های پرواز." dir="rtl"></div>
    <div class="field"><label for="b-${i}-accent">${T('Accent colour')}</label><input id="b-${i}-accent" type="color" data-brand="${i}" data-field="accent" value="${esc(b.accent||'#1f5fa8')}"><span class="field-hint">${T('Drives buttons, links and the glow behind the header.')}</span></div>
    <div class="field"><label for="b-${i}-accentSoft">${T('Soft accent')}</label><input id="b-${i}-accentSoft" type="color" data-brand="${i}" data-field="accentSoft" value="${esc(b.accentSoft||b.accent||'#3f8ad8')}"><span class="field-hint">${T('The lighter half of the gradient.')}</span></div>
-   <div class="field"><label for="b-${i}-mark">${T('Header mark')}</label><input id="b-${i}-mark" data-brand="${i}" data-field="mark" maxlength="200" value="${esc(b.mark)}" placeholder="brand/arya-mark.png"><span class="field-hint">${T('Small square emblem shown in the header.')}</span></div>
-   <div class="field"><label for="b-${i}-logo">${T('Card logo')}</label><input id="b-${i}-logo" data-brand="${i}" data-field="logo" maxlength="200" value="${esc(b.logo)}" placeholder="brand/arya-logo.png"><span class="field-hint">${T('Wider lockup for the brand card. Falls back to the mark.')}</span></div>
+   <div class="field brand-asset-field"><label>${T('Header mark')}</label>${brandAssetField(i,'mark',b.mark,T('Small square emblem shown in the header.'))}</div>
+   <div class="field brand-asset-field"><label>${T('Card logo')}</label>${brandAssetField(i,'logo',b.logo,T('Wider lockup for the brand card. Falls back to the mark.'))}</div>
   </div>
  </div>`;
+}
+/* One image slot for a brand: the current picture, a picker and a remove.
+   Two things are kept in step — the visible preview and the hidden input the
+   form reads — so a save sends exactly the path shown.
+
+   A brand mark is transparent artwork, not a photograph, so nothing is
+   re-encoded or cropped here: the bytes are stored and shown as they are.
+   The text field stays for a path an operator already has in the repo. */
+function brandAssetField(i, which, current, hint){
+ const url = current ? brandAsset(current) : '';
+ return `<div class="brand-asset" data-brand-asset="${which}">
+   <input type="hidden" data-brand="${i}" data-field="${which}" value="${esc(current||'')}" data-brand-asset-input>
+   <span class="brand-asset-preview" data-brand-asset-preview>${url?`<img src="${esc(url)}" alt="">`:'<span class="brand-asset-empty">—</span>'}</span>
+   <div class="brand-asset-actions">
+    <label class="btn btn-sm btn-quiet"><input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden data-brand-asset-file>${T('Choose image…')}</label>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-asset-clear" ${current?'':'hidden'}>${T('Remove')}</button>
+    <input class="brand-asset-path" type="text" maxlength="200" value="${esc(current||'')}" placeholder="brand/arya-mark.png" data-brand-asset-path aria-label="${T('Or type a path')}">
+   </div>
+   <span class="field-hint">${hint}</span>
+   <span class="brand-asset-status" data-brand-asset-status role="status"></span>
+  </div>`;
 }
 function brandsTabHTML(){
  const list=brandDraft();
@@ -800,6 +831,20 @@ return}
  if(act==='close-nav'){$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show');return}
  if(act==='theme'){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);b.textContent=t==='dark'?'◐':'☼';return}
  if(act==='refresh'){refreshAll();return}
+ /* A brand image is uploaded with the same endpoint the product covers use.
+    The reply carries one URL; it goes into both the preview and the hidden
+    field, and the path box is filled too so the operator can see what was
+    stored. */
+ if(act==='brand-asset-clear'){
+  const box=b.closest('[data-brand-asset]');
+  const hidden=$('[data-brand-asset-input]',box);
+  hidden.value='';
+  $('[data-brand-asset-preview]',box).innerHTML='<span class="brand-asset-empty">—</span>';
+  $('[data-brand-asset-path]',box).value='';
+  $('[data-brand-asset-status]',box).textContent='';
+  const clear=$('[data-act="brand-asset-clear"]',box); if(clear)clear.hidden=true;
+  return;
+ }
  if(act==='brand-add'){const list=brandDraft();if(list.length>=12){toast('Twelve brands is the maximum.');return}list.push({id:'',name:'',nameFa:'',tagline:'',taglineFa:'',accent:'#1f5fa8',accentSoft:'#3f8ad8',mark:'',logo:''});state.dirty=true;$('#pageContent').innerHTML=contentHTML();const last=$('.brand-edit:last-child [data-field="id"]');last?.focus();return}
  if(act==='brand-remove'){const i=Number(b.dataset.i);brandDraft().splice(i,1);state.dirty=true;$('#pageContent').innerHTML=contentHTML();return}
  if(act==='brand-up'){const i=Number(b.dataset.i);const list=brandDraft();if(i>0){[list[i-1],list[i]]=[list[i],list[i-1]];state.dirty=true;$('#pageContent').innerHTML=contentHTML()}return}
@@ -1102,7 +1147,7 @@ window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(p&&P
   /* One upload at a time. The request is a plain binary body with the image's own
      Content-Type: it needs no multipart wrapper, and it keeps the server's
      handling of the bytes identical to what the decoder expects. */
-  async function uploadCover(file) {
+  async function uploadCover(file, options = {}) {
     if (!file) return null;
     if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
       throw new Error('Choose a PNG, JPEG, WebP or GIF image.');
@@ -1111,6 +1156,9 @@ window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(p&&P
       throw new Error('That image is larger than 5 MB.');
     }
     const headers = { 'Content-Type': file.type };
+    // ?raw=1 asks the server to store the bytes as sent. A logo keeps its
+    // transparency and its exact pixels; a cover is normalised to PNG.
+    if (options.convert === false) headers['X-Upload-Raw'] = '1';
     if (!state.csrf) {
       const session = await fetch('/api/me', { credentials: 'same-origin' }).then((r) => r.json()).catch(() => ({}));
       state.csrf = session.csrf || null;
@@ -1131,6 +1179,52 @@ window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(p&&P
   }
 
   // Delegated so it survives the modal being rebuilt.
+  /* A brand logo or mark. Same endpoint and limits as a cover, but the image is
+     not re-encoded: a logo is line art with transparent edges, and a lossy pass
+     would fringe it. SVG is accepted here because a mark is often one. */
+  document.addEventListener('change', async (event) => {
+    const input = event.target.closest('[data-brand-asset-file]');
+    if (!input) return;
+    const box = input.closest('[data-brand-asset]');
+    const status = $('[data-brand-asset-status]', box);
+    const hidden = $('[data-brand-asset-input]', box);
+    const preview = $('[data-brand-asset-preview]', box);
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    status.className = 'brand-asset-status';
+    status.textContent = T('Uploading…');
+    try {
+      const result = await uploadCover(file, { convert: false });
+      hidden.value = result.url;
+      const pathBox = $('[data-brand-asset-path]', box);
+      if (pathBox) pathBox.value = result.url;
+      preview.innerHTML = `<img src="${esc(brandAsset(result.url))}" alt="">`;
+      const clear = $('[data-act="brand-asset-clear"]', box);
+      if (clear) clear.hidden = false;
+      status.textContent = result.local
+        ? T('Read in this browser only — the demo console has no server to store it.')
+        : T('Uploaded.');
+    } catch (error) {
+      status.className = 'brand-asset-status is-error';
+      status.textContent = error.message;
+    }
+  });
+
+  /* Typing a path is the other way in, and it keeps the two fields together. */
+  document.addEventListener('input', (event) => {
+    const pathBox = event.target.closest('[data-brand-asset-path]');
+    if (!pathBox) return;
+    const box = pathBox.closest('[data-brand-asset]');
+    const value = pathBox.value.trim();
+    $('[data-brand-asset-input]', box).value = value;
+    $('[data-brand-asset-preview]', box).innerHTML = value
+      ? `<img src="${esc(brandAsset(value))}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'brand-asset-empty',textContent:'✕'}))">`
+      : '<span class="brand-asset-empty">—</span>';
+    const clear = $('[data-act="brand-asset-clear"]', box);
+    if (clear) clear.hidden = !value;
+  });
+
   document.addEventListener('change', async (event) => {
     const input = event.target.closest('[data-cover-file]');
     if (!input) return;

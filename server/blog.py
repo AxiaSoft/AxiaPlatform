@@ -451,7 +451,7 @@ def shell(head, body, lang='fa', base='', slug=''):
   <meta name="theme-color" content="#080d18">
   {head}
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{root}/styles.css?v=site-5">
+  <link rel="stylesheet" href="{root}/styles.css?v=site-16">
   <link rel="stylesheet" href="{root}/blog.css?v=4">
 </head>
 <body class="blog-body">

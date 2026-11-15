@@ -85,19 +85,31 @@ ck('brand names are shown in Persian by default',
 ck('each button names a product count', doc.querySelectorAll('.brand-pick-count').length === 4);
 // The static build rebases every root-relative URL onto the Pages sub-path, so
 // the assertion is about the file being a brand logo, not about its prefix.
-ck('every brand logo is an image in the build',
-   [...doc.querySelectorAll('.brand-pick-logo img')].every((img) =>
-     /\/brand\/[a-z]+-logo\.png$/.test(img.getAttribute('src') || '')),
-   [...doc.querySelectorAll('.brand-pick-logo img')].map((i) => i.getAttribute('src')).join(','));
+/* The brands no longer ship artwork. A tile shows an uploaded logo when one
+   exists and a monogram otherwise, so the contract is "exactly one of the two",
+   never a broken image. */
+ck('every brand tile shows an image or a monogram',
+   [...doc.querySelectorAll('.brand-pick-logo')].every((slot) =>
+     !!slot.querySelector('img') !== !!slot.querySelector('.brand-glyph')),
+   [...doc.querySelectorAll('.brand-pick-logo')].map((s) => s.innerHTML.slice(0, 40)).join(' | '));
+ck('the shipped brands draw monograms',
+   doc.querySelectorAll('.brand-pick-logo .brand-glyph').length === 4);
 ck('no brand is active before one is chosen', !doc.documentElement.hasAttribute('data-brand'));
 ck('the catalog lists all four products', doc.querySelectorAll('.product-card').length === 4);
-ck('each card shows its own uploaded cover', doc.querySelectorAll('.product-cover.has-image img').length === 4);
+/* The demo rows ship without a cover, so every card draws its brand's
+   monogram plate rather than four identical empty boxes. */
+ck('every card draws a cover plate', doc.querySelectorAll('.product-cover').length === 4);
+ck('a card with no cover shows a monogram', doc.querySelectorAll('.cover-glyph').length === 4);
 
 /* ------------------------------------------------ choosing a brand ----- */
 click(w, doc.querySelector('[data-brand-pick="homa"]'));
 await new Promise((r) => setTimeout(r, 500));
 ck('the choice is remembered', w.localStorage.getItem('axia-brand') === 'homa');
-ck('the header mark becomes that brand', doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/homa-mark.png');
+/* With no artwork to load, the header keeps the studio mark and shows the
+   brand's initial beside it — the name swap below is what identifies the brand. */
+ck('the header mark stays the studio emblem', doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/axiasoft-original.png');
+ck('the header shows the brand name', doc.querySelector('#brand-name').textContent.trim() === 'هما',
+   doc.querySelector('#brand-name').textContent);
 ck('the accent colour changes',
    doc.documentElement.style.getPropertyValue('--brand-accent') === '#1e5fa6',
    doc.documentElement.style.getPropertyValue('--brand-accent'));
@@ -133,8 +145,15 @@ ck('the brand attribute is removed', !doc.documentElement.hasAttribute('data-bra
 const picked = await boot('#/products');
 click(picked.w, picked.doc.querySelector('[data-brand-pick="homa"]'));
 await new Promise((r) => setTimeout(r, 400));
+/* The brand is "running" when its name and accent are applied. With no artwork
+   to swap in, the header mark is no longer the signal — the name is. */
 ck('the brand is running before the logo is pressed',
-   picked.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/homa-mark.png');
+   picked.doc.querySelector('#brand-name').textContent.trim() === 'هما' &&
+   picked.doc.querySelector('#brand-name').hidden === false,
+   picked.doc.querySelector('#brand-name').textContent);
+ck('its accent reaches the page',
+   picked.doc.documentElement.style.getPropertyValue('--brand-accent') === '#1e5fa6',
+   picked.doc.documentElement.style.getPropertyValue('--brand-accent'));
 
 click(picked.w, picked.doc.querySelector('#brand-link'));
 await new Promise((r) => setTimeout(r, 500));
@@ -157,8 +176,8 @@ ck('pressing the logo still lands on the home page',
    first render already shows that brand. */
 const returning = await boot('#/products', 'fa', 'mino');
 ck('a stored brand is running on arrival',
-   returning.doc.querySelector('#brand-mark img').getAttribute('src') === '/brand/mino-mark.png',
-   returning.doc.querySelector('#brand-mark img').getAttribute('src'));
+   returning.doc.querySelector('#brand-name').textContent.trim() === 'مینو',
+   returning.doc.querySelector('#brand-name').textContent);
 click(returning.w, returning.doc.querySelector('#brand-link'));
 await new Promise((r) => setTimeout(r, 500));
 ck('a returning visitor can also press the logo to get AXIASOFT back',

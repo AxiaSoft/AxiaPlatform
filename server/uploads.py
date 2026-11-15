@@ -81,7 +81,30 @@ def _convert(source, target, *extra):
     return target
 
 
-def store(data, upload_dir=None, convert=_convert):
+SVG_MAX_BYTES = 512 * 1024            # line art, not a bitmap
+
+
+def sniff_svg(data):
+    """True when the bytes are SVG, checked cheaply and without parsing.
+
+    Only ever used on the raw path, where the file is stored as sent. The
+    guards are the ones that matter for an image: no script element, no event
+    handler attribute, no javascript: URL. The file is additionally served with
+    Content-Security-Policy sandbox by the static handler.
+    """
+    head = data[:1024].lstrip().lower()
+    if not (head.startswith(b'<svg') or head.startswith(b'<?xml')):
+        return False
+    text = data.decode('utf-8', 'ignore').lower()
+    if '<svg' not in text:
+        return False
+    for forbidden in ('<script', 'onload=', 'onerror=', 'javascript:'):
+        if forbidden in text:
+            raise UploadError('That SVG contains script and cannot be used.')
+    return True
+
+
+def store(data, upload_dir=None, convert=_convert, raw=False):
     """Validate and store one image. Returns the public URL path.
 
     `convert` is injected so the validation path can be tested without
@@ -90,6 +113,28 @@ def store(data, upload_dir=None, convert=_convert):
     upload_dir = Path(upload_dir or UPLOAD_DIR)
     if not data:
         raise UploadError('No image was received.')
+    if raw:
+        # The caller asked for the bytes back untouched. That is how a brand
+        # logo keeps its transparency and its exact pixels; a cover is still
+        # normalised, because a photograph benefits from it.
+        if len(data) > SVG_MAX_BYTES and sniff_svg(data):
+            raise UploadError('That SVG is larger than 512 KB.')
+        if sniff_svg(data):
+            digest = hashlib.sha256(data).hexdigest()[:32]
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            target = upload_dir / f'{digest}.svg'
+            target.write_bytes(data)
+            return f'{UPLOAD_URL}/{target.name}'
+        if len(data) > MAX_BYTES:
+            raise UploadError(f'The image is larger than {MAX_BYTES // (1024 * 1024)} MB.')
+        kind = sniff(data)
+        if not kind:
+            raise UploadError('Only PNG, JPEG, WebP, GIF and SVG images are accepted.')
+        digest = hashlib.sha256(data).hexdigest()[:32]
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        target = upload_dir / f'{digest}.{kind}'
+        target.write_bytes(data)
+        return f'{UPLOAD_URL}/{target.name}'
     if len(data) > MAX_BYTES:
         raise UploadError(f'The image is larger than {MAX_BYTES // (1024 * 1024)} MB.')
     kind = sniff(data)

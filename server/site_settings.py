@@ -120,23 +120,24 @@ DEFAULTS = {
     # trying the demo has something to filter by.
     'categories': [],
 
+    # The four brands ship with their names, taglines and colours but with no
+    # image: the logos that used to be here were the studio's own artwork, and
+    # shipping them meant the site carried somebody's drawings whether or not
+    # they were wanted. An operator uploads their own marks in the console; the
+    # storefront draws a monogram from the brand's initial until one exists.
     'brands': [
         {'id': 'arya', 'name': 'Arya', 'nameFa': 'آریا',
          'tagline': 'Software with wings.', 'taglineFa': 'نرم‌افزاری با بال‌های پرواز.',
-         'accent': '#1f5fa8', 'accentSoft': '#3f8ad8',
-         'mark': 'brand/arya-mark.png', 'logo': 'brand/arya-logo.png'},
+         'accent': '#1f5fa8', 'accentSoft': '#3f8ad8', 'mark': '', 'logo': ''},
         {'id': 'ersha', 'name': 'Ersha', 'nameFa': 'ارشا',
          'tagline': 'Built to stand.', 'taglineFa': 'ساخته‌شده برای ماندن.',
-         'accent': '#1b64a8', 'accentSoft': '#4d97d8',
-         'mark': 'brand/ersha-mark.png', 'logo': 'brand/ersha-logo.png'},
+         'accent': '#1b64a8', 'accentSoft': '#4d97d8', 'mark': '', 'logo': ''},
         {'id': 'mino', 'name': 'Mino', 'nameFa': 'مینو',
          'tagline': 'Clarity, by design.', 'taglineFa': 'شفافیت، به‌صورت طراحی‌شده.',
-         'accent': '#1a5c9e', 'accentSoft': '#4a8fd0',
-         'mark': 'brand/mino-mark.png', 'logo': 'brand/mino-logo.png'},
+         'accent': '#1a5c9e', 'accentSoft': '#4a8fd0', 'mark': '', 'logo': ''},
         {'id': 'homa', 'name': 'Homa', 'nameFa': 'هما',
          'tagline': 'Rise above the noise.', 'taglineFa': 'بالاتر از همهمه.',
-         'accent': '#1e5fa6', 'accentSoft': '#4d92d6',
-         'mark': 'brand/homa-mark.png', 'logo': 'brand/homa-logo.png'},
+         'accent': '#1e5fa6', 'accentSoft': '#4d92d6', 'mark': '', 'logo': ''},
     ],
 }
 
@@ -190,10 +191,12 @@ def clean_brand(raw, seen_ids):
     for colour in ('accent', 'accentSoft'):
         if not COLOUR_RE.fullmatch(brand[colour]):
             return None, f'{colour} must be a #rrggbb colour.'
-    # The mark is what the header shows; a brand without one would empty the
-    # lockup, so it is required. The logo is the larger card artwork and may be
-    # left out — the product cover falls back to the default emblem.
-    if not ASSET_RE.fullmatch(brand['mark']):
+    # Either image may be absent. The shipped brands carry none — the studio
+    # does not ship its artwork with the site — and the storefront draws a
+    # monogram from the brand's initial until an operator uploads one. A path
+    # that *is* given has to be one this site can serve, so the check is on the
+    # shape, not on the presence.
+    if brand['mark'] and not ASSET_RE.fullmatch(brand['mark']):
         return None, 'The header mark must be a path such as brand/name-mark.png.'
     if brand['logo'] and not ASSET_RE.fullmatch(brand['logo']):
         return None, 'The logo must be a path such as brand/name-logo.png.'
