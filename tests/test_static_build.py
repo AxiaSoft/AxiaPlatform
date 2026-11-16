@@ -389,9 +389,11 @@ class AdminThemeAndLanguageTests(unittest.TestCase):
         missing_db = ROOT / 'tests' / 'does-not-exist.sqlite3'
         rows = build_static.read_catalog(missing_db, '/AxiaPlatform/')
         self.assertEqual([r['slug'] for r in rows], ['arya', 'ersha', 'mino', 'homa'])
-        # A demo row ships without a cover: the brand artwork it used to point
-        # at is no longer published, and the storefront draws a monogram.
-        self.assertEqual(rows[0]['cover'], '')
+        # The demo rows carry the brand artwork, so the catalog shows the real
+        # marks instead of four monograms. read_catalog() returns the path
+        # stored in the catalog — bare, with no deploy base — and the build
+        # prefixes it exactly once afterwards.
+        self.assertEqual(rows[0]['cover'], 'brand/arya-logo.webp')
         # And the rows carry what a card renders.
         self.assertEqual(len(rows[0]['features']), 4)
         self.assertTrue(rows[0]['published'])
@@ -1002,6 +1004,70 @@ class MobileMenuTests(unittest.TestCase):
         self.assertEqual(len(drawer), len(top))
 
 
+class BrandCategoryScopeTests(unittest.TestCase):
+    """The brand strip is a websites control, and only a websites control.
+
+    The four site brands are website builds: their logo, their name in the
+    header, their accent colour. The storefront offered them on every catalog
+    tab, including Applications, where none of their products appear — so
+    choosing a brand emptied the grid. And a product whose *title* happened to
+    contain a brand name counted as that brand's work regardless of category.
+    """
+
+    def setUp(self):
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+
+    def test_the_brand_category_is_named_once(self):
+        self.assertIn("const BRAND_CATEGORY = 'websites'", self.app_js)
+
+    def test_a_brand_only_matches_a_websites_product(self):
+        # The guard is the first statement: a product in another category can
+        # never be that brand's, whatever its title says.
+        match = self.app_js.index('function brandMatches(')
+        body = self.app_js[match:match + 900]
+        self.assertIn('product.category', body)
+        self.assertIn('BRAND_CATEGORY', body)
+
+    def test_the_strip_is_hidden_off_the_websites_tab(self):
+        strip = self.app_js.index('function brandStrip(')
+        body = self.app_js[strip:strip + 700]
+        self.assertIn('productFilter', body)
+        self.assertIn('BRAND_CATEGORY', body)
+
+    def test_the_landing_page_only_offers_doors_that_open(self):
+        # A category with no published product behind it is advertised on the
+        # front page but opens an empty grid.
+        cards = self.app_js.index('function categoryCards(')
+        body = self.app_js[cards:cards + 900]
+        self.assertIn('products.some(', body)
+
+
+class ProductPageHidesCategoryTests(unittest.TestCase):
+    """A product's own page does not print its category.
+
+    The grid uses categories to filter; the product page is about the product.
+    It printed the category in three places — the eyebrow, a badge and the
+    concept preview — which is what a visitor to "Arya" saw instead of Arya.
+    """
+
+    def setUp(self):
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        start = self.app_js.index('function detail(')
+        self.detail = self.app_js[start:self.app_js.index('\nfunction ', start + 10)]
+
+    def test_the_detail_page_does_not_print_the_category(self):
+        self.assertNotIn('categoryLabel(p.category)', self.detail)
+
+    def test_the_detail_eyebrow_still_names_the_studio(self):
+        self.assertIn('AXIA PRODUCT', self.detail)
+
+    def test_the_grid_card_still_shows_the_category(self):
+        # The card is a browsing surface and keeps its badge.
+        start = self.app_js.index('function card(')
+        card = self.app_js[start:self.app_js.index('\nfunction ', start + 10)]
+        self.assertIn('categoryLabel(p.category)', card)
+
+
 class BrandCatalogTests(unittest.TestCase):
     """The site brands are data, not source.
 
@@ -1042,12 +1108,15 @@ class BrandCatalogTests(unittest.TestCase):
         self.assertIsInstance(data.get('brands'), list)
         self.assertTrue(data['brands'], 'the sites ships with no brands at all')
         for brand in data['brands']:
-            # The image is the operator's to supply. Everything that makes the
-            # brand identifiable has to be there; the artwork does not.
             for field in ('id', 'name', 'nameFa', 'accent'):
                 self.assertTrue(brand.get(field), f'{brand.get("id")} has no {field}')
-            self.assertIn(brand.get('mark', ''), ('', None),
-                          f'{brand.get("id")} ships artwork the site does not own')
+            # The operator supplies each mark; the snapshot ships theirs. A path
+            # that names no file is worse than an empty one: the page renders a
+            # broken plate instead of falling back to the monogram.
+            mark = brand.get('mark', '')
+            self.assertTrue(mark, f'{brand.get("id")} ships no artwork')
+            self.assertTrue((ROOT / 'public' / mark).is_file(),
+                            f'{brand.get("id")} points at a missing file: {mark}')
 
     def test_the_console_edits_brands(self):
         self.assertIn("['brands'", self.admin_js)
@@ -1110,16 +1179,23 @@ class BrandValidationTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(len(brands), 4)
 
-    def test_the_shipped_brands_carry_no_artwork(self):
-        # The four brands shipped with the studio's own logo files. Those are
-        # gone: the site does not publish somebody else's drawings, and an
-        # operator uploads their own marks in the console. The defaults must
-        # therefore validate with empty paths.
+    def test_the_shipped_brands_carry_their_artwork(self):
+        # These four brands used to ship with no artwork at all: the studio's
+        # earlier logo files were withdrawn because the site should not publish
+        # somebody else's drawings. The operator has since supplied a mark for
+        # each brand, so they now ship one — and the paths must point at a file
+        # that is really in the tree, because a stale path renders as an empty
+        # plate rather than as an error.
         for brand in self.settings.DEFAULTS['brands']:
-            self.assertEqual(brand['mark'], '', f"{brand['id']} still ships a mark")
-            self.assertEqual(brand['logo'], '', f"{brand['id']} still ships a logo")
+            for key in ('mark', 'logo'):
+                path = brand[key]
+                self.assertTrue(path, f"{brand['id']} ships no {key}")
+                self.assertTrue((ROOT / 'public' / path).is_file(),
+                                f"{brand['id']} {key} points at a missing file: {path}")
 
-    def test_no_brand_artwork_is_left_in_the_tree(self):
+    def test_no_png_brand_artwork_is_left_in_the_tree(self):
+        # The supplied artwork is converted to WebP on the way in: the PNGs were
+        # three to five times heavier for the same picture.
         for name in ('arya', 'ersha', 'mino', 'homa'):
             for kind in ('mark', 'logo'):
                 path = ROOT / 'public' / 'brand' / f'{name}-{kind}.png'
@@ -1382,17 +1458,15 @@ class CatalogShipsEmptyTests(unittest.TestCase):
 
     def test_the_demo_catalog_rows_are_complete(self):
         for row in self.catalog:
-            # `cover` is deliberately absent from this list: a demo product has
-            # no artwork, and the storefront draws the brand's monogram. Every
-            # other field is what a card renders.
             for field in ('slug', 'title', 'category', 'summary', 'description',
-                          'features', 'technologies', 'status', 'price_label'):
+                          'cover', 'features', 'technologies', 'status', 'price_label'):
                 self.assertTrue(row.get(field) not in (None, ''),
                                 f'{row.get("slug")} has no {field}')
+            # Stored bare: the build adds the deploy base, and prefixing a
+            # second time would bake in '/AxiaPlatform/AxiaPlatform/...'.
             cover = row.get('cover') or ''
-            if cover:
-                self.assertFalse(cover.startswith('/'),
-                                 f'{row["slug"]} cover is pre-prefixed')
+            self.assertFalse(cover.startswith('/'),
+                             f'{row["slug"]} cover is pre-prefixed')
 
     def test_the_demo_seeds_are_only_written_on_request(self):
         # The seed list is a constant; nothing may call the loader while the page
@@ -1426,6 +1500,9 @@ class WebpLogoOnlyTests(unittest.TestCase):
     BRAND = ROOT / 'public' / 'brand'
 
     def test_no_png_logos_remain_in_the_tree(self):
+        # Includes the four brand marks the operator supplied: they arrived as
+        # PNG and are converted to WebP on the way in, for the same reason the
+        # studio logos were.
         self.assertEqual(sorted(p.name for p in self.BRAND.glob('*.png')), [])
 
     def test_the_webp_files_are_present(self):

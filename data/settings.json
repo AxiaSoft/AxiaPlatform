@@ -59,8 +59,8 @@
       "taglineFa": "نرم‌افزاری با بال‌های پرواز.",
       "accent": "#1f5fa8",
       "accentSoft": "#3f8ad8",
-      "mark": "",
-      "logo": ""
+      "mark": "brand/arya-logo.webp",
+      "logo": "brand/arya-logo.webp"
     },
     {
       "id": "ersha",
@@ -70,8 +70,8 @@
       "taglineFa": "ساخته‌شده برای ماندن.",
       "accent": "#1b64a8",
       "accentSoft": "#4d97d8",
-      "mark": "",
-      "logo": ""
+      "mark": "brand/ersha-logo.webp",
+      "logo": "brand/ersha-logo.webp"
     },
     {
       "id": "mino",
@@ -81,8 +81,8 @@
       "taglineFa": "شفافیت، به‌صورت طراحی‌شده.",
       "accent": "#1a5c9e",
       "accentSoft": "#4a8fd0",
-      "mark": "",
-      "logo": ""
+      "mark": "brand/mino-logo.webp",
+      "logo": "brand/mino-logo.webp"
     },
     {
       "id": "homa",
@@ -92,8 +92,8 @@
       "taglineFa": "بالاتر از همهمه.",
       "accent": "#1e5fa6",
       "accentSoft": "#4d92d6",
-      "mark": "",
-      "logo": ""
+      "mark": "brand/homa-logo.webp",
+      "logo": "brand/homa-logo.webp"
     }
   ]
 }

@@ -110,7 +110,12 @@ function categoryCards(){
  // Each card is a door into a section an administrator can switch off, so a
  // hidden section must not be advertised here either - the grid then simply
  // carries the sections that are still published.
- const cats = siteCategories().map(c=>{
+ /* A door is only drawn when there is something behind it. The landing page
+    used to advertise every category the operator had defined, so a site whose
+    only products were websites still offered an Applications door that opened
+    an empty grid. The catalog's own tab row has always filtered this way; the
+    front page now agrees with it. */
+ const cats = siteCategories().filter(c=>products.some(p=>p.category===c.id&&!isAurion(p))).map(c=>{
   const [icon, copy] = CATEGORY_COPY[c.id] || ['◈', 'Products built around a clear purpose and shaped with you.'];
   return `<a href="#/products?category=${encodeURIComponent(c.id)}" class="card category-card tilt-hover mouse-light"><div class="category-icon">${icon}</div><h3>${esc(c.label)}</h3><p>${esc(copy)}</p><span class="arrow-link">↗</span></a>`;
  });
@@ -151,20 +156,20 @@ function productArt(p){
      Testing for '//' alone silently demoted every existing cover to the logo
      fallback. */
   if(cover&&/^(?:(?:https?:)?\/\/|\/)/i.test(cover)){
-    return `<div class="product-cover has-image"><img src="${esc(cover)}" alt="${esc(p.title)}" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)} / ${esc(p.category)}</span></div>`
+    return `<div class="product-cover has-image"><img src="${esc(cover)}" alt="${esc(p.title)}" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)}</span></div>`
   }
   /* No cover: the brand's logo stands in for it. A brand without a logo falls
      back to its mark, and a product with neither brand gets the studio emblem,
      so this branch always draws something. */
   const fallback=brand?(brand.logo||brand.mark||''):'';
   if(brand&&fallback){
-    return `<div class="product-cover is-emblem"><img class="cover-emblem" src="${esc(assetUrl(fallback))}" alt="${esc(brand.name)} logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)} / ${esc(categoryLabel(p.category))}</span></div>`
+    return `<div class="product-cover is-emblem"><img class="cover-emblem" src="${esc(assetUrl(fallback))}" alt="${esc(brand.name)} logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">${esc(label)}</span></div>`
   }
   /* The brand has no artwork. The monogram is drawn at emblem size, in the
      same slot, so a catalog of image-less brands still reads as a grid of
      pictures rather than four identical empty plates. */
   if(brand){
-    return `<div class="product-cover is-emblem"><span class="cover-glyph" style="--glyph-accent:${esc(brand.accent||'#1f5fa8')}">${esc((brandName(brand)||brand.name||'·').trim()[0].toUpperCase())}</span><span class="cover-label">${esc(label)} / ${esc(categoryLabel(p.category))}</span></div>`
+    return `<div class="product-cover is-emblem"><span class="cover-glyph" style="--glyph-accent:${esc(brand.accent||'#1f5fa8')}">${esc((brandName(brand)||brand.name||'·').trim()[0].toUpperCase())}</span><span class="cover-label">${esc(label)}</span></div>`
   }
   return `<div class="product-cover is-default"><img class="cover-emblem" src="${esc(assetUrl('brand/axiasoft-original.webp'))}" alt="AXIASOFT logo" loading="lazy" decoding="async" onerror="this.closest('.product-cover').classList.add('cover-failed')"><span class="cover-label">AXIA / ${esc(p.category)}</span></div>`}/* The whole card opens the product. Actions inside it (Details, Preview,
    Request) keep their own behaviour because the handler ignores clicks that
@@ -176,7 +181,7 @@ function catalog(){const brand=currentBrand();const cats=siteCategories();let ro
    published product is filtered out too: a tab that opens an empty grid is
    worse than no tab. */
 const shownCats=cats.filter(c=>products.some(p=>p.category===c.id&&!isAurion(p)));const tabsHtml=shownCats.length?`<div class="tabs"><button data-filter="All" class="tab ${productFilter==='All'?'active':''}">All</button>${shownCats.map(c=>`<button data-filter="${esc(c.id)}" class="tab ${productFilter===c.id?'active':''}">${esc(c.label)}</button>`).join('')}</div>`:'';return `<div class="container"><section class="page-head"><div class="eyebrow">The AXIASOFT catalog</div><h1>Made to move you <span class="gradient">forward.</span></h1><p>Explore our product concepts and development starting points. Every engagement can be shaped to fit your goals.</p></section>${brandStrip()}${tabsHtml}<div class="product-grid">${rows.map(card).join('')}</div>${rows.length?'':'<div class="empty-state catalog-empty">No products published yet. New products are added from the admin console, each with its own GitHub preview link.</div>'}<section class="section-sm"><div class="card cta-band"><div><h2>Need something more specific?</h2><p>Tell us about the custom product you have in mind.</p></div><a class="button button-primary" href="#/contact">Discuss your project ↗</a></div></section></div>`}
-function detail(p){return `<div class="container"><div style="padding-top:34px"><a class="back-link" href="#/products">← Back to products</a></div><div class="product-detail"><div class="card detail-visual">${productArt(p)}</div><div class="detail-copy"><div class="eyebrow">${esc(categoryLabel(p.category))} / AXIA PRODUCT</div><h1>${esc(p.title)}</h1><p>${esc(p.description)}</p><div class="detail-meta"><span class="badge">Responsive by design</span><span class="badge">Custom scope</span><span class="badge">${esc(categoryLabel(p.category))}</span></div><h3>What it can include</h3><div class="detail-features">${p.features.map(f=>`<div><span class="check">✓</span>${esc(f)}</div>`).join('')}</div><h3>Technology direction</h3><div class="detail-meta">${p.technologies.map(t=>`<span class="badge">${esc(t)}</span>`).join('')}</div>${visible('show_prices')?`<div class="price-box"><div><small>Indicative starting point</small><strong>${esc(p.price_label)}</strong></div><span class="badge">Scope confirmed together</span></div>`:''}${isAurion(p)?`<a class="button button-primary button-block" href="#/aurion">View AURION showcase ↗</a>`:`<button class="button button-primary button-block" data-order="${p.id}">Request this product ↗</button>`}<p style="font-size:9px;color:var(--faint);margin-top:12px">No payment is taken here. Scope and any quotation are confirmed before work begins.</p></div></div>${safePreview(p.github_url)?`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">Live preview</div><h3 style="font-weight:550">See it on GitHub</h3><p class="preview-disclaimer">This product is presented by its own repository. The link opens in a new tab.</p><a class="button button-primary" href="${esc(safePreview(p.github_url))}" target="_blank" rel="noopener noreferrer">Open preview ↗</a><p style="font-size:9px;color:var(--faint);margin-top:12px;word-break:break-all">${esc(p.github_url)}</p></div>`:`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">See the direction</div><h3 style="font-weight:550">Concept preview</h3><p class="preview-disclaimer">Demonstration content only—not a live customer website or functioning application.</p><div class="preview-frame"><div class="preview-toolbar"><i class="preview-dot"></i><i class="preview-dot" style="background:#ffc457"></i><i class="preview-dot" style="background:#51c99e"></i><span style="margin-left:12px">AXIASOFT concept · ${esc(p.slug)}</span></div><div class="preview-body"><div style="font-size:10px;letter-spacing:.12em;color:#337ada">${esc(categoryLabel(p.category).toUpperCase())} / PRODUCT CONCEPT</div><h2>${esc(p.title)}<br><span style="color:#377cd8">designed around you.</span></h2><p>${esc(p.summary)} This is a demonstration of visual direction only.</p><button style="background:#286fcd;color:white;border:0;padding:12px 18px;border-radius:7px">Discover more</button></div></div></div>`}</div>`}
+function detail(p){return `<div class="container"><div style="padding-top:34px"><a class="back-link" href="#/products">← Back to products</a></div><div class="product-detail"><div class="card detail-visual">${productArt(p)}</div><div class="detail-copy"><div class="eyebrow">AXIA PRODUCT</div><h1>${esc(p.title)}</h1><p>${esc(p.description)}</p><div class="detail-meta"><span class="badge">Responsive by design</span><span class="badge">Custom scope</span></div><h3>What it can include</h3><div class="detail-features">${p.features.map(f=>`<div><span class="check">✓</span>${esc(f)}</div>`).join('')}</div><h3>Technology direction</h3><div class="detail-meta">${p.technologies.map(t=>`<span class="badge">${esc(t)}</span>`).join('')}</div>${visible('show_prices')?`<div class="price-box"><div><small>Indicative starting point</small><strong>${esc(p.price_label)}</strong></div><span class="badge">Scope confirmed together</span></div>`:''}${isAurion(p)?`<a class="button button-primary button-block" href="#/aurion">View AURION showcase ↗</a>`:`<button class="button button-primary button-block" data-order="${p.id}">Request this product ↗</button>`}<p style="font-size:9px;color:var(--faint);margin-top:12px">No payment is taken here. Scope and any quotation are confirmed before work begins.</p></div></div>${safePreview(p.github_url)?`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">Live preview</div><h3 style="font-weight:550">See it on GitHub</h3><p class="preview-disclaimer">This product is presented by its own repository. The link opens in a new tab.</p><a class="button button-primary" href="${esc(safePreview(p.github_url))}" target="_blank" rel="noopener noreferrer">Open preview ↗</a><p style="font-size:9px;color:var(--faint);margin-top:12px;word-break:break-all">${esc(p.github_url)}</p></div>`:`<div class="card" style="padding:24px;margin-bottom:70px"><div class="eyebrow">See the direction</div><h3 style="font-weight:550">Concept preview</h3><p class="preview-disclaimer">Demonstration content only—not a live customer website or functioning application.</p><div class="preview-frame"><div class="preview-toolbar"><i class="preview-dot"></i><i class="preview-dot" style="background:#ffc457"></i><i class="preview-dot" style="background:#51c99e"></i><span style="margin-left:12px">AXIASOFT concept · ${esc(p.slug)}</span></div><div class="preview-body"><div style="font-size:10px;letter-spacing:.12em;color:#337ada">PRODUCT CONCEPT</div><h2>${esc(p.title)}<br><span style="color:#377cd8">designed around you.</span></h2><p>${esc(p.summary)} This is a demonstration of visual direction only.</p><button style="background:#286fcd;color:white;border:0;padding:12px 18px;border-radius:7px">Discover more</button></div></div></div>`}</div>`}
 function aurionWorkflowCards(){return `<div class="category-grid"><article class="card category-card tilt-hover mouse-light workflow-card"><div class="category-icon">⌘</div><h3>MetaTrader environment</h3><p>AURION is presented as a concept for the MetaTrader ecosystem. No broker connection or live integration is enabled.</p></article><article class="card category-card tilt-hover mouse-light workflow-card"><div class="category-icon">◉</div><h3>Operator-led</h3><p>Product direction focuses on clarity, deliberate setup and keeping the operator in control.</p></article><article class="card category-card tilt-hover mouse-light workflow-card"><div class="category-icon">⛨</div><h3>Risk-aware</h3><p>Trading involves risk. This symbolic showcase does not execute trades and is not financial advice.</p></article></div>`}
 /* The four showcase durations, in one place. The AURION page shows them as a
    strip; /aurion/plans shows the same cards with the long-form reasoning, so
@@ -707,10 +712,22 @@ function brandCatalog() {
   return Array.isArray(window.AXIA_BRANDS) ? window.AXIA_BRANDS : [];
 }
 
-// A product belongs to a brand when its slug starts with the brand id or its
-// title carries the brand name. Both are checked so an admin can add a product
-// either way and still have the button work.
+/* The category the site brands belong to. A brand is a website identity — its
+   logo, its name in the header, its accent colour — so it starts a website and
+   nothing else. Naming the category in one place means the brand strip, the
+   brand filter and the per-product brand lookup cannot disagree about it. */
+const BRAND_CATEGORY = 'websites';
+
+/* A product belongs to a brand when its slug starts with the brand id or its
+   title carries the brand name. Both are checked so an admin can add a product
+   either way and still have the button work.
+
+   The category is checked first: without it, a product merely *named* after a
+   brand — an application called "Mino Mobile" — appeared as that brand's work
+   and the brand strip offered a door into the applications tab that the brand
+   has nothing in. */
 function brandMatches(brand, product, productSlug) {
+  if (product && product.category && String(product.category) !== BRAND_CATEGORY) return false;
   const slug = String(productSlug || product?.slug || '').toLowerCase();
   const title = String(product?.title || '').toLowerCase();
   return slug === brand.id || slug.startsWith(brand.id + '-') ||
@@ -983,6 +1000,11 @@ function bindFilters() {
 /* The brand strip. It renders nothing when the catalog has no branded products,
    so an empty installation shows no dead buttons. */
 function brandStrip() {
+  /* The strip is a websites-only control. On the applications tab, or on any
+     other category, it would offer to restyle the site with a website brand
+     whose products are not on the page — the visitor clicks a brand and the
+     grid empties. It stays on "All", where both categories are shown. */
+  if (productFilter !== 'All' && productFilter !== BRAND_CATEGORY) return '';
   const available = availableBrands();
   if (!available.length) return '';
   const active = currentBrand();
