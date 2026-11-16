@@ -295,12 +295,36 @@ def _xiona_stamp():
         articles = conn.execute(
             "SELECT count(*), COALESCE(max(COALESCE(updated_at, published_at, created_at)), '') "
             "FROM articles WHERE status='published'").fetchone()
+        settings = conn.execute(
+            'SELECT updated_at FROM site_settings WHERE id=1').fetchone()
     finally:
         conn.close()
-    return (tuple(products or (0, '')), tuple(articles or (0, '')))
+    # Site settings are in the stamp because the FAQ answers the operator writes
+    # are indexed too; without it, editing a question would leave the assistant
+    # answering the previous wording until the next restart.
+    return (tuple(products or (0, '')),
+            tuple(articles or (0, '')),
+            str(settings['updated_at']) if settings else '')
 
 
 agent.configure_content(_xiona_products, _xiona_articles, _xiona_stamp)
+
+
+def _xiona_settings():
+    """The storefront settings, so the FAQ answers are part of the index.
+
+    Questions the operator writes in the console are published on the site; if
+    the assistant cannot see them it refuses to answer what the page in front
+    of the visitor displays.
+    """
+    conn = database.connect()
+    try:
+        return database.get_settings(conn)
+    finally:
+        conn.close()
+
+
+agent.configure_settings(_xiona_settings)
 
 
 def product_out(r):
