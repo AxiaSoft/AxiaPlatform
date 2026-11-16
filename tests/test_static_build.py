@@ -1863,14 +1863,19 @@ class AgentEnvFileTests(unittest.TestCase):
         self.assertEqual(line.strip(), 'AXIA_AGENT_KEY=')
 
     def test_the_example_is_not_gitignored(self):
+        # Once the file is tracked, `git add --dry-run` prints nothing (there is
+        # nothing to add), so asking git whether it would add it answers the
+        # wrong question. The rule that matters is that `.gitignore` names it as
+        # an exception to `.env.*`, and that the real secret is still ignored.
         import subprocess
-        result = subprocess.run(['git', 'check-ignore', '.env.example'],
-                                cwd=str(ROOT), capture_output=True, text=True)
-        # check-ignore reports a match for the `!.env.example` negation too, so
-        # the useful test is whether git would actually add it.
-        added = subprocess.run(['git', 'add', '--dry-run', '.env.example'],
-                               cwd=str(ROOT), capture_output=True, text=True)
-        self.assertIn('.env.example', added.stdout + added.stderr)
+        ignore = (ROOT / '.gitignore').read_text(encoding='utf-8')
+        self.assertIn('!.env.example', ignore)
+        ignored = subprocess.run(['git', 'check-ignore', '-q', '.env'],
+                                 cwd=str(ROOT), capture_output=True)
+        self.assertEqual(ignored.returncode, 0, '.env must stay ignored')
+        tracked = subprocess.run(['git', 'ls-files', '--error-unmatch', '.env.example'],
+                                 cwd=str(ROOT), capture_output=True)
+        self.assertEqual(tracked.returncode, 0, '.env.example should be in the repository')
 
 
 class XionaLanguageTests(unittest.TestCase):
@@ -1945,3 +1950,255 @@ class XionaLanguageTests(unittest.TestCase):
         finally:
             if saved is not None:
                 os.environ['AXIA_AGENT_KEY'] = saved
+
+
+class HeaderControlTests(unittest.TestCase):
+    """Every control in the header is the same size.
+
+    Four different sizes sat in one row: a 38px icon button, a 36px icon button
+    below 650px, a link-shaped button whose height came from its padding, and a
+    CTA with a third padding again. Pinned to one height and one radius here.
+    """
+
+    def setUp(self):
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+
+    def test_the_header_pins_a_height(self):
+        self.assertIn('.topbar .nav-actions > .button', self.css)
+        self.assertIn('height: 38px', self.css)
+
+    def test_the_icon_button_matches_the_text_buttons(self):
+        self.assertRegex(self.css, r'\.topbar \.nav-actions > \.icon-button \{\s*width: 38px;')
+
+    def test_the_shrink_at_the_mobile_breakpoint_is_shared(self):
+        # One media query, applied to all three classes, or the row goes ragged
+        # again on a phone.
+        block = self.css[self.css.index('@media (max-width: 650px) {\n  .topbar .nav-actions'):
+                        self.css.index('@media (max-width: 650px) {\n  .topbar .nav-actions') + 900]
+        for selector in ('.button', '.button-small', '.icon-button'):
+            self.assertIn(selector, block)
+
+    def test_only_the_header_is_pinned(self):
+        # The same .button class is used across the site, where the natural
+        # padding is wanted. A bare `.button { height: 38px }` would flatten
+        # every CTA on every page.
+        import re
+        bare = re.findall(r'(?<![>\s])\.button\s*\{[^}]*height:\s*38px', self.css)
+        self.assertEqual(bare, [], 'the height rule must be scoped to .topbar')
+
+
+class ThemeIconTests(unittest.TestCase):
+    """The theme button is a drawn sun and moon, not a character.
+
+    ◐ and ☼ are astronomical notation: different weights in different fonts,
+    a smudge at 15px, and meaningless in the light theme — a half-filled circle
+    on a page that is already light reads as "partly dark".
+    """
+
+    def setUp(self):
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.index = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
+        self.blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
+
+    def test_the_markup_ships_an_svg(self):
+        self.assertIn('class="theme-icon"><svg', self.index)
+
+    def test_the_old_glyphs_are_gone_from_markup(self):
+        self.assertNotIn('◐', self.index)
+        self.assertNotIn('>☼<', self.index)
+
+    def test_the_blog_ships_an_svg_too(self):
+        self.assertRegex(self.blog, r'id="theme-toggle"[\s\S]{0,400}<svg')
+
+    def test_both_glyphs_are_drawn(self):
+        self.assertIn('THEME_SUN', self.app)
+        self.assertIn('THEME_MOON', self.app)
+
+    def test_the_label_names_the_action_not_the_state(self):
+        self.assertIn('Switch to light theme', self.app)
+        self.assertIn('Switch to dark theme', self.app)
+
+    def test_the_blog_has_localised_labels(self):
+        import blog as blog_module
+        self.assertTrue(blog_module.COPY['en']['theme_to_light'])
+        self.assertTrue(blog_module.COPY['fa']['theme_to_dark'])
+
+
+class AdminThemeIconTests(unittest.TestCase):
+    """The console draws the same sun and moon.
+
+    It kept the old pair, so the two surfaces disagreed and the console still
+    showed an illegible half-circle in the light theme.
+    """
+
+    def setUp(self):
+        self.js = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+
+    def test_the_console_draws_svgs(self):
+        self.assertIn('ADMIN_SUN', self.js)
+        self.assertIn('ADMIN_MOON', self.js)
+
+    def test_the_toggle_repaints_the_icon(self):
+        self.assertIn('b.innerHTML=themeGlyph()', self.js)
+
+    def test_no_text_glyph_is_written_into_the_button(self):
+        # The comment explains the change and mentions the old characters; only
+        # an assignment to the button would be a regression.
+        self.assertNotIn("textContent=t==='dark'", self.js)
+        self.assertNotIn("?'◐':'☼'", self.js)
+
+class TiltReachTests(unittest.TestCase):
+    """Tilt is stronger, works under a finger, and covers the page but not the
+    header.
+
+    It used to be 10 degrees with a 10px lift, and a blanket rule switched it
+    off on every touch device. The rule now removes only the hover half on
+    touch; the press half lives in app.js.
+    """
+
+    def setUp(self):
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        self.app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+
+    def test_the_angle_and_lift_are_bigger(self):
+        self.assertIn('perspective(820px)', self.css)
+        self.assertIn('translateZ(24px)', self.css)
+
+    def test_the_shadow_moves_with_the_card(self):
+        self.assertIn('box-shadow:0 34px 70px', self.css)
+
+    def test_the_light_theme_gets_a_lighter_shadow(self):
+        self.assertIn('[data-theme=light] .tilt-hover.is-tilting', self.css)
+
+    def test_touch_is_not_a_blanket_off_switch(self):
+        start = self.css.index('@media(hover:none),(pointer:coarse){')
+        depth = 0
+        for i in range(self.css.index('{', start), len(self.css)):
+            if self.css[i] == '{':
+                depth += 1
+            elif self.css[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    block = self.css[start:i + 1]
+                    break
+        self.assertNotIn('transform:none!important', block)
+
+    def test_touch_gets_a_press_driven_tilt(self):
+        self.assertIn('.tilt-hover.is-tilting{transform:perspective(900px)', self.css)
+
+    def test_the_app_drives_both_inputs(self):
+        self.assertIn("matchMedia('(pointer:coarse)')", self.app)
+        self.assertIn("addEventListener('pointerdown',start", self.app)
+        self.assertIn("addEventListener('pointerup',end", self.app)
+
+    def test_cards_and_buttons_are_covered(self):
+        self.assertIn('TILT_SELECTORS', self.app)
+        for selector in ('.category-card', '.product-card', '.stat-card',
+                         '.cta-band', '.contact-card', '.button:not(.button-small)'):
+            self.assertIn(selector, self.app, f'{selector} is not tilted')
+
+    def test_the_header_is_excluded(self):
+        self.assertIn("el.closest('.topbar')", self.app)
+
+    def test_a_new_render_reapplies_the_classes(self):
+        # Half the routes build their markup after the first paint, so one call
+        # site would miss them.
+        self.assertIn('new MutationObserver', self.app)
+        self.assertIn('startTiltWatcher', self.app)
+
+
+class BlogShellMotionTests(unittest.TestCase):
+    """The article pages load the same motion layer as the storefront.
+
+    They did not, so two things were missing: the click ripple, and the
+    `tap-highlight-color: transparent` rule that stops the browser painting its
+    own grey-blue rectangle over a pressed control. That rectangle was the
+    "blue square hover" reported on the blog — the header's buttons are the only
+    controls there, so it was the only thing anyone saw.
+    """
+
+    def setUp(self):
+        self.blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
+        self.effects = (ROOT / 'public' / 'effects.css').read_text(encoding='utf-8')
+
+    def test_the_blog_loads_effects_css(self):
+        self.assertIn('effects.css?v=', self.blog)
+
+    def test_the_blog_loads_effects_js(self):
+        self.assertIn('effects.js?v=', self.blog)
+
+    def test_the_layer_clears_the_tap_highlight(self):
+        self.assertIn('-webkit-tap-highlight-color: transparent', self.effects)
+        self.assertIn('tap-highlight-color: transparent', self.effects)
+
+    def test_the_ripple_covers_the_header_controls(self):
+        # .icon-button is in the ripple's selector list, or the theme and menu
+        # buttons would be the only controls without one. The list is the block
+        # that sets tap-highlight-color, not everything before the first brace.
+        marker = 'tap-highlight-color: transparent'
+        start = self.effects.rindex('{', 0, self.effects.index(marker))
+        selector_list = self.effects[:start]
+        selector_list = selector_list[selector_list.rindex('}') + 1:] if '}' in selector_list else selector_list
+        self.assertIn('.icon-button', selector_list)
+
+
+class BlogDrawerCascadeTests(unittest.TestCase):
+    """The blog drawer can actually be closed.
+
+    styles.css opens `.mobile-nav` with `display: flex !important` because the
+    storefront inserts it only when it should be visible. The blog renders it in
+    the markup and toggles `hidden`, so a plain `display: none` lost the cascade
+    to that !important. The drawer was therefore always on screen — which is why
+    the menu button looked broken: the panel was already covering it, and the
+    first tap was hitting the panel.
+    """
+
+    def setUp(self):
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+        self.blog_css = (ROOT / 'public' / 'blog.css').read_text(encoding='utf-8')
+        self.blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
+
+    def test_the_storefront_still_opens_it_with_important(self):
+        # If this ever changes, the blog rule below can drop its own !important.
+        # Asserting it keeps the reason visible.
+        self.assertRegex(self.css, r'\.mobile-nav\{display:flex!important')
+
+    def test_the_blog_closes_it_with_important(self):
+        self.assertIn('.blog-body .mobile-nav[hidden] { display: none !important; }',
+                      self.blog_css)
+
+    def test_the_blog_renders_the_drawer_hidden(self):
+        self.assertIn('id="blog-mobile-nav" hidden', self.blog)
+
+    def test_the_script_toggles_the_hidden_attribute(self):
+        self.assertIn('drawer.hidden = !on', self.blog)
+        self.assertIn("drawer.classList.toggle('open', on)", self.blog)
+
+    def test_the_close_button_is_wired(self):
+        self.assertIn('blog-menu-close', self.blog)
+        self.assertIn("close.addEventListener('click'", self.blog)
+
+    def test_a_link_inside_closes_it(self):
+        self.assertIn("if (e.target.tagName === 'A')", self.blog)
+
+    def test_the_body_scroll_is_locked_while_open(self):
+        self.assertIn("document.body.style.overflow = on ? 'hidden' : ''", self.blog)
+
+
+class FocusRingTests(unittest.TestCase):
+    """A focus ring follows the control's own radius.
+
+    `outline` draws a rectangle and border-radius does not clip it, so tabbing
+    to a pill-shaped button drew a hard blue box around a rounded surface.
+    """
+
+    def setUp(self):
+        self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
+
+    def test_rounded_controls_get_a_rounded_ring(self):
+        block = self.css[self.css.index('.button:focus-visible,'):]
+        self.assertIn('border-radius: 11px', block[:600])
+
+    def test_the_ring_is_not_removed(self):
+        # Cosmetic, not a reason to take focus indication away.
+        self.assertIn('outline: 2px solid var(--blue)', self.css)

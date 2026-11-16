@@ -219,8 +219,13 @@ img{max-width:100%}
 .hero-logo{animation:none!important;transform-style:preserve-3d}
 .aurion-core.aurion-logo-hover{transform-style:preserve-3d}
 @media(hover:hover) and (pointer:fine){
- .tilt-hover{transform-style:preserve-3d;transition:transform .28s cubic-bezier(.2,.72,.24,1),border-color .22s ease!important}
- .tilt-hover.is-tilting{transform:perspective(1050px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(10px);will-change:transform;z-index:5}
+ /* The angles were 10/8 degrees with a 10px lift, which reads as a slight
+    wobble. 16/13 with a 24px lift is unmistakably a card being tipped toward
+    the pointer, and the shadow now sits under the raised edge instead of
+    staying flat, which is what sells the depth. The values themselves are set
+    by app.js; this rule only says how to draw them. */
+ .tilt-hover{transform-style:preserve-3d;transition:transform .34s cubic-bezier(.2,.72,.24,1),border-color .22s ease,box-shadow .34s ease!important}
+ .tilt-hover.is-tilting{transform:perspective(820px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(24px) scale(1.022);will-change:transform;z-index:5;box-shadow:0 34px 70px rgba(0,0,0,.42),0 0 0 1px rgba(120,178,255,.16)}
  .hero-logo.is-tilting{transform:perspective(950px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(20px)}
  .aurion-core.aurion-logo-hover.is-tilting{transform:perspective(950px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(18px)}
  .mouse-light{isolation:isolate}
@@ -228,8 +233,22 @@ img{max-width:100%}
  .mouse-light.is-lit::before{opacity:1}
  .mouse-light:hover{border-color:rgba(118,174,247,.42)}
 }
-@media(hover:none),(pointer:coarse){.tilt-hover{transform:none!important;will-change:auto}}
+/* Tilt runs on touch as well now. It was switched off here because a tilt that
+   follows a finger needs a different input than one that follows a mouse: there
+   is no hover to start it, so the element has to react to a press. The rule
+   below only removes the *hover* half on touch — the press half is driven by
+   pointerdown/pointermove in app.js, which knows the difference. Leaving the
+   blanket `transform:none !important` here would kill both. */
+@media(hover:none),(pointer:coarse){
+  .tilt-hover{transform-style:preserve-3d}
+  /* A press, not a hover: the element lifts and stays lifted while held. */
+  .tilt-hover.is-tilting{transform:perspective(900px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(6px);will-change:transform;z-index:5}
+}
 @media(prefers-reduced-motion:reduce){.tilt-hover{transform:none!important;transition:none!important}.mouse-light::before{display:none}}
+
+/* A 42%-black shadow under a white card on a near-white page reads as a hole.
+   The same lift in the light theme is a soft blue-grey. */
+[data-theme=light] .tilt-hover.is-tilting{box-shadow:0 30px 60px rgba(43,70,108,.20),0 0 0 1px rgba(46,110,208,.14)}
 
 /* Persian locale: maintain the original glass treatment while applying native RTL flow. */
 @font-face{font-family:"Vazirmatn";src:url("/fonts/Vazirmatn-Variable.woff2") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}
@@ -974,3 +993,80 @@ body.preview-open .topbar { visibility: hidden; }
 .plan-faq .faq[open] summary:before{content:"−"}
 .plan-faq .faq p{margin:0;padding:0 0 18px;font-size:12px;line-height:1.9;color:var(--muted)}
 .plans-more{margin-top:22px}
+
+/* ---- one size for every control in the header --------------------------
+   The header held four different control sizes: a 38px icon button, a 36px
+   icon button below 650px, a link-shaped button whose height came from its
+   padding (so it was shorter than both), and the primary CTA with a third
+   padding again. Sitting in a row, the row looked hand-assembled.
+
+   They are pinned to one height and one corner radius here, and the icon
+   button is given the same padding as the text buttons so its box is the same
+   shape rather than a square among rectangles. Only the header is affected:
+   the same .button class is used everywhere else on the site, where the
+   natural padding is wanted. */
+.topbar .nav-actions { gap: 8px; }
+.topbar .nav-actions > .button,
+.topbar .nav-actions > .button-small,
+.topbar .nav-actions > .icon-button {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 11px;
+  font-size: 12.5px;
+  line-height: 1;
+  flex: none;
+  box-sizing: border-box;
+}
+.topbar .nav-actions > .icon-button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+@media (max-width: 650px) {
+  .topbar .nav-actions { gap: 6px; }
+  .topbar .nav-actions > .button,
+  .topbar .nav-actions > .button-small,
+  .topbar .nav-actions > .icon-button {
+    height: 34px;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    border-radius: 10px;
+  }
+  .topbar .nav-actions > .icon-button { width: 34px; min-width: 34px; padding: 0; }
+}
+/* The theme toggle keeps its own glyph, which was a piece of astronomical
+   notation (◐ / ☼) that reads as a smudge at 12px and has no meaning in the
+   light theme — a half-filled circle suggests "partly dark" while the page is
+   already light. A sun for the light theme and a moon for the dark one are
+   both legible at this size and say what the button will do. */
+.theme-icon { font-size: 15px; line-height: 1; display: block; }
+.theme-toggle svg { width: 17px; height: 17px; display: block; }
+
+/* A focus ring that follows the control's own radius.
+
+   `outline` draws a rectangle, and `border-radius` does not clip it in most
+   browsers — so tabbing to a pill-shaped button drew a hard blue box around a
+   rounded surface. That was the "blue square hover" reported on the blog,
+   where the header's buttons are the only controls and every one of them is
+   rounded: the ring was the only thing anyone saw.
+
+   outline-offset is kept so the ring still clears the border, and the ring is
+   drawn with the same radius as the control so the two shapes agree. Focus
+   visibility is not weakened: this is a cosmetic change, and keyboard users
+   still get a ring on every focusable thing. */
+.button:focus-visible,
+.icon-button:focus-visible,
+.contact-product:focus-visible,
+.brand-pick:focus-visible,
+.blog-card-link:focus-visible,
+.chat-chip:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 11px;
+}
+.icon-button:focus-visible { border-radius: 11px; }
+/* The nav links and footer links are text, not boxes: a rounded ring there
+   would look like it belonged to a button that is not there. They keep the
+   rectangular ring, which is correct for a run of text. */

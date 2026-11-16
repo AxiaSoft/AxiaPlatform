@@ -245,6 +245,7 @@ COPY = {
         'nav_products': 'محصولات', 'nav_services': 'خدمات', 'nav_blog': 'وبلاگ',
         'nav_about': 'درباره ما', 'nav_cta': 'شروع پروژه', 'skip': 'پرش به محتوا',
         'nav_aurion': 'AURION', 'theme_toggle': 'تغییر حالت روشن و تاریک',
+        'theme_to_light': 'تغییر به حالت روشن', 'theme_to_dark': 'تغییر به حالت تاریک',
         'open_menu': 'باز کردن منو', 'close_menu': 'بستن منو',
         'blog_title': 'وبلاگ AXIASOFT', 'blog_h1a': 'یادداشت‌هایی دربارهٔ ساختن',
         'blog_h1b': 'محصول دیجیتال',
@@ -261,6 +262,7 @@ COPY = {
         'nav_products': 'Products', 'nav_services': 'Services', 'nav_blog': 'Blog',
         'nav_about': 'About', 'nav_cta': 'Start a project', 'skip': 'Skip to content',
         'nav_aurion': 'AURION', 'theme_toggle': 'Toggle color theme',
+        'theme_to_light': 'Switch to light theme', 'theme_to_dark': 'Switch to dark theme',
         'open_menu': 'Open menu', 'close_menu': 'Close menu',
         'blog_title': 'AXIASOFT Blog', 'blog_h1a': 'Notes on building',
         'blog_h1b': 'digital products',
@@ -462,8 +464,9 @@ def shell(head, body, lang='fa', base='', slug=''):
   (function(){{try{{var t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}}catch(e){{document.documentElement.dataset.theme='dark';}}}})();
   </script>
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{root}/styles.css?v=site-17">
-  <link rel="stylesheet" href="{root}/blog.css?v=5">
+  <link rel="stylesheet" href="{root}/styles.css?v=site-19">
+  <link rel="stylesheet" href="{root}/effects.css?v=fx-5">
+  <link rel="stylesheet" href="{root}/blog.css?v=7">
 </head>
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -471,7 +474,7 @@ def shell(head, body, lang='fa', base='', slug=''):
 <header class="topbar">
   <a href="{root}/" class="brand" aria-label="AXIASOFT home"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
   <nav class="nav-links" aria-label="{t['nav_products']}"><a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/about">{t['nav_about']}</a></nav>
-  <div class="nav-actions"><a class="blog-lang" href="{other_lang_url}" hreflang="{other_lang}" lang="{other_lang}" rel="alternate">{switch_label}</a><button class="icon-button theme-toggle" id="theme-toggle" aria-label="{t['theme_toggle']}" title="{t['theme_toggle']}"><span class="theme-icon">◐</span></button><a class="button button-small button-primary nav-cta" href="{root}/#/contact">{t['nav_cta']} <span>↗</span></a><button class="mobile-menu icon-button" id="blog-menu" aria-label="{t['open_menu']}" aria-expanded="false">☰</button></div>
+  <div class="nav-actions"><a class="blog-lang" href="{other_lang_url}" hreflang="{other_lang}" lang="{other_lang}" rel="alternate">{switch_label}</a><button class="icon-button theme-toggle" id="theme-toggle" aria-label="{t['theme_toggle']}" title="{t['theme_toggle']}" data-to-light="{t['theme_to_light']}" data-to-dark="{t['theme_to_dark']}"><span class="theme-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span></button><a class="button button-small button-primary nav-cta" href="{root}/#/contact">{t['nav_cta']} <span>↗</span></a><button class="mobile-menu icon-button" id="blog-menu" aria-label="{t['open_menu']}" aria-expanded="false">☰</button></div>
 </header>
 <nav class="mobile-nav" id="blog-mobile-nav" hidden aria-label="{t['nav_products']}">
   <button class="icon-button close-mobile" id="blog-menu-close" aria-label="{t['close_menu']}">×</button>
@@ -484,6 +487,7 @@ def shell(head, body, lang='fa', base='', slug=''):
   <div class="footer-links"><a href="{root}/#/contact">{t['contact']}</a><a href="{blog_home}">{t['feed']}</a><a href="{root}/#/privacy">{t['privacy']}</a></div></div>
   <div class="footer-bottom"><span>© AXIASOFT</span><span>{t['made']} <span class="blue">✦</span></span></div>
 </footer>
+<script src="{root}/effects.js?v=fx-5" defer></script>
 <script>
 /* The article pages are static HTML, so the two header controls the
    storefront gets from app.js are wired here instead. Small on purpose: a
@@ -494,7 +498,16 @@ def shell(head, body, lang='fa', base='', slug=''):
   var root = document.documentElement;
   var toggle = document.getElementById('theme-toggle');
   if (toggle) {{
-    var paint = function () {{ toggle.querySelector('.theme-icon').textContent = root.dataset.theme === 'dark' ? '◐' : '☼'; }};
+    /* Same two glyphs as the storefront (public/app.js), inline because this
+       page is server-rendered and does not load app.js. */
+    var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>';
+    var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
+    var paint = function () {{
+      var dark = root.dataset.theme === 'dark';
+      toggle.querySelector('.theme-icon').innerHTML = dark ? MOON : SUN;
+      var label = dark ? toggle.dataset.toLight : toggle.dataset.toDark;
+      if (label) {{ toggle.setAttribute('aria-label', label); toggle.setAttribute('title', label); }}
+    }};
     paint();
     toggle.addEventListener('click', function () {{
       var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
