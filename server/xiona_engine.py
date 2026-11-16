@@ -44,7 +44,18 @@ STOPWORDS = {
            'شما', 'ما', 'من', 'او', 'آنها', 'همه', 'بیشتر', 'خیلی', 'چیست', 'چیه',
            'چرا', 'آیا', 'باید', 'توانم', 'توانید', 'می‌توانم', 'می‌توانید', 'هست',
            'هستند', 'هستم', 'نیست', 'بوده', 'دارند', 'لطفا', 'لطفاً', 'بگو',
-           'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم'},
+           'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم',
+           # The stopword list must match the browser engine's word for word;
+           # the two are the same assistant and drift shows up as one of them
+           # answering a question the other refuses. These were missing here and
+           # present in xiona.js. Light verbs carry no subject on their own —
+           # «چه خدماتی ارائه می‌دهید؟» is a question about services — but the
+           # phrase-pair table attaches meanings to them anyway ("دهید" appears
+           # in sentences about payments and starting a project), which dragged
+           # unrelated words into the search and dropped coverage below the gate.
+           'دهید', 'دهد', 'کن', 'کرده', 'دار', 'است؟', 'انجام', 'طور', 'مورد',
+           'پس', 'بودن', 'باش', 'باشه', 'کردن', 'دادن', 'گفتن', 'لازم', 'لطف',
+           'عزیز', 'بله', 'نه'},
     'en': {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'do', 'does', 'did',
            'how', 'what', 'when', 'where', 'who', 'why', 'can', 'could', 'would',
            'should', 'i', 'you', 'we', 'they', 'it', 'of', 'to', 'in', 'on', 'for',
