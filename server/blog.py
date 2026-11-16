@@ -464,7 +464,7 @@ def shell(head, body, lang='fa', base='', slug=''):
   (function(){{try{{var t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}}catch(e){{document.documentElement.dataset.theme='dark';}}}})();
   </script>
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{root}/styles.css?v=site-19">
+  <link rel="stylesheet" href="{root}/styles.css?v=site-21">
   <link rel="stylesheet" href="{root}/effects.css?v=fx-5">
   <link rel="stylesheet" href="{root}/blog.css?v=7">
 </head>

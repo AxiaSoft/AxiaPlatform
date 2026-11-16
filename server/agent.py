@@ -52,6 +52,9 @@ import urllib.request
 
 MAX_QUESTION = 800
 MAX_HISTORY = 8
+# How many turns a saved conversation keeps. The browser trims to the same
+# number; this is the server's own bound, because the count arrives from there.
+HISTORY_TURNS = 60
 
 
 def load_env_file(path=None):
@@ -162,10 +165,13 @@ SYSTEM_PROMPT = (
     '- Keep it to at most four sentences. Plain language, no marketing filler, no bullet '
     'lists unless the visitor asked for a list.\n\n'
     'LANGUAGE\n'
-    'Reply in {language}. That is the language the visitor used; use it even if the '
-    'PUBLISHED text below is in the other language. Write Persian in Persian script, '
-    'never transliterated. Keep product names (AXIASOFT, AURION) and technical terms '
-    '(MetaTrader, API) as they are.\n\n'
+    'Reply in {language}. That is the language the visitor is reading the site in, '
+    'and it is not negotiable: they may type the question in the other language, or '
+    'quote a product name, or paste English text — the answer is still {language}. '
+    'Do not mirror the question. Use it even if the PUBLISHED text below is in the '
+    'other language. Write Persian in Persian script, never transliterated. Keep '
+    'product names (AXIASOFT, AURION) and technical terms (MetaTrader, API) as they '
+    'are.\n\n'
     'PUBLISHED:\n{context}'
 )
 
@@ -235,7 +241,7 @@ def _looks_persian(text):
     return bool(re.search(r'[\u0600-\u06FF]', str(text or '')))
 
 
-def answer(question, history=None):
+def answer(question, history=None, language=None):
     """Public entry point. Always returns an answer and how it was produced.
 
     Retrieval still runs first, because it is what supplies the model with the
@@ -251,7 +257,13 @@ def answer(question, history=None):
     """
     question = str(question or '').strip()[:MAX_QUESTION]
     index = engine()
-    local = index.answer(question)
+    # The interface language, not the question's. A visitor reading the site in
+    # English who types Persian must still be answered in English - inferring
+    # from the text was how a Persian question came back in English (or, worse,
+    # in Persian on the English site, quoting the wrong-language corpus).
+    if language not in LANGUAGE_NAMES:
+        language = 'fa' if _looks_persian(question) else 'en'
+    local = index.answer(question, language=language)
 
     # `topics` stays part of the response shape: it names the pages an answer
     # drew on, which the console surfaces and the browser logs.

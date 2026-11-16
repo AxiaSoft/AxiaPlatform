@@ -314,9 +314,17 @@ stays on the server: it is never sent to the browser, never written into the
 static build, and never returned by `/api/agent`.
 
 With a model configured Xiona will answer questions the site never wrote down,
-compare products, recommend one, and reply in the language the visitor used.
-Without one it falls back to retrieval, which is what the GitHub Pages build
+compare products, recommend one, and reply in the language **the site is being
+read in** — not the language the question was typed in. A visitor on the Persian
+site who types English gets Persian and vice versa; that is a hard rule, not a
+model preference, and it is enforced in the engine as well as the prompt.
+Without a model it falls back to retrieval, which is what the GitHub Pages build
 does because there is no server there.
+
+The conversation persists. Signed in, it is stored on the account
+(`agent_history`) and comes back on any device. Signed out, it is kept in the
+tab's `sessionStorage`, so it survives a reload and closing the panel but ends
+when the browser session does. See `docs/agent.md`.
 
 See [`docs/agent.md`](docs/agent.md) for the provider table, the local-Ollama
 option and what the agent is not allowed to do.

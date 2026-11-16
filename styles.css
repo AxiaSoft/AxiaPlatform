@@ -1070,3 +1070,24 @@ body.preview-open .topbar { visibility: hidden; }
 /* The nav links and footer links are text, not boxes: a rounded ring there
    would look like it belonged to a button that is not there. They keep the
    rectangular ring, which is correct for a run of text. */
+
+/* The seam between a resumed conversation and the live one. It has to read as
+   a note to the visitor, not as a message from the assistant, so it is quiet:
+   a rule with a label in the middle, in the muted colour rather than black. */
+.chat-resumed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 2px;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.chat-resumed::before,
+.chat-resumed::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}

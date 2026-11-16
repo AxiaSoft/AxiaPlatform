@@ -65,7 +65,7 @@ class AdminApiTests(unittest.TestCase):
         self.admin = build_opener(HTTPCookieProcessor(CookieJar()))
         self.customer = build_opener(HTTPCookieProcessor(CookieJar()))
         self.csrf = self.login(self.admin, 'admin@example.test', 'admin test password')
-        self.login(self.customer, 'customer@example.test', 'customer test password')
+        self.customer_csrf = self.login(self.customer, 'customer@example.test', 'customer test password')
 
     def request(self, opener, path, method='GET', payload=None, csrf=None):
         data = None if payload is None else json.dumps(payload).encode()
@@ -308,3 +308,94 @@ class AdminApiTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AgentHistoryApiTests(AdminApiTests):
+    """The conversation with Xiona belongs to the account, not the tab.
+
+    Signed in, it comes back on any device. Signed out there is no identity to
+    attach it to, so the endpoint refuses and the browser keeps it for the tab's
+    lifetime instead — which is the whole contract the storefront depends on.
+    """
+
+    def setUp(self):
+        # This class logs in a second time (the cross-device case), and the auth
+        # bucket is shared by every test in the process. Clearing it keeps the
+        # tests about the endpoint rather than about each other's rate budget.
+        app.RATE = type(app.RATE)()
+        super().setUp()
+        # One customer row, one history: without this each test would inherit
+        # the conversation the previous one saved.
+        conn = db.connect()
+        conn.execute('DELETE FROM agent_history')
+        conn.commit()
+        conn.close()
+
+    def history(self, opener, method='GET', payload=None, csrf=None):
+        return self.request(opener, '/api/agent/history', method, payload, csrf)
+
+    def test_a_signed_out_visitor_gets_no_history(self):
+        status, _ = self.history(build_opener())
+        self.assertEqual(status, 401)
+
+    def test_a_new_account_has_an_empty_history(self):
+        status, data = self.history(self.customer)
+        self.assertEqual(status, 200)
+        self.assertEqual(data['history'], [])
+
+    def test_turns_round_trip(self):
+        turns = [{'role': 'user', 'text': 'what do you offer?'},
+                 {'role': 'bot', 'text': 'Websites and applications.'}]
+        status, _ = self.history(self.customer, 'POST', {'history': turns}, self.customer_csrf)
+        self.assertEqual(status, 200)
+        status, data = self.history(self.customer)
+        self.assertEqual(status, 200)
+        self.assertEqual(data['history'], turns)
+
+    def test_the_history_survives_a_new_session(self):
+        # The point of storing it: a different device is a different cookie jar.
+        turns = [{'role': 'user', 'text': 'where are you based?'}]
+        self.history(self.customer, 'POST', {'history': turns}, self.customer_csrf)
+        other = build_opener(HTTPCookieProcessor(CookieJar()))
+        self.login(other, 'customer@example.test', 'customer test password')
+        status, data = self.history(other)
+        self.assertEqual(status, 200)
+        self.assertEqual(data['history'], turns)
+
+    def test_one_account_cannot_read_another(self):
+        self.history(self.customer, 'POST',
+                     {'history': [{'role': 'user', 'text': 'private question'}]}, self.customer_csrf)
+        status, data = self.history(self.admin)
+        self.assertEqual(status, 200)
+        self.assertEqual(data['history'], [])
+
+    def test_delete_clears_it(self):
+        self.history(self.customer, 'POST',
+                     {'history': [{'role': 'user', 'text': 'goodbye'}]}, self.customer_csrf)
+        status, _ = self.history(self.customer, 'DELETE', None, self.customer_csrf)
+        self.assertEqual(status, 200)
+        _, data = self.history(self.customer)
+        self.assertEqual(data['history'], [])
+
+    def test_a_write_without_csrf_is_refused(self):
+        status, _ = self.history(self.customer, 'POST',
+                                 {'history': [{'role': 'user', 'text': 'x'}]})
+        self.assertEqual(status, 403)
+
+    def test_the_saved_list_is_bounded_and_cleaned(self):
+        # The browser sends this; it is not trusted. Unknown roles become 'bot',
+        # non-dicts and blanks are dropped, and the tail is what is kept.
+        payload = {'history': [{'role': 'user', 'text': 'first'},
+                               'not a turn',
+                               {'role': 'user', 'text': ''},
+                               {'role': 'alien', 'text': 'last'}]}
+        self.history(self.customer, 'POST', payload, self.customer_csrf)
+        _, data = self.history(self.customer)
+        self.assertEqual(data['history'], [{'role': 'user', 'text': 'first'},
+                                           {'role': 'bot', 'text': 'last'}])
+
+    def test_a_long_turn_is_truncated(self):
+        self.history(self.customer, 'POST',
+                     {'history': [{'role': 'user', 'text': 'x' * 5000}]}, self.customer_csrf)
+        _, data = self.history(self.customer)
+        self.assertEqual(len(data['history'][0]['text']), app.agent.MAX_QUESTION)

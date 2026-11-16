@@ -808,6 +808,27 @@
   // The greeting test therefore anchors at the start and checks the token.
   var GREETING = /^(hi|hello|hey|salam|سلام|درود|وقت بخیر|چطوری|خوبی)(\s|$|[!,.؟?])/i;
 
+  /* The language Xiona answers in is the language the site is being read in.
+
+     It used to be inferred from the question, which is wrong in the one case
+     that matters: a Persian speaker on the English site asking in Persian got
+     an English answer, and — worse — a Persian question typed into the English
+     site was refused outright, because the Persian subject words were absent
+     from the English index. The site already knows which language the visitor
+     chose; the question is a question, not a preference.
+
+     `documentElement.lang` is what i18n.js sets, and it is 'fa' or 'en' only,
+     so this cannot produce a third language. */
+  function uiLanguage() {
+    if (typeof document !== 'undefined' && document.documentElement) {
+      var lang = document.documentElement.lang;
+      if (lang === 'fa' || lang === 'en') return lang;
+    }
+    return 'en';
+  }
+
+  // The language of a piece of text, which is not the same question as the
+  // language to answer in. Used for English text on a Persian page.
   function languageOf(text) { return isPersian(text) ? 'fa' : 'en'; }
 
   // Sentences that only make sense inside their own page ("open Products").
@@ -909,13 +930,73 @@
 
   /* The words of a question that appear nowhere in the corpus. A question made
      entirely of such words is about something this site does not publish. */
+  /* The words the site has no text behind.
+
+     `known()` already asks the dictionary whether the site has a word for this
+     one, which is what makes a Persian question about English copy workable. It
+     was not enough on its own: the English build indexes only English text, so
+     a Persian subject word ('محصولات') has no direct occurrence anywhere, and
+     the question was refused as "not covered" even where the site answers it in
+     the other language. A term whose translation the corpus actually uses is
+     therefore not absent — the search will bridge it. */
+  /* When the site's language has no text for a question but the other one
+     does, saying which one does is more useful than a bare refusal — and it is
+     still an honest answer in the language the visitor chose. */
+  Engine.prototype._otherLanguageHint = function (query, language) {
+    if (language !== 'fa') return '';
+    var other = 'en';
+    if (!(this.corpus[other] || []).length) return '';
+    // Only say it when the other language really does answer this question.
+    var there = this.search(query, { language: other, limit: 1 });
+    if (!there.length || this._judge(there[0])) return '';
+    return ' بخشی از محتوای این سایت هنوز فقط به انگلیسی منتشر شده است؛ ' +
+           'اگر مایل بودید زبان سایت را از دکمهٔ بالای صفحه به انگلیسی تغییر دهید.';
+  };
+
+  /* Identity questions, in both languages and their common spellings. Kept
+     tight: this decides to bypass retrieval, so a loose match would swallow
+     real questions ("who built this website" is about the studio, not me). */
+  // Persian identity questions arrive with or without the pronoun, and with
+  // the copula written several ways: "شما کی هستید", "کی هستی", "تو کی هستی".
+  var IDENTITY = /(\bwho\s+are\s+you\b|\bwhat\s+are\s+you\b|\bwho\s+am\s+i\s+talking\s+to\b|\bare\s+you\s+(a\s+)?(bot|robot|human|ai)\b|(?:شما|تو|شخص)?\s*(?:کی|چی)\s*(?:هستید|هستی|هست|هس|ه)\s*[؟?]?\s*$|(?:شما|تو)\s*کی\s*(?:هستید|هستی))/i;
+
+  Engine.prototype._asksIdentity = function (query) {
+    return IDENTITY.test(String(query || ''));
+  };
+
+  /* The chunk the panel taught the engine, or a description kept here for the
+     case where the panel has not been opened yet - the assistant must be able
+     to introduce itself before the visitor clicks the launcher. */
+  Engine.prototype._selfChunk = function (language) {
+    /* Two chunks can describe the assistant - one per language, because the
+       panel text is translated with the rest of the interface. Take the one in
+       the reply's language and fall back to whatever is there. */
+    var any = null;
+    for (var d = 0; d < this.docs.length; d++) {
+      if (this.docs[d].topic !== 'assistant') continue;
+      if (!any) any = this.docs[d];
+      if (language && this.docs[d].language === language) return this.docs[d];
+    }
+    return any;
+  };
+
   Engine.prototype.absentTerms = function (terms) {
     var out = [];
     for (var i = 0; i < terms.length; i++) {
-      if (this.known(terms[i])) continue;
+      if (this.known(terms[i]) || this.bridged(terms[i])) continue;
       if (out.indexOf(terms[i]) === -1) out.push(terms[i]);
     }
     return out;
+  };
+
+  /* Does the dictionary translate this term into a word the site's own text
+     uses? That is the difference between "the site never mentions this" and
+     "the site mentions it in the other language", and only the second one is
+     worth searching for. */
+  Engine.prototype.bridged = function (term) {
+    var direct = (this.lexicon.fa && this.lexicon.fa[term]) ||
+                 (this.lexicon.en && this.lexicon.en[term]);
+    return !!(direct && this.reach(direct, []) > 0);
   };
 
   /* Does a word the site knows actually answer this question, or is it only the
@@ -984,6 +1065,7 @@
       unsure: 'پاسخ تأییدشده‌ای برای این سؤال پیدا نکردم.',
       nodocs: 'هنوز دانشی برای پاسخ دادن ندارم. وقتی محصول یا مقاله‌ای منتشر شود، Xiona آن را می‌خواند و پاسخ می‌دهد.',
       greeting: 'سلام. من Xiona هستم؛ دستیار همین سایت.',
+      self: 'من Xiona هستم، دستیار همین سایت. از آنچه AXIASOFT اینجا منتشر کرده پاسخ می‌دهم، به همان زبانی که سایت را می‌خوانید، و به سفارش‌ها، پرداخت‌ها یا حساب شما دسترسی ندارم.',
       html: 'این سایت در مرحلهٔ توسعه است.'
     },
     en: {
@@ -993,6 +1075,7 @@
       unsure: "I couldn't find an answer to that on this site.",
       nodocs: "I have no knowledge yet. Once a product or article is published, Xiona reads it and can answer from it.",
       greeting: "Hi, I'm Xiona — this site's own assistant.",
+      self: "I'm Xiona, the assistant for this site. I answer from what AXIASOFT publishes here, in the language you are reading the site in, and I cannot see orders, payments or your account.",
       html: 'This site is in development.'
     }
   };
@@ -1001,15 +1084,44 @@
      cover - from the index, so the sentence cannot go stale. */
   function uncoveredText(absent, language, topics) {
     var join = language === 'fa' ? '، ' : ', ';
-    var subject = absent.join(join);
-    var list = topics.slice(0, 5).join(join);
+    /* The unmatched words are the visitor's, not the site's, and they arrive in
+       whichever language the question was typed in. Quoting them inside a reply
+       in the other language puts foreign script in the sentence - the same
+       wrong-language leak, just in one word. Keep only the words written in the
+       language this reply is in; if none are, the sentence drops the quote. */
+    var own = [];
+    for (var w = 0; w < absent.length; w++) {
+      if (languageOf(absent[w]) === language) own.push(absent[w]);
+    }
+    var subject = own.join(join);
+    /* The index names its topics in English ('Products', 'refunds-policy'),
+       because those are the site's own section names. Listing them raw inside a
+       Persian sentence is the same wrong-language leak this function exists to
+       avoid, so they are translated through the site's dictionary. */
+    var named = [];
+    for (var t = 0; t < topics.length && named.length < 5; t++) {
+      var word = topics[t];
+      if (language === 'fa') {
+        var translated = (typeof window !== 'undefined' && window.AXIA_T)
+          ? window.AXIA_T(word) : word;
+        named.push(translated || word);
+      } else {
+        named.push(word);
+      }
+    }
+    var list = named.join(join);
     if (language === 'fa') {
-      return 'این سایت دربارهٔ «' + subject + '» چیزی منتشر نکرده است، پس پاسخ تأییدشده‌ای ندارم.' +
+      var faLead = subject
+        ? 'این سایت دربارهٔ «' + subject + '» چیزی منتشر نکرده است، '
+        : 'دربارهٔ این پرسش چیزی منتشر نکرده‌ام، ';
+      return faLead + 'پس پاسخ تأییدشده‌ای ندارم.' +
              (list ? ' آنچه منتشر شده: ' + list + '.' : '') +
              ' می‌توانید پرسش خود را از صفحهٔ «شروع پروژه» مطرح کنید.';
     }
-    return 'This site does not publish anything about "' + subject +
-           '", so I have no answer for it.' +
+    var enLead = subject
+      ? 'This site does not publish anything about "' + subject + '", '
+      : 'The site does not publish anything I can answer that with, ';
+    return enLead + 'so I have no answer for it.' +
            (list ? ' What it does publish: ' + list + '.' : '') +
            ' You can raise it on the Start a project page.';
   }
@@ -1017,7 +1129,11 @@
   Engine.prototype.answer = function (question, options) {
     var opts = options || {};
     var query = String(question || '').trim();
-    var language = languageOf(query);
+    /* The reply language is the site's language. `opts.language` exists so the
+       tests and the server can be explicit; the visitor's question never
+       decides it, because a Persian question on the English site must still be
+       answered in English. */
+    var language = (opts.language === 'fa' || opts.language === 'en') ? opts.language : uiLanguage();
     var labels = LABELS[language];
     if (!query) {
       return { text: labels.unsure, source: 'empty', language: language, citations: [] };
@@ -1086,6 +1202,21 @@
       return { text: labels.unsure, source: 'no-match', language: language, citations: [] };
     }
 
+    /* "Who are you?" is a question about the assistant, not about the site, and
+       retrieval answers it badly: 'who are you' matched the privacy page's
+       "contact support to request access" sentence, and the Persian form left
+       the copula 'هستید' as a content word and was refused outright. The panel
+       publishes what this assistant is, so answer from that chunk when the
+       question is an identity question - in whatever words it arrived. */
+    if (this._asksIdentity(query)) {
+      var me = this._selfChunk(language);
+      if (me) {
+        return { text: focus(me.text, [], 320), source: 'knowledge', language: language,
+                 citations: [{ title: me.title, route: me.route, topic: me.topic, score: 1 }] };
+      }
+      return { text: labels.self, source: 'knowledge', language: language, citations: [] };
+    }
+
     var absent = this.absentTerms(terms);
     var subjectMissing = false;
     for (var a = 0; a < absent.length; a++) {
@@ -1105,9 +1236,30 @@
     // of its catalog is Persian, so language is a weak signal: preferring the
     // question's own language made a Persian question match the one Persian
     // article and stop, ignoring the page that actually answered it.
-    var hits = this.search(query, { language: 'any', limit: this.maxResults });
+    /* Answer in the site's language, or say plainly that this language has no
+       text for it.
+
+       The corpus is lopsided: page copy is written once and translated in the
+       UI, so the English build indexes ~21 English chunks against 3 Persian
+       ones, and most product copy is English-only. Searching 'any' therefore
+       answered a Persian reader with an English paragraph — the site's own copy
+       in the wrong language, which is exactly what a visitor reports as "I
+       spoke Persian and it replied in English".
+
+       Quoting the other language is not a fallback here, it is the failure.
+       So: search the site's language; if it finds nothing, say so in that
+       language and name what the site does cover. The cross-language search is
+       still used for *understanding* the question (the dictionary bridges the
+       words), but it never supplies English text as a Persian answer. */
+    var hits = this.search(query, { language: language, limit: this.maxResults });
+    if (this._judge(hits[0]) && language === 'en') {
+      // English is the fallback language of the catalog, so an English reader
+      // can still be served the (English) product copy the site mostly uses.
+      hits = this.search(query, { language: 'any', limit: this.maxResults });
+    }
     if (this._judge(hits[0])) {
-      return { text: labels.unsure, source: 'no-match', language: language, citations: [] };
+      return { text: labels.unsure + this._otherLanguageHint(query, language), source: 'no-match',
+               language: language, citations: [] };
     }
 
     var parts = [];
@@ -1209,6 +1361,18 @@
     // happens once; the caller adds a newly visited page itself.
     if (this.hasSite) {
       var again = opts.site || {};
+      /* The dictionary is fetched after the first build (app.js only pays for
+         it when the panel is first opened), so the site is indexed before its
+         Persian/English pairs exist. Latching here left the assistant with an
+         empty lexicon for the whole session: every Persian subject word read
+         as "not on this site", and a Persian speaker got a refusal. Vocabulary
+         arriving late is now absorbed rather than ignored — the pages are
+         already indexed, so this only rebuilds the dictionary. */
+      var win = opts.window || (typeof window !== 'undefined' ? window : null);
+      var shared = (win && win.AXIA_STATIC) || {};
+      var late = Array.isArray(opts.pairs) ? opts.pairs
+               : (Array.isArray(shared.pairs) ? shared.pairs : null);
+      if (late && late.length) this.vocabulary(late);
       if (again.pages && again.pages.length) this.learn({ pages: again.pages });
       return this;
     }

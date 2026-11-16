@@ -390,24 +390,95 @@ function toggleChat(){
       teachXiona();
     })
   }
-  chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · on-site assistant</strong><small>Learns this site · answers on its own · no outside service</small></div><button class="close-button" aria-label="Close support">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">Xiona answers only from what this site publishes. It cannot see orders, payments or your account.</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="Ask about products, services or the process…" maxlength="500" required><button>Send</button></form>`;document.body.append(panel);
+  chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';const chatFa=document.documentElement.lang==='fa';
+ panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · ${chatFa?'دستیار همین سایت':'on-site assistant'}</strong><small>${chatFa?'همین سایت را یاد می‌گیرد · خودش پاسخ می‌دهد · بدون سرویس بیرونی':'Learns this site · answers on its own · no outside service'}</small></div><button class="close-button" aria-label="${chatFa?'بستن گفت‌وگو':'Close support'}">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">${chatFa?'Xiona فقط از آنچه این سایت منتشر کرده پاسخ می‌دهد و به سفارش‌ها، پرداخت‌ها یا حساب شما دسترسی ندارد.':'Xiona answers only from what this site publishes. It cannot see orders, payments or your account.'}</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="${chatFa?'دربارهٔ محصولات، خدمات یا فرایند کار بپرسید…':'Ask about products, services or the process…'}" maxlength="500" required><button>${chatFa?'بفرست':'Send'}</button></form>`;document.body.append(panel);
   /* The panel is the site telling the visitor what this assistant is. Teach it
      the moment it exists, so "who are you" is answered from the panel text the
      visitor can read - not from a sentence kept in the engine. */
   if(xiona&&xiona.add){const claims=[...panel.querySelectorAll('.chat-head strong,.chat-head small,.chat-disclaimer')].map(n=>n.textContent.trim()).filter(Boolean);if(claims.length)xiona.add({id:'shell-assistant',title:'Xiona',topic:'assistant',route:'#/contact',text:claims.join('. '),keywords:'assistant bot ai robot who xiona دستیار ربات هوش مصنوعی کی ساخت'})}
   $('.close-button',panel).onclick=toggleChat;$('#chat-form',panel).onsubmit=e=>{e.preventDefault();let input=$('#chat-input');sendChat(input.value);input.value=''};
- /* Open with a real answer, not a fixed greeting: the engine names what it can
-    actually answer, which on an empty catalog is honestly "not much yet". */
+ /* Open with the conversation this visitor already had, or with a real answer
+    rather than a fixed greeting: the engine names what it can actually answer,
+    which on an empty catalog is honestly "not much yet". */
  const engine=xionaEngine();
  const fa=document.documentElement.lang==='fa';
  const hello=engine?engine.answer(fa?'سلام':'hello').text:(fa?'سلام. من Xiona هستم؛ دستیار همین سایت.':'Hi, I am Xiona, this site\'s assistant.');
- addChat(hello,'bot');
+ loadChatHistory().then(saved=>{
+   /* The panel may have been closed again while the account was answering. */
+   if(!$('#chat-panel'))return;
+   chatHistory=Array.isArray(saved)?saved.slice(-CHAT_MAX):[];
+   if(chatHistory.length){
+     /* A resumed conversation: replay it and skip the greeting, which would
+        otherwise sit between the visitor's own last question and its answer. */
+     chatHistory.forEach(turn=>addChat(turn.text, turn.role==='user'?'user':'bot'));
+     const divider=document.createElement('div');
+     divider.className='chat-resumed';
+     divider.textContent=fa?'ادامهٔ گفت‌وگوی پیشین':'Resumed conversation';
+     $('#chat-messages')?.prepend(divider);
+   }else{
+     addChat(hello,'bot');
+   }
+   const box=$('#chat-messages'); if(box)box.scrollTop=box.scrollHeight;
+ });
  const chips=$('.chat-chips',panel);
  [fa?'محصولات را معرفی کن':'What products do you offer?',fa?'فرایند سفارش چطور است؟':'How do I start a project?',fa?'AURION چیست؟':'What is AURION?'].forEach(label=>{const b=document.createElement('button');b.className='chat-chip';b.textContent=label;b.onclick=()=>sendChat(label);chips.append(b)});
  teachXiona();
 }
 function addChat(text,who='bot',thinking=false){let box=$('#chat-messages');if(!box)return null;let node=document.createElement('div');node.className='chat-msg '+(who==='user'?'user':'')+(thinking?' chat-thinking':'');node.textContent=text;box.append(node);box.scrollTop=box.scrollHeight;return node}
-const chatHistory=[];
+/* --------------------------------------------------------------- history
+
+   The conversation outlives the panel, the page and the tab.
+
+   Signed in, it is kept on the account and comes back on any device: the
+   session cookie is what identifies it, so a returning visitor resumes where
+   they left off. Signed out, there is no identity to hang it on, so it lives
+   in sessionStorage instead - which the browser clears when the tab (and
+   therefore the browser session) is closed, and keeps across a reload, a
+   back-button and a route change. localStorage would have kept it forever for
+   someone who never signed in, on a shared machine, which is the wrong default.
+
+   The store is a small wrapper because the two backends answer differently:
+   sessionStorage is synchronous, the account API is not. Both fail quietly -
+   a browser with storage disabled, or a static build with no API, still gets a
+   working chat for the length of the visit. */
+const CHAT_KEY='axia-chat-v1', CHAT_MAX=60;
+let chatHistory=[], chatSavedAt=0, chatStoreMode='guest';
+
+function chatStorage(){
+  try{ return window.sessionStorage }catch(e){ return null }
+}
+/* The signed-in copy is the account's; the guest copy is the tab's. Reading
+   prefers the account so a signed-in visitor never sees a stranger's tab
+   history, and writing mirrors into the tab so a reload mid-session is instant
+   even before the API answers. */
+function loadChatHistory(){
+  const raw=(()=>{ try{ return chatStorage()?.getItem(CHAT_KEY) }catch(e){ return null } })();
+  let local=null;
+  if(raw){ try{ const parsed=JSON.parse(raw); if(Array.isArray(parsed)) local=parsed }catch(e){} }
+  if(me){
+    chatStoreMode='account';
+    /* The account is authoritative. The tab copy is NOT used as a head start
+       here: on a shared machine it could belong to the previous person to sign
+       in, and showing one visitor another's conversation is worse than a flash
+       of empty panel. It is kept only as an offline fallback. */
+    return api('/api/agent/history').then(d=>Array.isArray(d?.history)?d.history:(local||[]))
+      .catch(()=>local||[]);
+  }
+  chatStoreMode='guest';
+  return Promise.resolve(local||[]);
+}
+function saveChatHistory(){
+  const turns=chatHistory.slice(-CHAT_MAX);
+  chatHistory=turns;
+  chatSavedAt=Date.now();
+  try{ chatStorage()?.setItem(CHAT_KEY, JSON.stringify(turns)) }catch(e){}
+  if(me){ api('/api/agent/history',{method:'POST',body:JSON.stringify({history:turns})}).catch(()=>{}) }
+}
+function clearChatHistory(){
+  chatHistory=[];
+  try{ chatStorage()?.removeItem(CHAT_KEY) }catch(e){}
+  if(me)api('/api/agent/history',{method:'DELETE'}).catch(()=>{});
+}
 /* A citation is the one bit of markup the answer carries: a link to the page it
    came from, so a claim can be checked instead of trusted. */
 function addCitations(list){
@@ -445,18 +516,22 @@ async function sendChat(text){
     into a refusal. */
  try{
    const res=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},
-     credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6)})});
+     credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6),
+     language:document.documentElement.lang==='fa'?'fa':'en'})});
    if(res.ok){
      const data=await res.json();
      if(data&&data.answer&&data.provider==='model'){reply=data.answer;usedModel=true}
    }
  }catch(e){ /* static build or offline: the local answer stands */ }
  if(!reply)reply=answer&&answer.source==='knowledge'?answer.text:null;
- if(!reply)reply=answer?answer.text:'I could not reach my knowledge just now.';
+ if(!reply)reply=answer?answer.text:(document.documentElement.lang==='fa'
+   ?'همین حالا نتوانستم به دانش خودم دست پیدا کنم؛ لطفاً دوباره بپرسید.'
+   :'I could not reach my knowledge just now.');
  thinking.remove();
  addChat(reply,'bot');
  if(!usedModel&&answer&&answer.citations)addCitations(answer.citations);
- chatHistory.push({role:'bot',text:reply})}
+ chatHistory.push({role:'bot',text:reply});
+ saveChatHistory()}
 // Responsive mobile navigation.
 const mobileMenuButton=$('.mobile-menu');mobileMenuButton.setAttribute('aria-expanded','false');mobileMenuButton.onclick=()=>{if($('.mobile-nav'))return;const rect=mobileMenuButton.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,w=window.innerWidth,h=window.innerHeight,radius=Math.ceil(Math.max(Math.hypot(x,y),Math.hypot(w-x,y),Math.hypot(x,h-y),Math.hypot(w-x,h-y))*1.08);let nav=document.createElement('nav');nav.className='mobile-nav';nav.setAttribute('aria-label','Mobile navigation');nav.style.setProperty('--menu-x',`${x}px`);nav.style.setProperty('--menu-y',`${y}px`);nav.style.setProperty('--menu-radius',`${radius}px`);nav.innerHTML=`<button class="close-button close-mobile" aria-label="Close menu">×</button><a href="#/products">Products</a><a href="#/services">Services</a><a href="/AxiaPlatform/blog/">Blog</a><a href="#/aurion">AURION</a><a href="#/about">About</a><a href="#/contact">Start a project</a>`;document.body.append(nav);mobileMenuButton.setAttribute('aria-expanded','true');const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:440;let closing=false;const closeMenu=()=>{if(closing)return;closing=true;nav.classList.remove('is-open');mobileMenuButton.setAttribute('aria-expanded','false');window.setTimeout(()=>{nav.remove();mobileMenuButton.focus()},duration)};$('.close-mobile',nav).onclick=closeMenu;$$('a',nav).forEach(a=>a.onclick=closeMenu);nav.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});requestAnimationFrame(()=>{nav.classList.add('is-open');requestAnimationFrame(()=>$('a',nav)?.focus())})};
 window.openAuth=openAuth;

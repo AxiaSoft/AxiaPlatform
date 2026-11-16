@@ -82,6 +82,69 @@ any non-empty `AXIA_AGENT_KEY` (Ollama ignores the value).
   and the recent turns of that conversation, capped at eight.
 
 
+## Language
+
+Xiona answers in **the language the site is being read in**, not the language
+the question happens to be typed in. A visitor on the Persian site who types
+English gets a Persian answer; a visitor on the English site who types Persian
+gets an English one.
+
+This is not a convenience. It was a bug with two causes:
+
+1. `answer()` took no language argument, so the reply language was inferred from
+   the question. Persian in, Persian out — but on the *English* site, which is
+   not what the visitor asked for.
+2. Retrieval searched the whole corpus regardless of language. The English build
+   indexes roughly 21 English chunks against 3 Persian ones, because the page
+   copy is written once and translated by `i18n.js` in the browser. The
+   best-scoring hit was therefore almost always English, and its text was quoted
+   back at a Persian reader — "I spoke Persian and it answered in English".
+
+The interface language now travels with the request: `app.js` sends
+`{language: 'fa'|'en'}` to `/api/agent`, the route passes it to `agent.answer()`,
+and the engine searches its own language first. The prompt states the language
+explicitly and tells the model not to mirror the question.
+
+When the site's language genuinely has no text for a question, the answer says
+so *in that language* and — if the other language does cover it — mentions that
+the site is partly English-only, so the visitor knows why. It never quotes the
+other language as the answer.
+
+`uncovered_text()` drops any of the visitor's words that are written in a
+different script, so a Persian question on the English site does not produce
+`This site does not publish anything about "محصولات"`.
+
+## Conversation history
+
+The chat outlives the panel, and where it is kept depends on who is asking.
+
+**Signed in** — the conversation belongs to the account, in an `agent_history`
+row keyed to `user_id`. It comes back on any device, because the session cookie
+is what identifies it. The account copy is authoritative: a tab that holds
+someone else's history (a shared machine) never shows it, even for a moment.
+
+**Signed out** — there is no identity to attach it to, so it lives in
+`sessionStorage`. That is scoped to the tab and is discarded when the browser
+session ends, which is the requested behaviour: it survives a reload, a
+route change and closing the panel, and dies with the browser. `localStorage`
+would have kept one visitor's questions on a shared machine indefinitely.
+
+The endpoints:
+
+| method | path | behaviour |
+| --- | --- | --- |
+| `GET` | `/api/agent/history` | the account's turns; `401` when signed out |
+| `POST` | `/api/agent/history` | replace it, CSRF-checked, capped at 60 turns |
+| `DELETE` | `/api/agent/history` | forget it |
+
+The `401` is load-bearing: the browser reads it as "keep this in the tab
+instead", which is why the static build (where every write is unavailable) and
+a signed-out visitor take the same path rather than an error path.
+
+Writes are cleaned server-side — unknown roles become `bot`, blanks and
+non-objects are dropped, and each turn is truncated to `MAX_QUESTION` — because
+the list arrives from the browser.
+
 ## Translating the articles
 
 The blog is written once, in whichever language the editor used. `/en/blog/` is

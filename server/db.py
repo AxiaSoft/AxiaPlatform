@@ -50,6 +50,11 @@ CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status, published_at 
 -- Machine translations of an article, cached so a published post is translated
 -- once rather than on every request. A row is keyed to the article's
 -- updated_at, so editing the source invalidates the English version.
+-- The visitor's conversation with Xiona, one row per account.
+-- Kept as a JSON array of {role, text} rather than a row per turn: nothing
+-- queries inside it, the whole thing is read and replaced, and a single row
+-- makes "the last N turns" one write instead of a delete-and-insert.
+CREATE TABLE IF NOT EXISTS agent_history(user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, data TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS article_translations(article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE, lang TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', source_hash TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(article_id, lang));
 '''
 

@@ -284,6 +284,14 @@
       return json({ error: 'This build answers in the browser.', engine: 'on-site' }, 501);
     }
 
+    /* No accounts here, so no account to keep a conversation on. 401 is what
+       app.js reads as "keep it in the browser for this tab" - the same path a
+       signed-out visitor takes on the real server, rather than an error the
+       chat would have to special-case. */
+    if (path === '/api/agent/history') {
+      return json({ error: 'This static build keeps the conversation in the browser.' }, 401);
+    }
+
     if (needsBackend(path)) {
       serverMessage(path.indexOf('/api/admin/') === 0 ? 'the admin console' : 'your account');
       return json({ error: 'This static build has no server. Run the site locally for the full app.' }, 503);
