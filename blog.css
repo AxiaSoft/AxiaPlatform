@@ -174,7 +174,13 @@ html[lang="fa"] .blog-prose { text-align: justify; text-justify: inter-word; }
   background: var(--bg);
   gap: 0;
 }
-.blog-body .mobile-nav[hidden] { display: none; }
+/* styles.css opens the drawer with `display: flex !important`, because on the
+   storefront it is created only when it should be visible. The blog renders it
+   in the markup and toggles it, so a plain `display: none` here loses the
+   cascade to that !important — the drawer was always open, which is why the
+   menu button looked dead: the panel was already covering the screen, and the
+   first tap was hitting the panel rather than the button. */
+.blog-body .mobile-nav[hidden] { display: none !important; }
 .blog-body .mobile-nav a {
   font-size: 21px;
   padding: 16px 0;

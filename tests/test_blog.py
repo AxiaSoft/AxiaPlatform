@@ -2,7 +2,9 @@
 import os
 import sys
 import unittest
+from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'server'))
 import agent  # noqa: E402
 import blog  # noqa: E402
@@ -153,3 +155,67 @@ class AgentTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BlogPostResolutionTests(unittest.TestCase):
+    """A published post resolves, and a missing one says so properly.
+
+    Two faults, both reported as "I published a post and the link 404s".
+
+    1. The console's "View" link was a raw `href="/blog/<slug>/"`. On GitHub
+       Pages the site is served from /AxiaPlatform/, so that link pointed at a
+       path that does not exist — the post was there, the URL was wrong. The
+       console already had the helper that solves this for brand images; the
+       blog link simply did not use it.
+    2. A slug that did not resolve was served by handing 404.html to
+       serve_static(), which sends any file it finds with 200. So the 404 page
+       was the one page that never returned 404 — search engines indexed it and
+       browsers cached it.
+    """
+
+    def setUp(self):
+        self.app_py = (ROOT / 'server' / 'app.py').read_text(encoding='utf-8')
+        self.admin_js = (ROOT / 'public' / 'admin' / 'admin.js').read_text(encoding='utf-8')
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+
+    def test_a_missing_post_returns_404(self):
+        start = self.app_py.index('def serve_blog(self, path):')
+        end = self.app_py.index('def _send_html(', start)
+        body = self.app_py[start:end]
+        self.assertIn('return self._not_found()', body)
+        self.assertNotIn("self.serve_static('/404.html')", body,
+                         'serving the 404 page as a file makes it a 200')
+
+    def test_not_found_really_sets_the_status(self):
+        start = self.app_py.index('def _not_found(self):')
+        body = self.app_py[start:start + 700]
+        self.assertIn('send_response(404)', body)
+
+    def test_the_console_links_to_a_post_through_the_base_helper(self):
+        self.assertIn('baseUrl(`blog/${esc(a.slug)}/`)', self.admin_js)
+
+    def test_the_console_keeps_one_base_helper(self):
+        # brandAsset() used to hold the base logic inline. Two copies would drift
+        # apart, and the one that was wrong is exactly what caused this.
+        self.assertIn('function baseUrl(path)', self.admin_js)
+        self.assertIn('return baseUrl(raw)', self.admin_js)
+        self.assertEqual(self.admin_js.count('const fromPath=(location.pathname'), 1)
+
+    def test_the_helper_handles_the_four_cases(self):
+        # A path with no prefix gains the base; one that already has it is not
+        # prefixed twice; an absolute URL is untouched.
+        start = self.admin_js.index('function baseUrl(path)')
+        end = self.admin_js.index('\n}', start) + 2
+        self.assertIn('if(/^(?:https?:)?\\/\\//i.test(raw))return raw;', self.admin_js[start:end])
+        self.assertIn("if(base!=='/'&&raw.startsWith(base))return raw;", self.admin_js[start:end])
+
+    def test_the_storefronts_blog_link_uses_the_base_too(self):
+        # The mobile menu had the same raw href, so on Pages the blog was
+        # unreachable from a phone for the same reason.
+        self.assertNotIn('<a href="/blog/">Blog</a>', self.app_js)
+        self.assertIn("assetUrl('blog/')", self.app_js)
+
+    def test_a_draft_is_not_served(self):
+        start = self.app_py.index('def serve_blog(self, path):')
+        end = self.app_py.index('def _send_html(', start)
+        self.assertIn("status='published'", self.app_py[start:end])

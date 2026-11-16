@@ -16,10 +16,32 @@ let activeBrand = null;
 const BRAND_STORAGE = 'axia-brand';
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const icons={Websites:'⌘',Applications:'▣',Aurion:'◈'};
 async function api(path,opts={}){let headers={'Content-Type':'application/json',...(opts.headers||{})};if(opts.method&&opts.method!=='GET'){if(!csrf){try{csrf=(await fetch('/api/me').then(r=>r.json())).csrf}catch{}}if(csrf)headers['X-CSRF-Token']=csrf}let r=await fetch(path,{...opts,headers,credentials:'same-origin'}),d=await r.json().catch(()=>({error:'Unexpected server response'}));if(r.headers.get('X-CSRF-Token'))csrf=r.headers.get('X-CSRF-Token');if(!r.ok)throw Error(d.error||'Request failed');return d}
-function toast(s){let x=document.createElement('div');x.className='toast';x.textContent=s;document.body.append(x);setTimeout(()=>x.remove(),3000)}function go(p){location.hash='#'+p}function themeInit(){let t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;$('.theme-icon').textContent=t==='dark'?'◐':'☼'}
+function toast(s){let x=document.createElement('div');x.className='toast';x.textContent=s;document.body.append(x);setTimeout(()=>x.remove(),3000)}function go(p){location.hash='#'+p}/* The sun/moon in the theme button, as inline SVG rather than a character.
+   The old pair was ◐/☼: two pieces of astronomical notation that render at
+   different weights in different fonts, read as a smudge at 15px, and meant
+   nothing in the light theme — a half-filled circle looks like "partly dark"
+   on a page that is already light. A drawn sun for light and a drawn moon for
+   dark are the same optical weight as the other header icons and the label
+   says what a press will do rather than what is showing now. */
+const THEME_SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>';
+const THEME_MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
+function paintThemeIcon(){
+  const dark=document.documentElement.dataset.theme==='dark';
+  const el=$('.theme-icon');
+  if(!el)return;
+  el.innerHTML=dark?THEME_MOON:THEME_SUN;
+  const btn=el.closest('.theme-toggle');
+  if(btn){
+    const label=document.documentElement.lang==='fa'
+      ?(dark?'تغییر به حالت روشن':'تغییر به حالت تاریک')
+      :(dark?'Switch to light theme':'Switch to dark theme');
+    btn.setAttribute('aria-label',label);btn.setAttribute('title',label);
+  }
+}
+function themeInit(){let t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;paintThemeIcon()}
 /* The administrator can choose what a first-time visitor sees. A visitor's own
    saved choice always wins - this only decides the default. */
-function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=$('.theme-icon');if(icon)icon.textContent=sys==='dark'?'◐':'☼'}$('.theme-toggle').onclick=()=>{let t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);$('.theme-icon').textContent=t==='dark'?'◐':'☼'};
+function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=paintThemeIcon()}$('.theme-toggle').onclick=()=>{let t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);paintThemeIcon()};
 async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');b.textContent=me?(me.role==='admin'?'Admin panel':'My account'):'Sign in';b.onclick=()=>me?(me.role==='admin'?location.assign('/admin/'):go('/account')):openAuth()}
 function sectionOff(name){const label=({about:'About',services:'Services',contact:'Contact',aurion:'AURION',catalog:'Products'})[name]||'This page';return `<div class="container"><section class="page-head"><div class="eyebrow">SECTION HIDDEN</div><h1>${label} is not<br><span class="gradient">published right now.</span></h1><p>An administrator has hidden this section of the site. The rest of AXIASOFT is still available.</p><a class="button button-primary" href="#/">Return home ↗</a></section></div>`}
 /* The strip of promises directly under the hero buttons. It used to be four
@@ -368,24 +390,95 @@ function toggleChat(){
       teachXiona();
     })
   }
-  chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · on-site assistant</strong><small>Learns this site · answers on its own · no outside service</small></div><button class="close-button" aria-label="Close support">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">Xiona answers only from what this site publishes. It cannot see orders, payments or your account.</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="Ask about products, services or the process…" maxlength="500" required><button>Send</button></form>`;document.body.append(panel);
+  chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';const chatFa=document.documentElement.lang==='fa';
+ panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · ${chatFa?'دستیار همین سایت':'on-site assistant'}</strong><small>${chatFa?'همین سایت را یاد می‌گیرد · خودش پاسخ می‌دهد · بدون سرویس بیرونی':'Learns this site · answers on its own · no outside service'}</small></div><button class="close-button" aria-label="${chatFa?'بستن گفت‌وگو':'Close support'}">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">${chatFa?'Xiona فقط از آنچه این سایت منتشر کرده پاسخ می‌دهد و به سفارش‌ها، پرداخت‌ها یا حساب شما دسترسی ندارد.':'Xiona answers only from what this site publishes. It cannot see orders, payments or your account.'}</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="${chatFa?'دربارهٔ محصولات، خدمات یا فرایند کار بپرسید…':'Ask about products, services or the process…'}" maxlength="500" required><button>${chatFa?'بفرست':'Send'}</button></form>`;document.body.append(panel);
   /* The panel is the site telling the visitor what this assistant is. Teach it
      the moment it exists, so "who are you" is answered from the panel text the
      visitor can read - not from a sentence kept in the engine. */
   if(xiona&&xiona.add){const claims=[...panel.querySelectorAll('.chat-head strong,.chat-head small,.chat-disclaimer')].map(n=>n.textContent.trim()).filter(Boolean);if(claims.length)xiona.add({id:'shell-assistant',title:'Xiona',topic:'assistant',route:'#/contact',text:claims.join('. '),keywords:'assistant bot ai robot who xiona دستیار ربات هوش مصنوعی کی ساخت'})}
   $('.close-button',panel).onclick=toggleChat;$('#chat-form',panel).onsubmit=e=>{e.preventDefault();let input=$('#chat-input');sendChat(input.value);input.value=''};
- /* Open with a real answer, not a fixed greeting: the engine names what it can
-    actually answer, which on an empty catalog is honestly "not much yet". */
+ /* Open with the conversation this visitor already had, or with a real answer
+    rather than a fixed greeting: the engine names what it can actually answer,
+    which on an empty catalog is honestly "not much yet". */
  const engine=xionaEngine();
  const fa=document.documentElement.lang==='fa';
  const hello=engine?engine.answer(fa?'سلام':'hello').text:(fa?'سلام. من Xiona هستم؛ دستیار همین سایت.':'Hi, I am Xiona, this site\'s assistant.');
- addChat(hello,'bot');
+ loadChatHistory().then(saved=>{
+   /* The panel may have been closed again while the account was answering. */
+   if(!$('#chat-panel'))return;
+   chatHistory=Array.isArray(saved)?saved.slice(-CHAT_MAX):[];
+   if(chatHistory.length){
+     /* A resumed conversation: replay it and skip the greeting, which would
+        otherwise sit between the visitor's own last question and its answer. */
+     chatHistory.forEach(turn=>addChat(turn.text, turn.role==='user'?'user':'bot'));
+     const divider=document.createElement('div');
+     divider.className='chat-resumed';
+     divider.textContent=fa?'ادامهٔ گفت‌وگوی پیشین':'Resumed conversation';
+     $('#chat-messages')?.prepend(divider);
+   }else{
+     addChat(hello,'bot');
+   }
+   const box=$('#chat-messages'); if(box)box.scrollTop=box.scrollHeight;
+ });
  const chips=$('.chat-chips',panel);
  [fa?'محصولات را معرفی کن':'What products do you offer?',fa?'فرایند سفارش چطور است؟':'How do I start a project?',fa?'AURION چیست؟':'What is AURION?'].forEach(label=>{const b=document.createElement('button');b.className='chat-chip';b.textContent=label;b.onclick=()=>sendChat(label);chips.append(b)});
  teachXiona();
 }
 function addChat(text,who='bot',thinking=false){let box=$('#chat-messages');if(!box)return null;let node=document.createElement('div');node.className='chat-msg '+(who==='user'?'user':'')+(thinking?' chat-thinking':'');node.textContent=text;box.append(node);box.scrollTop=box.scrollHeight;return node}
-const chatHistory=[];
+/* --------------------------------------------------------------- history
+
+   The conversation outlives the panel, the page and the tab.
+
+   Signed in, it is kept on the account and comes back on any device: the
+   session cookie is what identifies it, so a returning visitor resumes where
+   they left off. Signed out, there is no identity to hang it on, so it lives
+   in sessionStorage instead - which the browser clears when the tab (and
+   therefore the browser session) is closed, and keeps across a reload, a
+   back-button and a route change. localStorage would have kept it forever for
+   someone who never signed in, on a shared machine, which is the wrong default.
+
+   The store is a small wrapper because the two backends answer differently:
+   sessionStorage is synchronous, the account API is not. Both fail quietly -
+   a browser with storage disabled, or a static build with no API, still gets a
+   working chat for the length of the visit. */
+const CHAT_KEY='axia-chat-v1', CHAT_MAX=60;
+let chatHistory=[], chatSavedAt=0, chatStoreMode='guest';
+
+function chatStorage(){
+  try{ return window.sessionStorage }catch(e){ return null }
+}
+/* The signed-in copy is the account's; the guest copy is the tab's. Reading
+   prefers the account so a signed-in visitor never sees a stranger's tab
+   history, and writing mirrors into the tab so a reload mid-session is instant
+   even before the API answers. */
+function loadChatHistory(){
+  const raw=(()=>{ try{ return chatStorage()?.getItem(CHAT_KEY) }catch(e){ return null } })();
+  let local=null;
+  if(raw){ try{ const parsed=JSON.parse(raw); if(Array.isArray(parsed)) local=parsed }catch(e){} }
+  if(me){
+    chatStoreMode='account';
+    /* The account is authoritative. The tab copy is NOT used as a head start
+       here: on a shared machine it could belong to the previous person to sign
+       in, and showing one visitor another's conversation is worse than a flash
+       of empty panel. It is kept only as an offline fallback. */
+    return api('/api/agent/history').then(d=>Array.isArray(d?.history)?d.history:(local||[]))
+      .catch(()=>local||[]);
+  }
+  chatStoreMode='guest';
+  return Promise.resolve(local||[]);
+}
+function saveChatHistory(){
+  const turns=chatHistory.slice(-CHAT_MAX);
+  chatHistory=turns;
+  chatSavedAt=Date.now();
+  try{ chatStorage()?.setItem(CHAT_KEY, JSON.stringify(turns)) }catch(e){}
+  if(me){ api('/api/agent/history',{method:'POST',body:JSON.stringify({history:turns})}).catch(()=>{}) }
+}
+function clearChatHistory(){
+  chatHistory=[];
+  try{ chatStorage()?.removeItem(CHAT_KEY) }catch(e){}
+  if(me)api('/api/agent/history',{method:'DELETE'}).catch(()=>{});
+}
 /* A citation is the one bit of markup the answer carries: a link to the page it
    came from, so a claim can be checked instead of trusted. */
 function addCitations(list){
@@ -423,24 +516,164 @@ async function sendChat(text){
     into a refusal. */
  try{
    const res=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},
-     credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6)})});
+     credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6),
+     language:document.documentElement.lang==='fa'?'fa':'en'})});
    if(res.ok){
      const data=await res.json();
      if(data&&data.answer&&data.provider==='model'){reply=data.answer;usedModel=true}
    }
  }catch(e){ /* static build or offline: the local answer stands */ }
  if(!reply)reply=answer&&answer.source==='knowledge'?answer.text:null;
- if(!reply)reply=answer?answer.text:'I could not reach my knowledge just now.';
+ if(!reply)reply=answer?answer.text:(document.documentElement.lang==='fa'
+   ?'همین حالا نتوانستم به دانش خودم دست پیدا کنم؛ لطفاً دوباره بپرسید.'
+   :'I could not reach my knowledge just now.');
  thinking.remove();
  addChat(reply,'bot');
  if(!usedModel&&answer&&answer.citations)addCitations(answer.citations);
- chatHistory.push({role:'bot',text:reply})}
+ chatHistory.push({role:'bot',text:reply});
+ saveChatHistory()}
 // Responsive mobile navigation.
-const mobileMenuButton=$('.mobile-menu');mobileMenuButton.setAttribute('aria-expanded','false');mobileMenuButton.onclick=()=>{if($('.mobile-nav'))return;const rect=mobileMenuButton.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,w=window.innerWidth,h=window.innerHeight,radius=Math.ceil(Math.max(Math.hypot(x,y),Math.hypot(w-x,y),Math.hypot(x,h-y),Math.hypot(w-x,h-y))*1.08);let nav=document.createElement('nav');nav.className='mobile-nav';nav.setAttribute('aria-label','Mobile navigation');nav.style.setProperty('--menu-x',`${x}px`);nav.style.setProperty('--menu-y',`${y}px`);nav.style.setProperty('--menu-radius',`${radius}px`);nav.innerHTML=`<button class="close-button close-mobile" aria-label="Close menu">×</button><a href="#/products">Products</a><a href="#/services">Services</a><a href="/blog/">Blog</a><a href="#/aurion">AURION</a><a href="#/about">About</a><a href="#/contact">Start a project</a>`;document.body.append(nav);mobileMenuButton.setAttribute('aria-expanded','true');const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:440;let closing=false;const closeMenu=()=>{if(closing)return;closing=true;nav.classList.remove('is-open');mobileMenuButton.setAttribute('aria-expanded','false');window.setTimeout(()=>{nav.remove();mobileMenuButton.focus()},duration)};$('.close-mobile',nav).onclick=closeMenu;$$('a',nav).forEach(a=>a.onclick=closeMenu);nav.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});requestAnimationFrame(()=>{nav.classList.add('is-open');requestAnimationFrame(()=>$('a',nav)?.focus())})};
+const mobileMenuButton=$('.mobile-menu');mobileMenuButton.setAttribute('aria-expanded','false');mobileMenuButton.onclick=()=>{if($('.mobile-nav'))return;const rect=mobileMenuButton.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,w=window.innerWidth,h=window.innerHeight,radius=Math.ceil(Math.max(Math.hypot(x,y),Math.hypot(w-x,y),Math.hypot(x,h-y),Math.hypot(w-x,h-y))*1.08);let nav=document.createElement('nav');nav.className='mobile-nav';nav.setAttribute('aria-label','Mobile navigation');nav.style.setProperty('--menu-x',`${x}px`);nav.style.setProperty('--menu-y',`${y}px`);nav.style.setProperty('--menu-radius',`${radius}px`);nav.innerHTML=`<button class="close-button close-mobile" aria-label="Close menu">×</button><a href="#/products">Products</a><a href="#/services">Services</a><a href="${assetUrl('blog/')}">Blog</a><a href="#/aurion">AURION</a><a href="#/about">About</a><a href="#/contact">Start a project</a>`;document.body.append(nav);mobileMenuButton.setAttribute('aria-expanded','true');const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:440;let closing=false;const closeMenu=()=>{if(closing)return;closing=true;nav.classList.remove('is-open');mobileMenuButton.setAttribute('aria-expanded','false');window.setTimeout(()=>{nav.remove();mobileMenuButton.focus()},duration)};$('.close-mobile',nav).onclick=closeMenu;$$('a',nav).forEach(a=>a.onclick=closeMenu);nav.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});requestAnimationFrame(()=>{nav.classList.add('is-open');requestAnimationFrame(()=>$('a',nav)?.focus())})};
 window.openAuth=openAuth;
 
-function initPointerEffects(){if(!matchMedia('(hover:hover) and (pointer:fine)').matches||matchMedia('(prefers-reduced-motion: reduce)').matches)return;app.addEventListener('pointerover',e=>{const el=e.target.closest('.tilt-hover');if(!el||!app.contains(el)||el.dataset.pointerEffectReady)return;el.dataset.pointerEffectReady='1';let frame=0,x=0,y=0,lx=50,ly=50;const isLogo=el.classList.contains('hero-logo')||el.classList.contains('aurion-logo-hover');el.addEventListener('pointermove',ev=>{const r=el.getBoundingClientRect();const nx=(ev.clientX-r.left)/r.width-.5,ny=(ev.clientY-r.top)/r.height-.5;x=nx*(isLogo?14:10);y=-ny*(isLogo?12:8);lx=(ev.clientX-r.left)/r.width*100;ly=(ev.clientY-r.top)/r.height*100;if(frame)return;frame=requestAnimationFrame(()=>{el.classList.add('is-tilting');el.style.setProperty('--tilt-x',`${x.toFixed(2)}deg`);el.style.setProperty('--tilt-y',`${y.toFixed(2)}deg`);if(el.classList.contains('mouse-light')){el.classList.add('is-lit');el.style.setProperty('--light-x',`${lx.toFixed(1)}%`);el.style.setProperty('--light-y',`${ly.toFixed(1)}%`)}frame=0})},{passive:true});el.addEventListener('pointerleave',()=>{el.style.setProperty('--tilt-x','0deg');el.style.setProperty('--tilt-y','0deg');el.classList.remove('is-tilting','is-lit')},{passive:true})},{passive:true})}
+/* Every card and every in-page button tilts; the header controls do not.
+
+   Doing this by hand would mean editing fifty template strings and remembering
+   the rule on every new one — the kind of thing that rots the first time
+   somebody adds a card. It runs instead at the end of each render: one selector
+   list, one pass, and the header is excluded explicitly because a nav bar that
+   tips under the pointer is a toy, not a flourish.
+
+   data-no-tilt is the escape hatch, and the two big illustrations opt out
+   through it below because their tilt is already custom. */
+const TILT_SELECTORS = [
+  '.category-card', '.product-card', '.package', '.stat-card', '.dash-panel',
+  '.cta-band', '.contact-card', '.feature-panel', '.workflow-card',
+  '.detail-visual', '.brand-pick', '.plan-table-wrap', '.faq',
+  '.button:not(.button-small)', '.contact-product',
+];
+function applyTiltClasses(root){
+  if(!root)return;
+  const header=root.querySelector('.topbar');
+  root.querySelectorAll(TILT_SELECTORS.join(',')).forEach(el=>{
+    if(header&&header.contains(el))return;   // header controls keep their own size
+    if(el.closest('.topbar'))return;
+    if(el.hasAttribute('data-no-tilt'))return;
+    el.classList.add('tilt-hover');
+    // The light that follows the pointer is for panels, not for buttons: a
+    // radial glare inside a 38px pill looks like a smudge.
+    if(!el.matches('.button,.contact-product'))el.classList.add('mouse-light');
+  });
+}
+/* Apply the classes whenever the page content changes.
+
+   render() returns early on half its branches, and several routes build their
+   markup later still (the catalog after filters, the account page after its
+   fetch), so hanging this off one call site would miss most of the site. A
+   MutationObserver on #app costs one callback per render — not per frame — and
+   covers every path including the ones added after this was written. */
+function startTiltWatcher(){
+  applyTiltClasses(app);
+  if(startTiltWatcher.done)return;
+  startTiltWatcher.done=true;
+  new MutationObserver(()=>applyTiltClasses(app)).observe(app,{childList:true,subtree:true});
+}
+function initPointerEffects(){
+ if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ /* Two input models, one element class.
+
+    Mouse: the tilt follows the pointer anywhere inside the element, and
+    releases on leave.
+
+    Touch: there is no hover, so a press is what starts it. The tilt tracks the
+    finger while it is down and springs back on release. That is the only way
+    this effect can exist on a phone, and it is also the right one — a card that
+    tilts when you touch it feels like a card; a card that tilts on scroll
+    position would be noise.
+
+    Both write the same three custom properties, so there is one drawing path. */
+ const fine=matchMedia('(hover:hover) and (pointer:fine)').matches;
+ const coarse=matchMedia('(pointer:coarse)').matches;
+ // Cards get a bigger angle than buttons: a 16-degree tip on a 100px pill
+ // would look broken, on a 340px card it looks deliberate.
+ const strength=el=>{
+   if(el.hasAttribute('data-no-tilt'))return 0;
+   if(el.classList.contains('hero-logo')||el.classList.contains('aurion-logo-hover'))return 18;
+   // A pill 38px tall tipping 16 degrees looks broken; 7 is a press, not a
+   // tumble. Cards get the full angle.
+   if(el.matches('.button,.btn,.icon-button,.contact-product,.brand-pick'))return 7;
+   return 16;
+ };
+
+ function tiltTo(el,clientX,clientY){
+   const r=el.getBoundingClientRect();
+   if(!r.width||!r.height)return;
+   const k=strength(el);
+   const nx=(clientX-r.left)/r.width-.5, ny=(clientY-r.top)/r.height-.5;
+   el.classList.add('is-tilting');
+   el.style.setProperty('--tilt-x',(nx*k).toFixed(2)+'deg');
+   el.style.setProperty('--tilt-y',(-ny*k*0.8).toFixed(2)+'deg');
+   if(el.classList.contains('mouse-light')){
+     el.classList.add('is-lit');
+     el.style.setProperty('--light-x',((clientX-r.left)/r.width*100).toFixed(1)+'%');
+     el.style.setProperty('--light-y',((clientY-r.top)/r.height*100).toFixed(1)+'%');
+   }
+ }
+ function reset(el){
+   el.style.setProperty('--tilt-x','0deg');
+   el.style.setProperty('--tilt-y','0deg');
+   el.classList.remove('is-tilting','is-lit');
+ }
+
+ if(fine){
+   app.addEventListener('pointerover',e=>{
+     if(e.pointerType==='touch')return;
+     const el=e.target.closest('.tilt-hover');
+     if(!el||!app.contains(el))return;
+     let frame=0,pending=null;
+     if(!el.dataset.tiltBound){
+       el.dataset.tiltBound='1';
+       el.addEventListener('pointermove',ev=>{
+         if(ev.pointerType==='touch')return;
+         pending=ev;
+         if(frame)return;
+         frame=requestAnimationFrame(()=>{frame=0;if(pending)tiltTo(el,pending.clientX,pending.clientY)});
+       },{passive:true});
+       el.addEventListener('pointerleave',()=>reset(el),{passive:true});
+       el.addEventListener('pointercancel',()=>reset(el),{passive:true});
+     }
+   },{passive:true});
+ }
+
+ if(coarse){
+   // Capture phase, because a press on a link must still tilt before the link
+   // navigates away, and a press on a card must not be swallowed by its child.
+   let active=null;
+   const start=e=>{
+     const el=e.target.closest('.tilt-hover');
+     if(!el||!app.contains(el))return;
+     active=el;
+     tiltTo(el,e.clientX,e.clientY);
+   };
+   const move=e=>{
+     if(!active)return;
+     // Only while the finger is still down; a scroll gesture releases it.
+     if(e.buttons===0&&e.pointerType==='touch')return;
+     tiltTo(active,e.clientX,e.clientY);
+   };
+   const end=()=>{if(active){reset(active);active=null}};
+   app.addEventListener('pointerdown',start,{passive:true});
+   app.addEventListener('pointermove',move,{passive:true});
+   app.addEventListener('pointerup',end,{passive:true});
+   app.addEventListener('pointercancel',end,{passive:true});
+   // `scroll` does not bubble, so a listener on #app would never fire. The
+   // window captures it from the scrolling element instead. A finger that
+   // scrolls the page has stopped pressing the card, so the tilt is released.
+   window.addEventListener('scroll',()=>{if(active){reset(active);active=null}},{passive:true,capture:true});
+ }
+}
 initPointerEffects();
+startTiltWatcher();
 
 /* -------------------------------------------------------------------------
    Product brands

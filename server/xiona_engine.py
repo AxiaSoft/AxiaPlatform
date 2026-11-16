@@ -544,6 +544,16 @@ class Engine:
         ranked.sort(key=lambda hit: -hit['score'])
         return ranked[:limit or self.max_results]
 
+    def _other_language_hint(self, query, language):
+        """Name the other language when it is the one that has the answer."""
+        if language != 'fa' or not self.corpus.get('en'):
+            return ''
+        there = self.search(query, 'en', 1)
+        if not there or self._judge(there[0]):
+            return ''
+        return (' بخشی از محتوای این سایت هنوز فقط به انگلیسی منتشر شده است؛ '
+                'اگر مایل بودید زبان سایت را از دکمهٔ بالای صفحه به انگلیسی تغییر دهید.')
+
     def _judge(self, best):
         """True when the best hit is too weak to answer with.
 
@@ -592,8 +602,18 @@ class Engine:
         keep.sort(key=lambda index: (index != lead, index))
         return tidy(' '.join(parts[index] for index in keep))
 
-    def answer(self, question):
-        language = 'fa' if is_persian(question) else 'en'
+    def answer(self, question, language=None):
+        """Answer in the interface's language.
+
+        The reply language is the language the visitor is reading the site in,
+        passed down from the request; it is not inferred from the question.
+        Inferring was the bug: a Persian question on the English site was
+        answered with a Persian paragraph pulled from the wrong-language corpus,
+        and a Persian question on the Persian site was answered in English
+        because the English copy scored higher.
+        """
+        if language not in ('fa', 'en'):
+            language = 'fa' if is_persian(question) else 'en'
         labels = _LABELS[language]
         query = str(question or '').strip()[:MAX_QUESTION]
         if not query:
@@ -641,10 +661,15 @@ class Engine:
                     'source': 'uncovered', 'language': language,
                     'citations': [], 'absent': absent}
 
-        hits = self.search(query, 'any')
+        # Search the site's own language first, then fall back to the whole
+        # corpus for English readers only. Quoting the other language at a
+        # Persian reader is the failure this ordering removes.
+        hits = self.search(query, language)
+        if self._judge(hits[0] if hits else None) and language == 'en':
+            hits = self.search(query, 'any')
         if self._judge(hits[0] if hits else None):
-            return {'answer': labels['unsure'], 'source': 'no-match',
-                    'language': language, 'citations': []}
+            return {'answer': labels['unsure'] + self._other_language_hint(query, language),
+                    'source': 'no-match', 'language': language, 'citations': []}
 
         used = self.expand(terms)
         for term in terms:
@@ -685,15 +710,25 @@ def uncovered_text(absent, language, topics):
     true as the site changes.
     """
     join = '، ' if language == 'fa' else ', '
-    subject = join.join(absent)
+    # The unmatched words are the visitor's, not the site's, and they arrive in
+    # whichever language the question was typed in. Quoting them inside a reply
+    # in the other language puts foreign script in the sentence - the same
+    # wrong-language leak, just in one word. Keep only the words written in the
+    # language this reply is in; if none are, the sentence drops the quote.
+    subject = join.join(w for w in absent if is_persian(w) == (language == 'fa'))
     listing = join.join(topics[:5])
+    if subject:
+        lead = ('این سایت دربارهٔ «' + subject + '» چیزی منتشر نکرده است، '
+                if language == 'fa' else
+                'This site does not publish anything about "' + subject + '", ')
+    else:
+        lead = ('دربارهٔ این پرسش چیزی منتشر نکرده‌ام، ' if language == 'fa'
+                else 'The site does not publish anything I can answer that with, ')
     if language == 'fa':
-        return ('این سایت دربارهٔ «' + subject + '» چیزی منتشر نکرده است، '
-                'پس پاسخ تأییدشده‌ای ندارم.' +
+        return (lead + 'پس پاسخ تأییدشده‌ای ندارم.' +
                 (' آنچه منتشر شده: ' + listing + '.' if listing else '') +
                 ' می‌توانید پرسش خود را از صفحهٔ «شروع پروژه» مطرح کنید.')
-    return ('This site does not publish anything about "' + subject +
-            '", so I have no answer for it.' +
+    return (lead + 'so I have no answer for it.' +
             (' What it does publish: ' + listing + '.' if listing else '') +
             ' You can raise it on the Start a project page.')
 

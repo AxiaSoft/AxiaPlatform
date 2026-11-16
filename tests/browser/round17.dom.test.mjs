@@ -31,17 +31,7 @@ ck('its heading is gone', !/Less noise/.test(about));
 ck('the values column survives', /Our values/.test(about) && /Built to be clear/.test(about));
 ck('the About route still renders', /function about\(/.test(app));
 
-// ---- 3. blog in the mobile menu ------------------------------------------
-const menu = app.slice(app.indexOf('nav.className='), app.indexOf('mobileMenuButton.setAttribute(\'aria-expanded\',\'true\')'));
-// The build prefixes root-relative links with the deploy base, so the entry
-// reads /AxiaPlatform/blog/ in the built tree and /blog/ in the source.
-ck('the hamburger has a blog entry', /href="[^"]*\/blog\/"[^>]*>Blog</.test(menu),
-   menu.match(/<a [^>]*>[^<]*<\/a>/g)?.map((a) => a.replace(/<[^>]*>/g, '')).join(' · '));
-/* The drawer now lists the site in the same order the top bar has always used:
-   Products · Services · Blog · AURION · About. */
-ck('blog sits between Services and AURION',
-   /Services<\/a><a href="[^"]*\/blog\/">Blog<\/a><a href="#\/aurion">AURION<\/a>/.test(menu));
-ck('the menu keeps its other entries', ['Products', 'Services', 'AURION', 'About', 'Start a project'].every((l) => menu.includes('>' + l + '<')));
+// ---- 3. blog in the mobile menu (checked on the rendered drawer, below) ---
 
 // ---- the About page actually renders without the card --------------------
 const dom = new JSDOM(read('index.html'), { runScripts: 'outside-only', url: 'http://localhost/AxiaPlatform/' });
@@ -51,9 +41,38 @@ w.fetch = async (u) => { const s = String(u);
   const b = s.includes('/api/products') ? [] : s.includes('/api/site') ? { settings: {} } : s.includes('/api/me') ? { user: null } : {};
   return { ok: true, status: 200, headers: { get: () => null }, json: async () => b }; };
 w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+// static-config.js is what tells the page where it is deployed, and it is the
+// first script in index.html. Without it assetUrl() cannot prefix the blog
+// link with /AxiaPlatform/, and the drawer is tested in a state no visitor sees.
+try { w.eval(read('static-config.js')); } catch (e) { /* older builds ship none */ }
 try { w.eval(read('i18n.js')); w.eval(read('brands.js')); w.eval(read('app.js')); }
 catch (e) { ck('scripts evaluate', false, e.message); }
 w.location.hash = '#/about';
+/* The drawer is built at runtime, so its links are read from the DOM rather
+   than from the source text. The blog entry goes through assetUrl('blog/'),
+   because the site is served from /AxiaPlatform/ on GitHub Pages and a raw
+   "/blog/" 404s there — the reason a freshly published post looked missing. */
+const drawer = (() => {
+  const button = w.document.querySelector('.mobile-menu');
+  button?.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  return w.document.querySelector('.mobile-nav');
+})();
+const drawerLinks = drawer ? [...drawer.querySelectorAll('a')] : [];
+const drawerText = drawerLinks.map((a) => a.textContent.trim()).join(' · ');
+const blogLink = drawerLinks.find((a) => a.textContent.trim() === 'Blog');
+ck('the hamburger has a blog entry', !!blogLink, drawerText);
+ck('the blog entry carries the deploy base',
+   !!blogLink && blogLink.getAttribute('href') === '/AxiaPlatform/blog/',
+   blogLink ? blogLink.getAttribute('href') : 'no link');
+/* The drawer lists the site in the same order the top bar has always used:
+   Products · Services · Blog · AURION · About. */
+ck('blog sits between Services and AURION',
+   drawerText.indexOf('Services') < drawerText.indexOf('Blog') &&
+   drawerText.indexOf('Blog') < drawerText.indexOf('AURION'), drawerText);
+ck('the menu keeps its other entries',
+   ['Products', 'Services', 'AURION', 'About', 'Start a project']
+     .every((l) => drawerText.includes(l)), drawerText);
+
 await new Promise((r) => setTimeout(r, 700));
 const doc = w.document;
 ck('the rendered About page has no approach panel', !doc.querySelector('.feature-panel'));

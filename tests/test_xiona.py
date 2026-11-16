@@ -341,3 +341,81 @@ process.stdout.write(JSON.stringify(out));
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ReplyLanguageTests(unittest.TestCase):
+    """Xiona answers in the language the site is being read in.
+
+    The reported failure was exactly this: a visitor using the Persian site
+    typed Persian and was answered in English. Two faults produced it.
+
+    1. The reply language was inferred from the question. Nothing in `answer()`
+       took the interface's language, so the engine could not know it.
+    2. Retrieval searched the whole corpus regardless of language. The English
+       build indexes ~21 English chunks against 3 Persian ones, so the highest
+       scoring hit was almost always English — and its text was quoted back at a
+       Persian reader.
+
+    Both are pinned here, in both engines, because the browser engine and the
+    Python twin have to agree about this the way they agree about scoring.
+    """
+
+    def setUp(self):
+        # The same corpus the rest of this file uses, so a language assertion
+        # is not really an assertion about a fixture I wrote for it.
+        self.engine = build()
+
+    def test_the_language_argument_decides_the_reply(self):
+        # The same question, answered on each site.
+        english = self.engine.answer('what do you offer?', language='en')
+        self.assertEqual(english['language'], 'en')
+        self.assertNotRegex(english['answer'], '[\u0600-\u06FF]',
+                            'an English reply must not contain Persian')
+
+    def test_a_persian_question_on_the_english_site_answers_in_english(self):
+        # The reported bug, from the other direction: the visitor's words must
+        # not switch the reply language.
+        reply = self.engine.answer('چه محصولاتی دارید؟', language='en')
+        self.assertEqual(reply['language'], 'en')
+        self.assertNotRegex(reply['answer'], '[\u0600-\u06FF]',
+                            'Persian was quoted back at an English reader')
+
+    def test_the_engine_defaults_to_the_question_only_without_an_argument(self):
+        # The fallback still exists for a caller that has no interface - the
+        # blog translator, a test, a script - but it is no longer what the site
+        # uses.
+        reply = self.engine.answer('سلام', language=None)
+        self.assertEqual(reply['language'], 'fa')
+
+    def test_an_english_question_on_the_persian_site_answers_in_persian(self):
+        reply = self.engine.answer('what do you offer?', language='fa')
+        self.assertEqual(reply['language'], 'fa')
+        self.assertRegex(reply['answer'], '[\u0600-\u06FF]',
+                         'a Persian reply must be in Persian script')
+
+    def test_the_portal_agent_passes_the_language_through(self):
+        body = (ROOT / 'server' / 'agent.py').read_text(encoding='utf-8')
+        start = body.index('def answer(')
+        end = body.index('\ndef status(', start)
+        section = body[start:end]
+        self.assertIn('language=None', section)
+        self.assertIn('index.answer(question, language=language)', section)
+        # And it must not quietly fall back to the question when it was given one.
+        self.assertIn("if language not in LANGUAGE_NAMES:", section)
+
+    def test_the_route_reads_the_interface_language_from_the_request(self):
+        body = (ROOT / 'server' / 'app.py').read_text(encoding='utf-8')
+        start = body.index("if p == '/api/agent':")
+        section = body[start:start + 1400]
+        self.assertIn("d.get('language')", section)
+        self.assertIn('agent.answer(question, history, language)', section)
+
+    def test_the_prompt_does_not_mirror_the_question(self):
+        body = (ROOT / 'server' / 'agent.py').read_text(encoding='utf-8')
+        # The old wording invited the model to follow the visitor's language.
+        self.assertNotIn('That is the language the visitor used', body)
+        self.assertIn('Do not mirror the question', body)
+
+    def test_the_browser_sends_the_interface_language(self):
+        js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn("language:document.documentElement.lang==='fa'?'fa':'en'", js)

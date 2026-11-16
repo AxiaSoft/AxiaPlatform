@@ -858,7 +858,12 @@ class Handler(SimpleHTTPRequestHandler):
         slug = unquote(trail)[:blog.MAX_SLUG]
         row = db.execute("SELECT * FROM articles WHERE slug=? AND status='published'", (slug,)).fetchone()
         if not row:
-            return self.serve_static('/404.html')
+            # This used to serve 404.html through serve_static(), which sends it
+            # as a normal 200 — so a slug that does not exist, or a draft that
+            # was never published, answered "OK" with a page saying otherwise.
+            # A search engine indexes that; a visitor's browser caches it; and
+            # the 404 page was the one page that never actually returned 404.
+            return self._not_found()
         article = blog.article_page(row, db, lang=lang)
         body = blog.render_article(article, site, lang=lang, base=base)
         fa_url = f'{origin}{base}/blog/{article["slug"]}/'
@@ -1011,6 +1016,21 @@ class Handler(SimpleHTTPRequestHandler):
             if not row:
                 self._send_json({'error': 'Article not found'}, 404); return
             self._send_json(blog.article_out(row, full=True)); return
+
+        if p == '/api/agent/history':
+            # Reads are separate from writes here, as everywhere else in this
+            # file: api_get never takes a mutation, and api_write never serves a
+            # read. Signed out is 401, which the browser reads as "keep it in
+            # this tab" rather than as an error.
+            if not user:
+                self._send_json({'error': 'Please sign in first'}, 401); return
+            row = db.execute('SELECT data FROM agent_history WHERE user_id=?',
+                             (user['id'],)).fetchone()
+            try:
+                history = json.loads(row['data']) if row else []
+            except (TypeError, json.JSONDecodeError):
+                history = []
+            self._send_json({'history': history if isinstance(history, list) else []}); return
 
         if p == '/api/me':
             self._send_json({'user': public_user(user) if user else None, 'csrf': user['csrf'] if user else None}); return
@@ -1308,6 +1328,38 @@ class Handler(SimpleHTTPRequestHandler):
             self._session_cookie = 'axia_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'
             self._send_json({'ok': True}); return
 
+        # The visitor's saved conversation. Signed in, it is theirs and comes
+        # back on any device; signed out there is no identity to attach it to,
+        # so the browser keeps it for the tab's lifetime instead and this
+        # endpoint answers 401 - which app.js reads as "use the tab copy".
+        if p == '/api/agent/history':
+            if not user:
+                self._send_json({'error': 'Please sign in first'}, 401); return
+            if method not in ('POST', 'DELETE'):
+                self._send_json({'error': 'Method not allowed'}, 405); return
+            if not self.check_csrf(user):
+                self._send_json({'error': 'Session security check failed. Refresh and try again.'}, 403); return
+            if method == 'DELETE':
+                db.execute('DELETE FROM agent_history WHERE user_id=?', (user['id'],))
+                self._send_json({'ok': True}); return
+            turns = d.get('history')
+            # Store only what the chat renders: a role and a short string. An
+            # unbounded list from the browser is not something to trust.
+            cleaned = []
+            for turn in (turns if isinstance(turns, list) else [])[-agent.HISTORY_TURNS:]:
+                if not isinstance(turn, dict):
+                    continue
+                text = clean(turn.get('text'), agent.MAX_QUESTION)
+                if not text:
+                    continue
+                cleaned.append({'role': 'user' if turn.get('role') == 'user' else 'bot',
+                                'text': text})
+            db.execute(
+                'INSERT INTO agent_history(user_id,data,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) '
+                'ON CONFLICT(user_id) DO UPDATE SET data=excluded.data, updated_at=CURRENT_TIMESTAMP',
+                (user['id'], json.dumps(cleaned, ensure_ascii=False)))
+            self._send_json({'ok': True, 'saved': len(cleaned)}); return
+
         # The support agent is public: a visitor can ask a question before they
         # ever create an account. It reads only the curated site facts.
         if p == '/api/agent':
@@ -1321,7 +1373,10 @@ class Handler(SimpleHTTPRequestHandler):
             if len(question) > agent.MAX_QUESTION:
                 self._send_json({'error': 'That question is too long.'}, 400); return
             history = d.get('history') if isinstance(d.get('history'), list) else []
-            result = agent.answer(question, history)
+            # The interface language the visitor is reading, not the language
+            # the question happens to be typed in.
+            language = d.get('language') if d.get('language') in ('fa', 'en') else None
+            result = agent.answer(question, history, language)
             self._send_json(result); return
 
         if not user:
