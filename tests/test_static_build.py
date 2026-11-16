@@ -969,15 +969,23 @@ class MobileMenuTests(unittest.TestCase):
 
     def test_the_drawer_reaches_the_blog(self):
         # The blog is a real directory, not a hash route, so it is the one entry
-        # whose target the build may rewrite with the deploy base.
-        self.assertRegex(self._menu(), r'<a href="[^"]*/blog/"[^>]*>Blog</a>')
+        # that must carry the deploy base. It is written as assetUrl('blog/')
+        # rather than a literal, because a raw "/blog/" 404s on GitHub Pages —
+        # which is exactly how a freshly published post appeared to be missing.
+        menu = self._menu()
+        self.assertRegex(menu, r'<a href="\$\{assetUrl\([\'"]blog/[\'"]\)\}">Blog</a>')
+        self.assertNotIn('<a href="/blog/">', menu,
+                         'a raw /blog/ drops the deployment sub-path')
 
     def test_the_blog_entry_sits_where_the_top_bar_puts_it(self):
         # The top bar has always read Products · Services · Blog · AURION ·
         # About. The drawer had it after AURION, which is the kind of small
         # difference that makes a phone feel like a different site.
         menu = self._menu()
-        self.assertRegex(menu, r'Services</a><a href="[^"]*/blog/">Blog</a><a href="#/aurion">AURION</a>')
+        self.assertRegex(
+            menu,
+            r'Services</a><a href="\$\{assetUrl\([\'"]blog/[\'"]\)\}">Blog</a>'
+            r'<a href="#/aurion">AURION</a>')
 
     def test_the_drawer_and_the_top_bar_agree_on_the_order(self):
         # Two hand-maintained lists that drift are how the blog went missing in

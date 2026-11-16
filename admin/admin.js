@@ -295,11 +295,23 @@ function brandAsset(path){
  const raw=String(path||'').trim();
  if(!raw)return '';
  if(/^(?:https?:)?\/\//i.test(raw))return raw;
- // The console page always lives at <deploy base>admin/, so its own path is the
- // most reliable statement of the base: /AxiaPlatform/admin/ implies
- // /AxiaPlatform/. AXIA_STATIC.base is preferred when the build shipped
- // static-config.js to this page, and the derived value covers the case where
- // it did not — which is how these assets were 404ing at the server root.
+ return baseUrl(raw);
+}
+/* Prefix an absolute path with the deploy base.
+
+   The console page always lives at <deploy base>admin/, so its own path is the
+   most reliable statement of the base: /AxiaPlatform/admin/ implies
+   /AxiaPlatform/. AXIA_STATIC.base is preferred when the build shipped
+   static-config.js to this page, and the derived value covers the case where it
+   did not — which is how brand assets used to 404 at the server root.
+
+   Every link the console hands the browser goes through here. The blog "View"
+   link did not, so on GitHub Pages it pointed at /blog/<slug>/ when the file is
+   at /AxiaPlatform/blog/<slug>/ — a 404 on a page that had just been published. */
+function baseUrl(path){
+ const raw=String(path||'').trim();
+ if(!raw)return '';
+ if(/^(?:https?:)?\/\//i.test(raw))return raw;
  const fromConfig=String((window.AXIA_STATIC&&window.AXIA_STATIC.base)||'');
  const fromPath=(location.pathname.replace(/\/admin\/?[^/]*$/,'/'));
  const base=(fromConfig||fromPath).replace(/\/$/,'')+'/';
@@ -504,7 +516,7 @@ function articlesHTML(){
      <small>/${esc(a.slug)}</small>
    </div>
    <div class="article-row-actions">
-     <a class="btn btn-sm btn-quiet" href="/AxiaPlatform/blog/${esc(a.slug)}/" target="_blank" rel="noopener">View ↗</a>
+     <a class="btn btn-sm btn-quiet" href="${baseUrl(`blog/${esc(a.slug)}/`)}" target="_blank" rel="noopener">View ↗</a>
      <button class="btn btn-sm btn-quiet" data-act="edit-article" data-id="${a.id}">Edit</button>
      <button class="btn btn-sm btn-danger" data-act="delete-article" data-id="${a.id}">Delete</button>
    </div>

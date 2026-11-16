@@ -858,7 +858,12 @@ class Handler(SimpleHTTPRequestHandler):
         slug = unquote(trail)[:blog.MAX_SLUG]
         row = db.execute("SELECT * FROM articles WHERE slug=? AND status='published'", (slug,)).fetchone()
         if not row:
-            return self.serve_static('/404.html')
+            # This used to serve 404.html through serve_static(), which sends it
+            # as a normal 200 — so a slug that does not exist, or a draft that
+            # was never published, answered "OK" with a page saying otherwise.
+            # A search engine indexes that; a visitor's browser caches it; and
+            # the 404 page was the one page that never actually returned 404.
+            return self._not_found()
         article = blog.article_page(row, db, lang=lang)
         body = blog.render_article(article, site, lang=lang, base=base)
         fa_url = f'{origin}{base}/blog/{article["slug"]}/'
