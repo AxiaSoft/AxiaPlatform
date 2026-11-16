@@ -330,18 +330,29 @@
   }
 
   /* ------------------------------------------------- 7. subtle parallax */
+  /* Reinit runs after every route change, and #app is replaced each time. The
+     hero element is therefore looked up on each call, but the frame callback and
+     the scroll listener are installed once: registering them per navigation used
+     to leave one dead frame task and one dead listener behind every time the
+     visitor changed page. */
+  let parallaxEl = null, parallaxCurrent = 0, parallaxTarget = 0, parallaxBound = false;
+
   function initParallax() {
     if (!canHover() || isAdmin) return;
-    const heroArt = document.querySelector('.hero-art');
-    if (!heroArt) return;
-    let current = 0, target = 0;
+    parallaxEl = document.querySelector('.hero-art');
+    if (!parallaxEl) return;
+    if (parallaxBound) return;
+    parallaxBound = true;
+    parallaxCurrent = 0;
+    parallaxTarget = clamp(window.scrollY * 0.08, 0, 60);
     window.addEventListener('scroll', () => {
-      target = clamp(window.scrollY * 0.08, 0, 60);
+      parallaxTarget = clamp(window.scrollY * 0.08, 0, 60);
     }, { passive: true });
     onFrame(() => {
-      if (Math.abs(target - current) < 0.2) return;
-      current += (target - current) * 0.12;
-      heroArt.style.setProperty('--parallax-y', current.toFixed(1) + 'px');
+      if (!parallaxEl) return;
+      if (Math.abs(parallaxTarget - parallaxCurrent) < 0.2) return;
+      parallaxCurrent += (parallaxTarget - parallaxCurrent) * 0.12;
+      parallaxEl.style.setProperty('--parallax-y', parallaxCurrent.toFixed(1) + 'px');
     });
   }
 
@@ -357,7 +368,11 @@
   }
 
   /* ------------------------------------------------- 9. navbar underline */
+  let navUnderlineBound = false;
+
   function initNavUnderline() {
+    if (navUnderlineBound) return;
+    navUnderlineBound = true;
     document.querySelectorAll('.nav-links a').forEach((link) => {
       link.addEventListener('pointerenter', () => {
         const rtl = root.dir === 'rtl';

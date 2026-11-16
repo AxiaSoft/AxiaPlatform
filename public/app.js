@@ -310,7 +310,30 @@ if(path==='/'){productFilter='All';if(localStorage.getItem(BRAND_STORAGE)){local
    hash is kept in step so a shared link lands on the same preview, and the
    route below re-creates the layer when the page loads directly at that hash. */
 if(path.startsWith('/preview/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){app.innerHTML='<div class="container page-head"><h1>Preview not found</h1><a class="back-link" href="#/products">Return to products</a></div>';return}app.innerHTML=catalog();bindFilters();setTimeout(()=>openPreview(slug,false),0);return}app.innerHTML=home()}
-$('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();loadSite().then(async()=>{applyChrome();applyThemePreference();await loadProducts();await refresh();render();applyChrome();teachXiona()}).catch(async()=>{await loadProducts();await refresh();render();applyChrome();teachXiona()});window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();teachXiona();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}
+$('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();
+/* Boot used to be a waterfall: settings, then products, then the session, and
+   only then the first paint. The three requests do not depend on each other —
+   settings decide which sections exist, products fill the grid, the session
+   decides one header button — so they run together and the page paints after
+   one round trip instead of three. Measured on a local server: 3 sequential
+   awaits cost ~3x the latency of the slowest one, which on a phone is the
+   difference between a page that appears and a page that hangs on a spinner.
+
+   Two rules keep this honest:
+   - the first render happens as soon as settings and products are in, not
+     after the session, so signing in never delays a public page;
+   - a failed settings request still renders (siteDefaults), rather than
+     stranding the visitor on the loading state. */
+(function boot(){
+  const paint=()=>{render();applyChrome();teachXiona()};
+  const siteReady=loadSite().then(()=>{applyChrome();applyThemePreference()});
+  const productsReady=loadProducts();
+  /* The session only changes the account button — refresh() rewrites that
+     button itself — so it must never hold the first paint. It is awaited
+     separately and finishes whenever it finishes. */
+  refresh();
+  Promise.all([siteReady,productsReady]).then(paint).catch(paint);
+})();window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();teachXiona();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}
 /* Pressing the header lockup while a product brand is running returns to
    AXIASOFT. The link has always pointed at '#/', but the home route never
    touched the brand, so from the home page the href was already satisfied: the
@@ -337,6 +360,11 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;c
    the visitor is looking at, and the snapshot carries the catalog and the
    articles. Nothing here reads orders, accounts or payments. */
 const launcher=$('#chat-launcher');launcher.onclick=toggleChat;
+/* Start fetching the assistant when a pointer or a finger reaches for it rather
+   than when the click lands: the panel still opens on the click, and the script
+   is usually already parsed by then. Nothing downloads for a visitor who only
+   scrolls past. */
+['pointerenter','focus','touchstart'].forEach(ev=>launcher.addEventListener(ev,wantXiona,{once:true,passive:true}));
 /* The launcher changes shape with the panel: a circle invites a question, the
    pill says who the visitor is already talking to. */
 function syncLauncher(){const l=$('#chat-launcher');if(!l)return;l.classList.toggle('is-open',chatOpen);l.setAttribute('aria-expanded',String(chatOpen));l.setAttribute('aria-label',chatOpen?'Close the Xiona assistant':'Open the Xiona assistant')}
@@ -374,8 +402,42 @@ function xionaEngine(){
   return xiona;
 }
 /* Every render re-teaches the assistant the page in front of the visitor, so a
-   post published from the console is answerable without a redeploy. */
+   post published from the console is answerable without a redeploy.
+
+   This used to run on boot, which meant every visitor paid for the assistant:
+   xiona.js (66 KB) was a blocking script, and the first render built a BM25
+   index over the whole site whether or not anyone ever opened the panel. Most
+   visitors never do. The assistant now loads the first time a visitor reaches
+   for it — the launcher, the panel, or a click on "Ask Xiona" — and this
+   function records the page so the engine learns it when it arrives. */
+let xionaWanted=false,xionaRequest=null;
+function wantXiona(){
+  if(xionaWanted)return Promise.resolve();
+  xionaWanted=true;
+  return loadXiona();
+}
+/* Load xiona.js on demand. The script tag is still in index.html for the
+   no-JavaScript and crawler case, but with data-src instead of src, so the
+   browser does not fetch or parse it until somebody asks. */
+function loadXiona(){
+  if(window.Xiona)return Promise.resolve();
+  if(xionaRequest)return xionaRequest;
+  const tag=document.querySelector('script[data-xiona]');
+  if(!tag)return Promise.resolve();
+  xionaRequest=new Promise((resolve)=>{
+    const el=document.createElement('script');
+    el.src=tag.dataset.src||tag.src;
+    el.defer=true;
+    el.onload=resolve;
+    el.onerror=resolve;   /* a failed assistant must not break the page */
+    document.head.appendChild(el);
+  });
+  return xionaRequest;
+}
 function teachXiona(){
+  /* Nothing to do until the assistant is wanted: building the index for a
+     closed panel was the most expensive thing on a cold page. */
+  if(!xionaWanted)return;
   const engine=xionaEngine(); if(!engine)return;
   const source=window.Xiona.readSite({document:document,window:window,path:location.hash});
   const page=source.pages[0]; if(!page||xionaPagesSeen[page.route])return;
@@ -384,16 +446,19 @@ function teachXiona(){
 }
 
 function toggleChat(){
-  /* Opening the panel is the first moment the vocabulary is worth its bytes. */
-  if(!chatOpen&&!(window.AXIA_STATIC&&(window.AXIA_STATIC.pairs||[]).length)){
-    loadVocabulary().then(()=>{
-      /* The engine has already indexed the pages with no dictionary. Rebuilding
-         it is cheaper than teaching a live one a second vocabulary, and it is a
+  /* Opening the panel is the first moment the assistant is worth its bytes: the
+     script itself, then its vocabulary. Both land before the panel draws an
+     answer, and the panel draws immediately in the meantime so the click feels
+     instant. */
+  if(!chatOpen){
+    wantXiona().then(()=>{
+      if(!(window.AXIA_STATIC&&(window.AXIA_STATIC.pairs||[]).length))return loadVocabulary();
+    }).then(()=>{
+      /* The engine may have indexed the pages with no dictionary. Rebuilding it
+         is cheaper than teaching a live one a second vocabulary, and it is a
          one-off: this runs the first time the panel opens and never again. */
-      xiona=null;
-      xionaEngine();
-      teachXiona();
-    })
+      if(window.Xiona){xiona=null;xionaEngine();teachXiona()}
+    }).catch(()=>{});
   }
   chatOpen=!chatOpen;syncLauncher();let panel=$('#chat-panel');if(!chatOpen){panel?.remove();return}if(panel)return;panel=document.createElement('section');panel.id='chat-panel';panel.className='chat-panel';const chatFa=document.documentElement.lang==='fa';
  panel.innerHTML=`<div class="chat-head"><div><strong>Xiona · ${chatFa?'دستیار همین سایت':'on-site assistant'}</strong><small>${chatFa?'همین سایت را یاد می‌گیرد · خودش پاسخ می‌دهد · بدون سرویس بیرونی':'Learns this site · answers on its own · no outside service'}</small></div><button class="close-button" aria-label="${chatFa?'بستن گفت‌وگو':'Close support'}">×</button></div><div class="chat-messages" id="chat-messages"></div><div class="chat-chips"></div><div class="chat-disclaimer">${chatFa?'Xiona فقط از آنچه این سایت منتشر کرده پاسخ می‌دهد و به سفارش‌ها، پرداخت‌ها یا حساب شما دسترسی ندارد.':'Xiona answers only from what this site publishes. It cannot see orders, payments or your account.'}</div><form class="chat-form" id="chat-form"><input id="chat-input" placeholder="${chatFa?'دربارهٔ محصولات، خدمات یا فرایند کار بپرسید…':'Ask about products, services or the process…'}" maxlength="500" required><button>${chatFa?'بفرست':'Send'}</button></form>`;document.body.append(panel);
@@ -405,9 +470,10 @@ function toggleChat(){
  /* Open with the conversation this visitor already had, or with a real answer
     rather than a fixed greeting: the engine names what it can actually answer,
     which on an empty catalog is honestly "not much yet". */
- const engine=xionaEngine();
+ /* xiona.js may still be arriving (it loads on the first click). The greeting
+    is composed once it is here; until then the panel shows the honest static
+    line, which is what a visitor sees if the script never loads at all. */
  const fa=document.documentElement.lang==='fa';
- const hello=engine?engine.answer(fa?'سلام':'hello').text:(fa?'سلام. من Xiona هستم؛ دستیار همین سایت.':'Hi, I am Xiona, this site\'s assistant.');
  loadChatHistory().then(saved=>{
    /* The panel may have been closed again while the account was answering. */
    if(!$('#chat-panel'))return;
@@ -421,7 +487,18 @@ function toggleChat(){
      divider.textContent=fa?'ادامهٔ گفت‌وگوی پیشین':'Resumed conversation';
      $('#chat-messages')?.prepend(divider);
    }else{
-     addChat(hello,'bot');
+     const fallback=fa?'سلام. من Xiona هستم؛ دستیار همین سایت.':'Hi, I am Xiona, this site\'s assistant.';
+     addChat(fallback,'bot');
+     /* Swap in the engine's own opening line when it finishes loading: it names
+        what this site can actually answer, which the static line cannot know. */
+     wantXiona().then(()=>{
+       const engine=xionaEngine();
+       if(!engine||!$('#chat-panel')||chatHistory.length)return;
+       const heading=fa?'سلام':'hello';
+       const box=$('#chat-messages');
+       const first=box&&box.querySelector('.chat-message');
+       if(first&&first.textContent.trim()===fallback)first.textContent=engine.answer(heading).text;
+     }).catch(()=>{});
    }
    const box=$('#chat-messages'); if(box)box.scrollTop=box.scrollHeight;
  });
@@ -510,6 +587,10 @@ async function sendChat(text){
  text=String(text||'').trim(); if(!text)return;
  addChat(text,'user'); chatHistory.push({role:'user',text});
  const thinking=addChat('…','bot',true);
+ /* A message can arrive before xiona.js has finished loading, if the visitor
+    types faster than the script. Wait for it once: the engine is the fallback
+    answer, and it should be ready by the time the server has replied anyway. */
+ await wantXiona().catch(()=>{});
  const engine=xionaEngine();
  const answer=engine?engine.answer(text):null;
  let reply=null, usedModel=false;
