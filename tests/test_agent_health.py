@@ -309,6 +309,23 @@ class SiteKnowledgeTest(unittest.TestCase):
         self.assertGreaterEqual(len(articles), 2)
         self.assertTrue(all(a.get('status') == 'published' for a in articles))
 
+    def test_the_two_engines_share_one_stopword_list(self):
+        # The Python server and the browser assistant are the same assistant,
+        # and their stopword lists had drifted: the browser knew «دهید» was a
+        # light verb, the server did not, so the server attached the word to
+        # payments and fell below its own coverage gate on «چه خدماتی ارائه
+        # می‌دهید؟» — a question it had answered a round earlier.
+        import re
+        import xiona_engine
+        source = (ROOT / 'public' / 'xiona.js').read_text(encoding='utf-8')
+        block = source[source.index("fa: ["):source.index("en: [")]
+        browser = set(re.findall(r"'([^']+)'", block))
+        self.assertEqual(browser, xiona_engine.STOPWORDS['fa'])
+
+    def test_a_question_built_on_a_light_verb_still_answers(self):
+        result = self.index().answer('چه خدماتی ارائه می‌دهید؟', language='fa')
+        self.assertEqual(result['source'], 'knowledge')
+
     def test_the_snapshot_carries_the_page_copy(self):
         pages = agent.site_pages()
         topics = {str(p.get('topic')) for p in pages if isinstance(p, dict)}
