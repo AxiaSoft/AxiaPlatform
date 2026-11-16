@@ -534,7 +534,7 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
   </script>
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{root}/styles.css?v=site-21">
-  <link rel="stylesheet" href="{root}/effects.css?v=fx-5">
+  <link rel="stylesheet" href="{root}/effects.css?v=fx-6">
   <link rel="stylesheet" href="{root}/blog.css?v=8">
 </head>
 <body class="blog-body">
@@ -556,7 +556,7 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
   <div class="footer-links"><a href="{root}/#/contact">{t['contact']}</a><a href="{blog_home}">{t['feed']}</a><a href="{root}/#/privacy">{t['privacy']}</a></div></div>
   <div class="footer-bottom"><span>© AXIASOFT</span><span>{t['made']} <span class="blue">✦</span></span></div>
 </footer>
-<script src="{root}/effects.js?v=fx-5" defer></script>
+<script src="{root}/effects.js?v=fx-6" defer></script>
 <script>
 /* The article pages are static HTML, so the two header controls the
    storefront gets from app.js are wired here instead. Small on purpose: a
