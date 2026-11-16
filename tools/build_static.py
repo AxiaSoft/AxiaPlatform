@@ -777,8 +777,14 @@ def write_previews(out, base: str, products: list[dict]) -> int:
         lead = ' '.join(words[:cut]) + (' ' if cut < len(words) else '')
         tail = ' '.join(words[cut:])
         cover = str(product.get('cover') or '')
-        if cover and not cover.startswith('http') and not cover.startswith('//'):
-            cover = base.rstrip('/') + '/' + cover.lstrip('/')
+        # The catalog pass above already prefixed a local cover with the deploy
+        # base. Prefixing here unconditionally baked in
+        # '/AxiaPlatform/AxiaPlatform/brand/...' and every concept preview opened
+        # with a broken image. Same guard as there, for the same reason.
+        prefix = base.rstrip('/')
+        if (cover and not cover.startswith('http') and not cover.startswith('//')
+                and prefix and not cover.startswith(prefix + '/')):
+            cover = prefix + '/' + cover.lstrip('/')
         art = f'<img src="{html.escape(cover, quote=True)}" alt="">' if cover else ''
         tags = ''.join(f'<span class="tag">{html.escape(str(t))}</span>'
                        for t in (product.get('technologies') or [])[:6])
