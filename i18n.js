@@ -421,6 +421,11 @@ Object.assign(fa,{
   "Local retrieval only": "فقط بازیابی محلی",
   "approved facts, no API key, no outbound request.": "واقعیت تأییدشده، بدون کلید API و بدون درخواست بیرونی.",
   "Set AXIA_AGENT_KEY and AXIA_AGENT_URL to let a model answer.": "برای پاسخ‌دادن مدل، AXIA_AGENT_KEY و AXIA_AGENT_URL را تنظیم کنید.",
+  "A model is configured but has not answered yet": "مدلی تنظیم شده اما هنوز پاسخی نداده است",
+  "Ask the assistant one question to check it.": "برای بررسی، یک پرسش از دستیار بپرسید.",
+  "The model is configured but its last call failed": "مدل تنظیم شده اما آخرین فراخوانی آن ناموفق بود",
+  "Visitors are getting the on-site answer.": "بازدیدکنندگان پاسخ درون‌سایتی می‌گیرند.",
+  "approved facts, no outbound request.": "واقعیت تأییدشده، بدون درخواست بیرونی.",
   "Status unavailable in this mode.": "وضعیت در این حالت در دسترس نیست.",
 
 /* ---- catalog categories (round 15) ---- */

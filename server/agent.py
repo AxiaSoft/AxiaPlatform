@@ -30,10 +30,16 @@ Using Google AI Studio (Gemini) instead of OpenAI:
 
   AXIA_AGENT_KEY=<your AI Studio key>
   AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
-  AXIA_AGENT_MODEL=gemini-2.0-flash
+  AXIA_AGENT_MODEL=gemini-3.8-flash
 
 Gemini exposes an OpenAI-compatible surface at that base URL, so nothing else
 changes. Any other provider that speaks /chat/completions works the same way.
+
+Check the model name when setting this up. Google retires model IDs on a
+published schedule — gemini-2.0-flash, the example this file used to carry,
+was shut down on 2026-06-01 and no longer answers. A dead model ID fails the
+same way a revoked key does: the site keeps serving the on-site answer and
+nothing looks broken. `status()['model_state']` exists to make that visible.
 
 The key is read from the environment on the server only. It is never sent to
 the browser, never baked into a built file, and never returned by /api/agent.
@@ -44,6 +50,7 @@ environment always wins over it.
 
 Nothing here reads orders, refunds, payments or account details.
 """
+import datetime
 import json
 import os
 import re
@@ -101,6 +108,14 @@ def load_env_file(path=None):
 # Read once, at import: `status()` and `answer()` both look at os.environ, and
 # they must agree about whether a model is configured.
 load_env_file()
+
+# The outcome of the last real provider call. "A key is set" is not the same as
+# "the model answers": a key can be revoked, the model can be shut down, or the
+# host can have no route to the provider at all. Without this the console read
+# `provider: model` from the mere presence of a key, so a site whose model had
+# never once replied still looked healthy — while every visitor silently got the
+# on-site answer instead. `None` means "no call attempted since start".
+_LAST_CALL = {'ok': None, 'error': None, 'at': None}
 
 # --------------------------------------------------------------------------- #
 # Knowledge
@@ -221,14 +236,31 @@ def ask_provider(question, history=None, context='', language=None):
         choice = (payload.get('choices') or [{}])[0]
         text = (choice.get('message') or {}).get('content', '')
         text = (text or '').strip()
-        return (text, None) if text else (None, 'empty response')
+        if not text:
+            return None, _record_failure('empty response')
+        _record_success()
+        return text, None
     except urllib.error.HTTPError as exc:
         # The status is the only part that is safe to log: a provider body can
         # echo the key or the prompt back, and this error string is served to
         # the browser.
-        return None, f'provider returned {exc.code}'
+        return None, _record_failure(f'provider returned {exc.code}')
     except Exception as exc:  # network, DNS, timeout, bad JSON
-        return None, type(exc).__name__
+        return None, _record_failure(type(exc).__name__)
+
+
+def _record_success():
+    _LAST_CALL.update(ok=True, error=None, at=_now())
+
+
+def _record_failure(reason):
+    """Remember the last failure and hand the reason back to the caller."""
+    _LAST_CALL.update(ok=False, error=reason, at=_now())
+    return reason
+
+
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def _looks_persian(text):
@@ -307,6 +339,19 @@ def status():
         'configured': True,
         'model': (os.environ.get('AXIA_AGENT_MODEL') or 'gpt-4o-mini') if _provider_configured() else None,
         'model_base': (os.environ.get('AXIA_AGENT_URL') or 'https://api.openai.com/v1').rstrip('/') if _provider_configured() else None,
+        # Three states an operator needs to tell apart, because they need
+        # different fixes: no key (nothing to do), a key that has never been
+        # tried (check it once), and a key whose last call failed (the key, the
+        # model name, or the network is wrong). The console used to show only
+        # the first of those.
+        'model_state': (
+            'unconfigured' if not _provider_configured()
+            else 'untested' if _LAST_CALL['ok'] is None
+            else 'ok' if _LAST_CALL['ok']
+            else 'failing'
+        ),
+        'model_last_error': _LAST_CALL['error'] if _provider_configured() else None,
+        'model_last_call': _LAST_CALL['at'] if _provider_configured() else None,
         'chunks': state['chunks'],
         # The console counts topics; with a live index the count is the number of
         # distinct sections it learned, which is more useful than a fixed 10.
