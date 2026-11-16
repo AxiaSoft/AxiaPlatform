@@ -532,7 +532,70 @@ Object.assign(fa,{
  "Sets the bar's accent colour only.":'فقط رنگ تأکید نوار را تعیین می‌کند.',
  'Support agent (Xiona)':'دستیار پشتیبانی (Xiona)',
  'Ticket state':'وضعیت تیکت',
- 'Ticket status':'وضعیت تیکت'
+ 'Ticket status':'وضعیت تیکت',
+
+ /* ---- demo catalog product copy (round 26) ---- */
+ /* The demo ships twelve products so neither catalog tab is empty. The four
+    site brands and the three concept rows that are not already in the main
+    table need their Persian here; the rest of the concept rows were translated
+    when they were the console's sample catalog. The English strings must match
+    tools/demo_catalog.py character for character — the translator looks the
+    rendered text up whole, so a paraphrase silently stays English. */
+ 'Arya — Software with wings.':'آریا — نرم‌افزاری با بال‌های پرواز.',
+ 'Ersha — Built to stand.':'ارشا — ساخته‌شده برای ماندن.',
+ 'Mino — Clarity, by design.':'مینو — شفافیت، به‌صورت طراحی‌شده.',
+ 'Homa — Rise above the noise.':'هما — بالاتر از همهمه.',
+ 'Arya is a complete website build presented under the Arya brand: software with wings.':
+   'آریا یک وب‌سایت کامل است که زیر برند آریا ارائه می‌شود: نرم‌افزاری با بال‌های پرواز.',
+ 'Ersha is a complete website build presented under the Ersha brand: built to stand.':
+   'ارشا یک وب‌سایت کامل است که زیر برند ارشا ارائه می‌شود: ساخته‌شده برای ماندن.',
+ 'Mino is a complete website build presented under the Mino brand: clarity, by design.':
+   'مینو یک وب‌سایت کامل است که زیر برند مینو ارائه می‌شود: شفافیت، به‌صورت طراحی‌شده.',
+ 'Homa is a complete website build presented under the Homa brand: rise above the noise.':
+   'هما یک وب‌سایت کامل است که زیر برند هما ارائه می‌شود: بالاتر از همهمه.',
+ 'Arya is one of the site brands AXIASOFT builds under. Choosing Arya launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Arya rather than as an agency pitch. Scope, pages and content are agreed before the build starts.':
+   'آریا یکی از برندهایی است که AXIASOFT زیر آن کار می‌کند. با انتخاب آریا، این وب‌سایت با لوگوی خودش در سربرگ، رنگ تأکیدی خودش و نام خودش در عنوان صفحه بالا می‌آید تا بازدیدکننده محصول را آریا ببیند، نه معرفی یک آژانس. دامنه، صفحه‌ها و محتوا پیش از آغاز ساخت توافق می‌شوند.',
+ 'Ersha is one of the site brands AXIASOFT builds under. Choosing Ersha launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Ersha rather than as an agency pitch. Scope, pages and content are agreed before the build starts.':
+   'ارشا یکی از برندهایی است که AXIASOFT زیر آن کار می‌کند. با انتخاب ارشا، این وب‌سایت با لوگوی خودش در سربرگ، رنگ تأکیدی خودش و نام خودش در عنوان صفحه بالا می‌آید تا بازدیدکننده محصول را ارشا ببیند، نه معرفی یک آژانس. دامنه، صفحه‌ها و محتوا پیش از آغاز ساخت توافق می‌شوند.',
+ 'Mino is one of the site brands AXIASOFT builds under. Choosing Mino launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Mino rather than as an agency pitch. Scope, pages and content are agreed before the build starts.':
+   'مینو یکی از برندهایی است که AXIASOFT زیر آن کار می‌کند. با انتخاب مینو، این وب‌سایت با لوگوی خودش در سربرگ، رنگ تأکیدی خودش و نام خودش در عنوان صفحه بالا می‌آید تا بازدیدکننده محصول را مینو ببیند، نه معرفی یک آژانس. دامنه، صفحه‌ها و محتوا پیش از آغاز ساخت توافق می‌شوند.',
+ 'Homa is one of the site brands AXIASOFT builds under. Choosing Homa launches this website with its own logo in the header, its own accent colour and its own name in the page title, so a visitor sees the product as Homa rather than as an agency pitch. Scope, pages and content are agreed before the build starts.':
+   'هما یکی از برندهایی است که AXIASOFT زیر آن کار می‌کند. با انتخاب هما، این وب‌سایت با لوگوی خودش در سربرگ، رنگ تأکیدی خودش و نام خودش در عنوان صفحه بالا می‌آید تا بازدیدکننده محصول را هما ببیند، نه معرفی یک آژانس. دامنه، صفحه‌ها و محتوا پیش از آغاز ساخت توافق می‌شوند.',
+ 'Grove Grocer':'بقالی گروو',
+ 'A weekly shop that fits in a pocket.':'خرید هفتگی، در اندازهٔ جیب شما.',
+ 'A grocery storefront concept built around a short, repeatable basket: seasonal produce up front, a saved list that survives between visits, and a checkout that asks for nothing it does not need. Delivery slots and payment integration are agreed during discovery.':
+   'مفهوم فروشگاه خواربار با محوریت سبدی کوتاه و تکرارپذیر: محصولات فصل در صدر، فهرستی ذخیره‌شده که بین بازدیدها می‌ماند، و پرداختی که چیزی بیش از نیاز نمی‌پرسد. بازه‌های تحویل و اتصال پرداخت در مرحلهٔ شناخت توافق می‌شوند.',
+ 'Atlas Client Portal':'پرتال مشتریان اطلس',
+ 'One place for every project a client has with you.':'یک جا برای همهٔ پروژه‌هایی که مشتری با شما دارد.',
+ 'A client-facing portal concept: project status, shared documents, invoices and a single thread per engagement. Access is role-aware from the first screen, and nothing is shared until somebody chooses to share it.':
+   'مفهوم پرتالی رو به مشتری: وضعیت پروژه، سندهای مشترک، صورت‌حساب‌ها و یک رشتهٔ گفت‌وگو برای هر همکاری. دسترسی از نخستین صفحه بر پایهٔ نقش است و تا کسی نخواهد چیزی به اشتراک گذاشته نمی‌شود.',
+ 'Signal Desk':'میز سیگنال',
+ 'Support conversations that keep their context.':'گفت‌وگوهای پشتیبانی که زمینه‌شان را نگه می‌دارند.',
+ 'A support desk concept for small teams: one queue, every channel, and the account history beside the reply box so nobody asks a customer to repeat themselves. Reporting is read-only in this concept; billing integration is out of scope.':
+   'مفهوم میز پشتیبانی برای تیم‌های کوچک: یک صف، همهٔ کانال‌ها، و پیشینهٔ حساب در کنار کادر پاسخ تا کسی از مشتری نخواهد خودش را تکرار کند. گزارش‌ها در این مفهوم فقط خواندنی‌اند و اتصال صورت‌حساب خارج از دامنه است.',
+ 'Branded header and title':'سربرگ و عنوان برندشده',
+ 'Responsive layout':'چیدمان واکنش‌گرا',
+ 'Content structure agreed first':'ساختار محتوا، پیش از هر چیز توافق‌شده',
+ 'No payment on this site':'بدون پرداخت در این سایت',
+ 'Saved baskets':'سبدهای ذخیره‌شده',
+ 'Seasonal produce shelf':'قفسهٔ محصولات فصل',
+ 'Delivery slot picker':'انتخاب بازهٔ تحویل',
+ 'Provider profiles':'پروفایل متخصصان',
+ 'Role-aware access':'دسترسی بر پایهٔ نقش',
+ 'Shared documents':'سندهای مشترک',
+ 'Status timeline':'خط زمانی وضعیت',
+ 'Secure sign-in':'ورود ایمن',
+ 'Unified inbox':'صندوق ورودی یکپارچه',
+ 'Account history':'پیشینهٔ حساب',
+ 'Canned replies':'پاسخ‌های آماده',
+ 'Read-only reporting':'گزارش فقط‌خواندنی',
+ 'From €3,900':'از ۳٬۹۰۰ یورو',
+ 'From €5,400':'از ۵٬۴۰۰ یورو',
+ 'From €6,100':'از ۶٬۱۰۰ یورو',
+ 'From €6,200':'از ۶٬۲۰۰ یورو',
+ 'From €7,800':'از ۷٬۸۰۰ یورو',
+ 'From €9,300':'از ۹٬۳۰۰ یورو',
+ 'From €11,500':'از ۱۱٬۵۰۰ یورو'
 });
 
 const faPatterns=[

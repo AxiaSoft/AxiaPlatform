@@ -388,7 +388,8 @@ class AdminThemeAndLanguageTests(unittest.TestCase):
     def test_a_build_without_a_database_ships_the_four_builds(self):
         missing_db = ROOT / 'tests' / 'does-not-exist.sqlite3'
         rows = build_static.read_catalog(missing_db, '/AxiaPlatform/')
-        self.assertEqual([r['slug'] for r in rows], ['arya', 'ersha', 'mino', 'homa'])
+        self.assertEqual([r['slug'] for r in rows][:4],
+                         ['arya', 'ersha', 'mino', 'homa'])
         # The demo rows carry the brand artwork, so the catalog shows the real
         # marks instead of four monograms. read_catalog() returns the path
         # stored in the catalog — bare, with no deploy base — and the build
@@ -1414,8 +1415,54 @@ class CatalogShipsEmptyTests(unittest.TestCase):
                          'the server must not seed products of its own')
 
     def test_the_demo_build_ships_the_website_builds(self):
-        self.assertEqual([row['slug'] for row in self.catalog],
+        # The four site brands lead, in the order the operator arranged them.
+        self.assertEqual([row['slug'] for row in self.catalog][:4],
                          ['arya', 'ersha', 'mino', 'homa'])
+
+    def test_the_demo_catalog_fills_both_tabs(self):
+        # The demo used to ship the four brand rows and nothing else, so the
+        # Applications tab opened an empty grid and the filter row was a lie.
+        # Every category the demo offers must have a product behind it.
+        import sys as _sys
+        _sys.path.insert(0, str(ROOT / 'tools'))
+        from demo_catalog import DEMO_CATEGORIES
+        for category in DEMO_CATEGORIES:
+            rows = [r for r in self.catalog if r['category'] == category['id']]
+            self.assertTrue(rows, f'no demo product in {category["id"]}')
+
+    def test_the_demo_catalog_is_big_enough_to_look_like_a_catalog(self):
+        # A grid of four cards in three columns is one row and a gap; the point
+        # of the demo is to show what a browsable catalog looks like.
+        self.assertGreaterEqual(len(self.catalog), 10)
+        # And no duplicate slugs: the console's sample loader matches by slug.
+        slugs = [r['slug'] for r in self.catalog]
+        self.assertEqual(len(slugs), len(set(slugs)))
+
+    def test_the_two_catalogs_cannot_leak_into_each_other(self):
+        """The demo is full and the server is empty, on purpose.
+
+        The operator asked for exactly this: "add a few products to the demo so
+        it is not empty; only the server site must stay clean." The mechanism is
+        that they are different artifacts, not a flag someone has to remember:
+
+        - the demo catalog lives in tools/demo_catalog.py and reaches the page
+          through data/products.js, which the *build* injects;
+        - the server serves the products table and never reads that file;
+        - public/index.html is the server's shell and carries no snapshot tag,
+          so a server-backed page cannot pick the demo rows up by accident.
+        """
+        shell = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
+        built = (ROOT / 'index.html').read_text(encoding='utf-8')
+        self.assertNotIn('data/products.js', shell,
+                         'the server shell loads the demo catalog snapshot')
+        self.assertIn('data/products.js', built,
+                      'the demo build does not load its own catalog snapshot')
+
+    def test_the_server_shell_has_no_product_rows(self):
+        # Belt and braces on the same guarantee: the page the server serves has
+        # no catalog data baked into it at all.
+        shell = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
+        self.assertNotIn('AXIA_STATIC.products', shell)
 
     def test_the_demo_catalog_is_a_fallback_not_a_precedence(self):
         self.assertIn('if not rows and demo_catalog:', self.build)
@@ -1458,8 +1505,11 @@ class CatalogShipsEmptyTests(unittest.TestCase):
 
     def test_the_demo_catalog_rows_are_complete(self):
         for row in self.catalog:
+            # `cover` is optional by design: a concept product has no artwork and
+            # the storefront draws the studio emblem, which is a deliberate
+            # fallback rather than a broken card. The brand rows do carry one.
             for field in ('slug', 'title', 'category', 'summary', 'description',
-                          'cover', 'features', 'technologies', 'status', 'price_label'):
+                          'features', 'technologies', 'status', 'price_label'):
                 self.assertTrue(row.get(field) not in (None, ''),
                                 f'{row.get("slug")} has no {field}')
             # Stored bare: the build adds the deploy base, and prefixing a
