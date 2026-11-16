@@ -2210,3 +2210,179 @@ class FocusRingTests(unittest.TestCase):
     def test_the_ring_is_not_removed(self):
         # Cosmetic, not a reason to take focus indication away.
         self.assertIn('outline: 2px solid var(--blue)', self.css)
+
+
+class DemoArticleTests(unittest.TestCase):
+    """The WordPress-versus-code article has to exist everywhere it is linked.
+
+    It was written as a demo post a visitor can click through, so it must be on
+    the blog index, open at its own URL, available in the English mirror, and
+    present in the browser-only console's seed — a demo article that only exists
+    in one of those is a dead link in three others.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.articles = json.loads((ROOT / 'data' / 'articles.json').read_text(encoding='utf-8'))
+        cls.by_slug = {a['slug']: a for a in cls.articles}
+        cls.article = cls.by_slug.get('wordpress-vs-code')
+        cls.translations = json.loads((ROOT / 'data' / 'translations.json').read_text(encoding='utf-8'))
+
+    def test_the_demo_article_is_published_in_persian(self):
+        self.assertIsNotNone(self.article, 'the demo article is missing from data/articles.json')
+        self.assertEqual(self.article.get('language'), 'fa')
+        self.assertTrue(self.article.get('published_at'))
+
+    def test_it_actually_compares_the_two_approaches(self):
+        # Not a stub: it must name both subjects, and carry a comparison table.
+        body = self.article['body']
+        self.assertIn('وردپرس', body)
+        self.assertIn('| --- |', body)
+        self.assertGreater(len(body), 1500)
+
+    def test_it_has_a_current_english_mirror(self):
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import translate_articles
+        entry = self.translations.get('wordpress-vs-code')
+        self.assertIsNotNone(entry, 'the demo article has no English copy')
+        self.assertEqual(entry['source_hash'], translate_articles.digest(self.article),
+                         'the English copy is stale — run tools/translate_articles.py')
+        self.assertIn('WordPress', entry['title'] + entry['body'])
+        self.assertIn('| --- |', entry['body'])
+
+    def test_every_article_still_has_a_current_english_mirror(self):
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import translate_articles
+        for article in self.articles:
+            if str(article.get('language') or 'fa') != 'fa':
+                continue
+            entry = self.translations.get(article['slug'])
+            self.assertIsNotNone(entry, f'{article["slug"]} has no English copy')
+            self.assertEqual(entry['source_hash'], translate_articles.digest(article),
+                             f'{article["slug"]} has a stale English copy')
+
+    def test_the_console_seeds_it_from_the_shipped_snapshot(self):
+        # The browser-only build has no server to read articles from, so the
+        # console seeds from data/products.js. Without the seed the demo's
+        # Articles page is empty and the demo post cannot be reached there.
+        source = (ROOT / 'public' / 'demo-backend.js').read_text(encoding='utf-8')
+        self.assertIn('function seedArticles()', source)
+        self.assertIn('seedArticles()', source[source.index('function readArticles()'):])
+
+    def test_public_article_reads_are_not_behind_the_admin_gate(self):
+        source = (ROOT / 'public' / 'demo-backend.js').read_text(encoding='utf-8')
+        admin = source.index("// ---- admin ---")
+        public = source.index("if (path === '/api/articles' && method === 'GET')")
+        self.assertLess(public, admin,
+                        'a public article read must be answered before the admin gate')
+
+
+class BlogBuildOutputTests(unittest.TestCase):
+    """A real build of the blog tree, checked on disk.
+
+    Two bugs lived here and neither could be seen in the source: the English
+    pages rendered an empty prose block because the body was dropped before the
+    article was rendered, and every breadcrumb read
+    '/AxiaPlatform/AxiaPlatform/blog/' because the base was applied twice.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temp = tempfile.TemporaryDirectory()
+        cls.out = Path(cls.temp.name)
+        (cls.out / 'data').mkdir(parents=True, exist_ok=True)
+        settings = {'default_theme': 'dark'}
+        (cls.out / 'data' / 'settings.json').write_text(json.dumps(settings), encoding='utf-8')
+        build_static.write_blog(cls.out, '/AxiaPlatform/', 'https://axiasoft.github.io')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp.cleanup()
+
+    def read(self, *parts):
+        return (self.out.joinpath(*parts)).read_text(encoding='utf-8')
+
+    def test_both_article_trees_are_written(self):
+        self.assertTrue((self.out / 'blog' / 'wordpress-vs-code' / 'index.html').is_file())
+        self.assertTrue((self.out / 'en' / 'blog' / 'wordpress-vs-code' / 'index.html').is_file())
+
+    def test_the_persian_article_has_its_body(self):
+        page = self.read('blog', 'wordpress-vs-code', 'index.html')
+        self.assertIn('<table>', page)
+        self.assertIn('وردپرس', page)
+
+    def test_the_english_article_has_its_body(self):
+        # The regression: title and summary were English, the prose was empty.
+        page = self.read('en', 'blog', 'wordpress-vs-code', 'index.html')
+        start = page.index('<div class="blog-prose"')
+        end = page.index('</div>', start)
+        prose = page[start:end]
+        self.assertGreater(len(prose), 500, 'the English article rendered no body')
+        self.assertIn('WordPress', prose)
+        self.assertIn('<table>', prose)
+
+    def test_the_index_links_to_the_article(self):
+        start = self.read('blog', 'index.html')
+        self.assertIn('blog/wordpress-vs-code/', start.replace('/AxiaPlatform/blog/', 'blog/'))
+        en = self.read('en', 'blog', 'index.html')
+        self.assertIn('WordPress or hand-coded', en)
+
+    def test_no_link_doubles_the_base_path(self):
+        for parts in (('blog', 'index.html'),
+                      ('blog', 'wordpress-vs-code', 'index.html'),
+                      ('en', 'blog', 'index.html'),
+                      ('en', 'blog', 'wordpress-vs-code', 'index.html'),
+                      ('blog', 'feed.xml')):
+            page = self.read(*parts)
+            self.assertNotIn('/AxiaPlatform/AxiaPlatform', page, f'{parts} doubled the base')
+            self.assertNotIn('AxiaPlatform//', page, f'{parts} doubled a slash')
+
+    def test_every_internal_link_resolves(self):
+        pages = [self.out / 'blog' / 'index.html',
+                 self.out / 'blog' / 'wordpress-vs-code' / 'index.html',
+                 self.out / 'en' / 'blog' / 'index.html',
+                 self.out / 'en' / 'blog' / 'wordpress-vs-code' / 'index.html']
+        for page in pages:
+            for href in set(re.findall(r'href="(/AxiaPlatform/[^"#?]*)', page.read_text(encoding='utf-8'))):
+                # Stylesheet and font links point at files this temp tree does
+                # not build; only page links have to resolve here.
+                if not re.search(r'/(blog|en/blog)/', href):
+                    continue
+                rel = href[len('/AxiaPlatform/'):]
+                target = self.out / rel
+                if href.endswith('/'):
+                    target = self.out / rel / 'index.html'
+                self.assertTrue(target.exists(), f'{page.name} links to missing {href}')
+
+    def test_an_untranslated_post_still_renders_its_body(self):
+        # The fallback page for a post with no stored English copy is written by
+        # a third branch, which had the same doubled base and the same missing
+        # body. Checked by building once with the translations hidden.
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        out = Path(temp.name)
+        (out / 'data').mkdir(parents=True, exist_ok=True)
+        (out / 'data' / 'settings.json').write_text('{"default_theme": "dark"}', encoding='utf-8')
+        original = build_static.ROOT
+        try:
+            # Hide every stored translation from this one build.
+            import shutil
+            mirror = out / 'repo'
+            (mirror / 'data').mkdir(parents=True, exist_ok=True)
+            (mirror / 'data' / 'articles.json').write_text(
+                (original / 'data' / 'articles.json').read_text(encoding='utf-8'), encoding='utf-8')
+            (mirror / 'data' / 'translations.json').write_text('{}', encoding='utf-8')
+            build_static.ROOT = mirror
+            build_static.write_blog(out, '/AxiaPlatform/', 'https://axiasoft.github.io')
+        finally:
+            build_static.ROOT = original
+        page = (out / 'en' / 'blog' / 'wordpress-vs-code' / 'index.html').read_text(encoding='utf-8')
+        self.assertIn('blog-notice', page, 'the page must say the copy is untranslated')
+        self.assertNotIn('/AxiaPlatform/AxiaPlatform', page)
+        start = page.index('<div class="blog-prose"')
+        self.assertGreater(page.index('</div>', start) - start, 500,
+                           'the fallback page rendered no body')
+
+    def test_the_article_theme_follows_the_setting(self):
+        page = self.read('blog', 'wordpress-vs-code', 'index.html')
+        self.assertIn('var fallback = "dark";', page)

@@ -265,6 +265,23 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
         print('  blog: skipped (server/blog.py not importable)')
         return
 
+    # The administrator's default theme lives in the settings document the
+    # storefront reads. The blog needs the same value, or a site configured to
+    # open in light mode opens dark on every article — same visitor, same
+    # session, two themes. Absent the file, the blog follows the system.
+    default_theme = ''
+    for candidate in (out / 'data' / 'settings.json', ROOT / 'data' / 'settings.json'):
+        if candidate.is_file():
+            try:
+                doc = json.loads(candidate.read_text(encoding='utf-8'))
+                # The file is either the settings object or {'settings': {...}}.
+                value = doc.get('settings') if isinstance(doc, dict) and 'settings' in doc else doc
+                if isinstance(value, dict):
+                    default_theme = str(value.get('default_theme') or '')
+            except (OSError, ValueError):
+                default_theme = ''
+            break
+
     # data/articles.json is the source of truth for the static build: it is
     # committed, so a checkout with no database still publishes the same
     # articles. A database is only consulted when that file is absent (a local
@@ -343,7 +360,10 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
     # is rendered in its original language and labelled as untranslated.
     en_posts = []
     for article in articles:
-        hit = english(article)
+        # full=True: the English article pages need the body, not just the
+        # index card. Popping it here left every /en/blog/<slug>/ page with an
+        # empty prose block while the card on the index looked correct.
+        hit = english(article, full=True)
         if hit:
             en_posts.append(hit)
         else:
@@ -365,15 +385,18 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
             canonical=en_url if lang == 'en' else fa_url, origin=origin, base=base,
             kind='blog', items=posts, lang=lang,
             alt_url=fa_url if lang == 'en' else en_url)
-        # The shell builds its own links from `base`; only the body carries
-        # root-relative URLs that need rebasing, so rebase it before wrapping.
+        # render_index/render_article build their own links from `base`, and the
+        # shell does too. Rebasing their output prefixed the base a second time
+        # ('/AxiaPlatform/AxiaPlatform/blog/'), which broke the breadcrumb and
+        # the back link on every article page. Only the article body, which is
+        # author-written markdown, can carry a bare root-relative URL.
         (blog_dir / 'index.html').write_text(
-            blog.shell(head=index_head, body=rebase(index_body), lang=lang,
-                       base=base.rstrip('/')), encoding='utf-8')
+            blog.shell(head=index_head, body=index_body, lang=lang,
+                       base=base.rstrip('/'), default_theme=default_theme), encoding='utf-8')
 
         for article in posts:
             item = dict(article)
-            item['html'] = blog.render_markdown(article.get('body') or '')
+            item['html'] = rebase(blog.render_markdown(article.get('body') or ''))
             item.setdefault('translated', True)
             folder = blog_dir / str(article.get('slug') or '')
             folder.mkdir(parents=True, exist_ok=True)
@@ -390,8 +413,9 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
             # rebase over a finished document would prefix the shell's already
             # correct links a second time.
             (folder / 'index.html').write_text(
-                blog.shell(head=rebase(head), body=rebase(body), lang=lang,
-                           base=base.rstrip('/'), slug=str(article.get('slug') or '')),
+                blog.shell(head=rebase(head), body=body, lang=lang,
+                           base=base.rstrip('/'), slug=str(article.get('slug') or ''),
+                           default_theme=default_theme),
                 encoding='utf-8')
         return blog_dir
 
@@ -406,9 +430,11 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
         item['html'] = blog.render_markdown(article.get('body') or '')
         folder = written / str(article.get('slug') or '')
         folder.mkdir(parents=True, exist_ok=True)
+        item['html'] = rebase(item['html'])
         body = blog.render_article(item, lang='en', base=base.rstrip('/'))
         (folder / 'index.html').write_text(
-            blog.shell(head='', body=rebase(body), lang='en', base=base.rstrip('/'),
+            blog.shell(head='', body=body, lang='en', base=base.rstrip('/'),
+                       default_theme=default_theme,
                        slug=str(article.get('slug') or '')), encoding='utf-8')
 
     (blog_dir / 'feed.xml').write_text(
@@ -426,8 +452,13 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
         print('          run: python3 tools/translate_articles.py')
 
 
-def build_sitemap(origin: str, base: str) -> str:
-    """The site map, with each page's language mirror named as an alternate."""
+def build_sitemap(origin: str, base: str, articles=None) -> str:
+    """The site map, with each page's language mirror named as an alternate.
+
+    Published articles are listed too. They were missing entirely: the sitemap
+    named /blog/ and /en/blog/ but not one post, so no article the site had
+    published could be discovered by a crawler from here.
+    """
     lines = ['<?xml version="1.0" encoding="UTF-8"?>',
              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
              ' xmlns:xhtml="http://www.w3.org/1999/xhtml">']
@@ -442,6 +473,20 @@ def build_sitemap(origin: str, base: str) -> str:
         if mirror:
             lines.append(f'  <url><loc>{origin}{base}{mirror}</loc>'
                          f'<changefreq>{freq}</changefreq><priority>{priority}</priority>{alternates}</url>')
+    for article in articles or []:
+        slug = str(article.get('slug') or '').strip('/')
+        if not slug:
+            continue
+        fa_url = f'{origin}{base}blog/{slug}/'
+        en_url = f'{origin}{base}en/blog/{slug}/'
+        alternates = (f'<xhtml:link rel="alternate" hreflang="fa-IR" href="{fa_url}"/>'
+                      f'<xhtml:link rel="alternate" hreflang="en" href="{en_url}"/>')
+        stamp = str(article.get('published_at') or '')[:10]
+        lastmod = f'<lastmod>{stamp}</lastmod>' if stamp else ''
+        lines.append(f'  <url><loc>{fa_url}</loc>{lastmod}'
+                     f'<changefreq>monthly</changefreq><priority>0.7</priority>{alternates}</url>')
+        lines.append(f'  <url><loc>{en_url}</loc>{lastmod}'
+                     f'<changefreq>monthly</changefreq><priority>0.7</priority>{alternates}</url>')
     lines.append('</urlset>')
     return '\n'.join(lines) + '\n'
 
@@ -969,7 +1014,7 @@ def main() -> int:
     admin_path = out / 'admin' / 'index.html'
     if admin_path.is_file():
         admin_html = admin_path.read_text(encoding='utf-8')
-        demo_tag = f'<script src="{base}demo-backend.js?v=static-5" defer></script>'
+        demo_tag = f'<script src="{base}demo-backend.js?v=static-6" defer></script>'
         if 'demo-backend.js' not in admin_html:
             admin_html = admin_html.replace(
                 f'<script src="{base}admin/admin.js',
@@ -993,7 +1038,9 @@ def main() -> int:
         admin_path.write_text(admin_html, encoding='utf-8')
 
     # ---- SEO files --------------------------------------------------------- #
-    (out / 'sitemap.xml').write_text(build_sitemap(origin, base), encoding='utf-8')
+    (out / 'sitemap.xml').write_text(
+        build_sitemap(origin, base, load_articles(out, DB_PATH=Path(getattr(args, 'db', '') or ''))),
+        encoding='utf-8')
     (out / 'robots.txt').write_text(build_robots(origin, base), encoding='utf-8')
     (out / '.nojekyll').write_text('', encoding='utf-8')
 

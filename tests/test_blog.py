@@ -219,3 +219,96 @@ class BlogPostResolutionTests(unittest.TestCase):
         start = self.app_py.index('def serve_blog(self, path):')
         end = self.app_py.index('def _send_html(', start)
         self.assertIn("status='published'", self.app_py[start:end])
+
+
+class TableMarkdownTest(unittest.TestCase):
+    """A comparison post needs a real table, not pipe characters in a paragraph."""
+
+    def test_a_pipe_table_becomes_a_table(self):
+        source = ('| Measure | WordPress | Code |\n'
+                  '| --- | --- | --- |\n'
+                  '| Start cost | low | higher |')
+        html = blog.render_markdown(source)
+        self.assertIn('<table>', html)
+        self.assertIn('<th>Measure</th>', html)
+        self.assertIn('<td>low</td>', html)
+        self.assertNotIn('| --- |', html)
+
+    def test_the_header_row_is_the_header_not_a_body_row(self):
+        html = blog.render_markdown('| A | B |\n| --- | --- |\n| 1 | 2 |')
+        head = html[:html.index('<tbody>')]
+        self.assertIn('<th>A</th>', head)
+        self.assertNotIn('<td>1</td>', head)
+
+    def test_a_short_row_does_not_shift_the_columns(self):
+        html = blog.render_markdown('| A | B |\n| --- | --- |\n| 1 |')
+        row = html[html.index('<tbody>'):]
+        self.assertEqual(row.count('<td>'), 2)
+
+    def test_an_escaped_cell_is_not_markup(self):
+        html = blog.render_markdown('| A |\n| --- |\n| <script>x</script> |')
+        self.assertNotIn('<script>', html)
+        self.assertIn('&lt;script&gt;', html)
+
+    def test_a_lone_pipe_stays_text(self):
+        html = blog.render_markdown('this | that')
+        self.assertNotIn('<table>', html)
+        self.assertIn('this | that', html)
+
+    def test_a_table_inside_a_code_block_is_not_parsed(self):
+        html = blog.render_markdown('```\n| A | B |\n| --- | --- |\n```')
+        self.assertNotIn('<table>', html)
+        self.assertIn('| --- |', html)
+
+
+class OriginBaseTest(unittest.TestCase):
+    """A trailing slash on the base must not become a doubled slash in a URL.
+
+    The build passed '/AxiaPlatform/' while the dev server passed
+    '/AxiaPlatform', and every URL here joins the base with its own '/'. The
+    result was 'https://host/AxiaPlatform//brand/…' in og:image and a feed whose
+    links, self-link and guids were all malformed.
+    """
+
+    def test_a_trailing_slash_is_removed(self):
+        self.assertEqual(blog._origin_base('https://h', '/AxiaPlatform/'),
+                         ('https://h', '/AxiaPlatform'))
+
+    def test_a_missing_slash_is_added(self):
+        self.assertEqual(blog._origin_base('https://h', '/AxiaPlatform'),
+                         ('https://h', '/AxiaPlatform'))
+
+    def test_a_root_base_becomes_empty(self):
+        self.assertEqual(blog._origin_base('https://h', '/'), ('https://h', ''))
+        self.assertEqual(blog._origin_base('https://h', ''), ('https://h', ''))
+
+    def test_a_trailing_slash_on_the_origin_is_removed(self):
+        self.assertEqual(blog._origin_base('https://h/', '/x'), ('https://h', '/x'))
+
+    def test_head_tags_publish_no_double_slash(self):
+        head = blog.head_tags(title='T', description='D',
+                              canonical='https://h/AxiaPlatform/blog/',
+                              origin='https://h', base='/AxiaPlatform/', kind='blog')
+        self.assertIn('https://h/AxiaPlatform/brand/axiasoft-wordmark.webp', head)
+        self.assertNotIn('AxiaPlatform//', head)
+
+    def test_the_feed_has_no_double_slash(self):
+        feed = blog.render_rss('https://h', '/AxiaPlatform/',
+                               [{'slug': 'a-post', 'title': 'T', 'summary': 'S'}])
+        self.assertEqual(feed.count('AxiaPlatform//'), 0)
+        self.assertIn('https://h/AxiaPlatform/blog/a-post/', feed)
+        self.assertIn('<atom:link href="https://h/AxiaPlatform/blog/feed.xml"', feed)
+
+    def test_the_sitemap_has_no_double_slash(self):
+        sitemap = blog.render_sitemap('https://h', '/AxiaPlatform/',
+                                      [{'slug': 'a-post'}])
+        self.assertNotIn('AxiaPlatform//', sitemap)
+
+    def test_the_jsonld_post_url_has_no_double_slash(self):
+        head = blog.head_tags(title='T', description='D',
+                              canonical='https://h/AxiaPlatform/blog/',
+                              origin='https://h', base='/AxiaPlatform/', kind='blog',
+                              items=[{'slug': 'p', 'title': 'T', 'summary': 'S',
+                                      'published_at': '2026-01-01'}])
+        self.assertIn('/blog/p/', head)
+        self.assertNotIn('AxiaPlatform//', head)

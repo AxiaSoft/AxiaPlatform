@@ -854,7 +854,8 @@ class Handler(SimpleHTTPRequestHandler):
                 canonical=en_url if lang == 'en' else fa_url,
                 origin=origin, base=base, kind='blog', items=items, lang=lang,
                 alt_url=fa_url if lang == 'en' else en_url)
-            return self._send_html(body, head, lang=lang, base=base)
+            return self._send_html(body, head, lang=lang, base=base,
+                                   default_theme=site.get('default_theme') or '')
         slug = unquote(trail)[:blog.MAX_SLUG]
         row = db.execute("SELECT * FROM articles WHERE slug=? AND status='published'", (slug,)).fetchone()
         if not row:
@@ -875,11 +876,16 @@ class Handler(SimpleHTTPRequestHandler):
             origin=origin, base=base, kind='article', article=article, lang=lang,
             alt_url=fa_url if lang == 'en' else en_url)
         self._send_html(body, head, lang=lang, base=base, slug=article['slug'],
-                        cache='public, max-age=300')
+                        cache='public, max-age=300',
+                        default_theme=site.get('default_theme') or '')
 
-    def _send_html(self, body, head, cache='no-cache', lang='fa', base='', slug=''):
+    def _send_html(self, body, head, cache='no-cache', lang='fa', base='', slug='',
+                   default_theme=''):
+        # `default_theme` is the administrator's setting, passed through so the
+        # article pages open on the same theme as the storefront. Absent, the
+        # blog falls back to the visitor's saved choice and then the system.
         payload = blog.shell(head=head, body=body, lang=lang, base=base,
-                             slug=slug).encode('utf-8')
+                             slug=slug, default_theme=default_theme).encode('utf-8')
         self._responded = True
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')

@@ -86,6 +86,19 @@ html[lang="fa"] .blog-prose blockquote { border-radius: 14px 0 0 14px; }
 .blog-prose pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.75; }
 .blog-prose hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
 .blog-prose img { max-width: 100%; border-radius: 14px; border: 1px solid var(--line); }
+/* Comparison tables are the whole point of some posts, so they get a real
+   style rather than the browser default. Every colour is a token, which is what
+   keeps the table legible in both themes. */
+.blog-prose table {
+  width: 100%; border-collapse: collapse; margin: 28px 0; font-size: 14px;
+  display: block; overflow-x: auto;
+}
+.blog-prose th, .blog-prose td {
+  border: 1px solid var(--line); padding: 10px 13px; text-align: start;
+  vertical-align: top; line-height: 1.75;
+}
+.blog-prose th { background: var(--surface2); font-weight: 600; white-space: nowrap; }
+.blog-prose tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface2) 55%, transparent); }
 
 .blog-cta {
   max-width: var(--blog-measure); margin: 64px auto 0; margin-inline: auto; padding: 32px;
@@ -115,9 +128,14 @@ html[lang="fa"] .blog-prose { text-align: justify; text-justify: inter-word; }
   margin: 0 0 26px;
   padding: 13px 17px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 191, 92, .30);
-  background: rgba(255, 191, 92, .09);
-  color: #f0cd98;
+  /* Amber marks the notice out; it does not colour the words. The light
+     palette's amber is a deep ochre, which measured 3.67:1 on the light page —
+     under AA for 14px text — and the house rule is black-on-light, white-on-
+     dark for every piece of copy. So the border and tint carry the colour and
+     the text uses --text, which is that pair by definition. */
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
+  color: var(--text);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -151,13 +169,13 @@ html[lang="fa"] .blog-prose { text-align: justify; text-justify: inter-word; }
   z-index: 60;
   padding: 10px 16px;
   border-radius: 0 0 10px 10px;
-  background: #101827;
-  color: #eaf0fa;
+  background: var(--surface3);
+  color: var(--text);
   font-size: 14px;
   text-decoration: none;
   transition: top 140ms ease;
 }
-.skip-link:focus { top: 0; outline: 2px solid #5b8cff; outline-offset: 2px; }
+.skip-link:focus { top: 0; outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* ---- shared shell parity ------------------------------------------------
    The article pages reuse styles.css for the shell, but were written before
