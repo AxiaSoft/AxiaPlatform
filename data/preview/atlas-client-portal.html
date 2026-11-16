@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Client Portal · AXIASOFT concept preview</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: radial-gradient(120% 90% at 18% 0%, #12203a 0%, #0a1220 55%, #070d18 100%); color: #eef4ff; }
+  .wrap { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid rgba(170,194,230,.13);
+         font-size: 11px; color: #9aa9bf; letter-spacing: .04em; }
+  .bar i { width: 8px; height: 8px; border-radius: 50%; background: #6aa9ff; }
+  .hero { display: grid; align-content: center; gap: 18px; padding: 6vh 8vw; }
+  .eyebrow { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: #6aa9ff; font-weight: 750; }
+  h1 { margin: 0; font-size: clamp(30px, 6vw, 58px); line-height: 1.07; letter-spacing: -.05em; font-weight: 590; max-width: 18ch; }
+  h1 span { background: linear-gradient(110deg,#8bc3ff 8%,#438fff 55%,#b2a5ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p { margin: 0; max-width: 62ch; font-size: 14px; line-height: 1.9; color: #9aa9bf; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .tag { border: 1px solid rgba(170,194,230,.18); border-radius: 99px; padding: 7px 12px; font-size: 10px; color: #c9d8ee; }
+  .art { border: 1px solid rgba(170,194,230,.13); border-radius: 20px; overflow: hidden; background: #0e1726;
+          display: grid; place-items: center; min-height: 190px; margin-top: 8px; }
+  .art img { max-width: 62%; max-height: 150px; object-fit: contain; }
+  .note { margin-top: 10px; font-size: 10px; color: #71819a; }
+  ul { margin: 0; padding-inline-start: 18px; color: #c9d8ee; font-size: 13px; line-height: 2; }
+</style>
+</head>
+<body><div class="wrap">
+  <div class="bar"><i></i>AXIASOFT · concept preview · atlas-client-portal</div>
+  <div class="hero">
+    <div class="eyebrow">APPLICATIONS / product concept</div>
+    <h1>Atlas Client Portal<span></span></h1>
+    <p>One place for every project a client has with you.</p>
+    <div class="row"><span class="tag">TypeScript</span><span class="tag">PostgreSQL</span><span class="tag">REST API</span></div>
+    <div class="art"></div>
+    <ul><li>Role-aware access</li><li>Shared documents</li><li>Status timeline</li><li>Secure sign-in</li></ul>
+    <p class="note">This is a clearly identified concept demonstration, not a live production deployment.
+      No payment is taken and no personal data is collected on this page.</p>
+  </div>
+</div></body></html>
