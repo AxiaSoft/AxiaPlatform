@@ -26,7 +26,7 @@ agent starts answering with that model:
 ```bash
 export AXIA_AGENT_KEY=your-key
 export AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
-export AXIA_AGENT_MODEL=gemini-2.0-flash
+export AXIA_AGENT_MODEL=gemini-3.8-flash
 ```
 
 The model is what makes Xiona an assistant rather than a search box:
@@ -44,12 +44,29 @@ to the retrieved answer automatically — a visitor never sees a stack trace, an
 the console reports which mode is active (`/api/agent` returns
 `provider: "model"` when a model answered).
 
+Because that fallback is silent by design, `GET /api/admin/agent` also reports
+`model_state`, `model_last_error` and `model_last_call`:
+
+| `model_state` | Meaning | What to do |
+|---|---|---|
+| `unconfigured` | no `AXIA_AGENT_KEY` | the site answers on-site; nothing is broken |
+| `untested` | a key is set, no call attempted since start | ask the assistant one question |
+| `ok` | the last call was answered | nothing |
+| `failing` | the last call failed; visitors get the on-site answer | read `model_last_error` |
+
+`failing` is the case worth watching. A revoked key, a model ID Google has shut
+down and a host with no route to the provider all look identical from the
+outside — the site keeps answering, so nothing appears broken, but every visitor
+is quietly getting the retrieval answer instead of the model. `gemini-2.0-flash`
+reached this state for real when Google retired it on 2026-06-01; check
+<https://ai.google.dev/gemini-api/docs/deprecations> before pinning a model.
+
 ## Where to get a free key
 
 | Provider | Free allowance | Base URL | Example model |
 |---|---|---|---|
 | **Groq** | Generous free tier, very fast | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
-| **Google AI Studio** ⭐ | Free tier for Gemini, best Persian | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` |
+| **Google AI Studio** ⭐ | Free tier for Gemini, best Persian | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` |
 | **OpenRouter** | Free models (`:free` suffix) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3.3-70b-instruct:free` |
 | **Mistral** | Free "experiment" tier | `https://api.mistral.ai/v1` | `mistral-small-latest` |
 | **Cerebras** | Free tier, very fast | `https://api.cerebras.ai/v1` | `llama3.3-70b` |

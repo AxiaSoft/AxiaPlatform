@@ -302,11 +302,17 @@ tier is adequate for a brochure site and its Persian is good.
 ```
 AXIA_AGENT_KEY=your-key-here
 AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
-AXIA_AGENT_MODEL=gemini-2.0-flash
+AXIA_AGENT_MODEL=gemini-3.8-flash
 ```
 
 3. Restart `./run_local.sh`. The console's Maintenance tab shows
-   *"A live model is answering — gemini-2.0-flash"* when it is active.
+   *"A live model is answering — gemini-3.8-flash"* when a call has succeeded.
+
+   The model name matters more than it looks. Google retires model IDs on a
+   published schedule: `gemini-2.0-flash`, the example here until recently,
+   stopped answering on 2026-06-01. The console reports `model_state` as
+   `unconfigured`, `untested`, `ok` or `failing` for exactly this reason — a
+   key that is present is not the same thing as a model that answers.
 
 `.env` is git-ignored, and a variable already exported in the shell wins over
 the file, so a one-off `AXIA_AGENT_KEY=... ./run_local.sh` still works. The key

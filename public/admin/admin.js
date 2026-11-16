@@ -465,9 +465,19 @@ function siteTabHTML(){
     <div class="danger-card"><strong>Publish every hidden product</strong><p>Puts all hidden products back in the public catalog. Order history is untouched.</p><button class="btn btn-quiet" data-act="bulk-publish-all">Publish all</button></div>
     <div class="danger-card"><strong>Hide the whole catalog</strong><p>Removes the products page from the site navigation and shows a short notice there.</p><button class="btn btn-danger" data-act="hide-catalog">Hide catalog</button></div>
     <div class="danger-card"><strong>Support agent (Xiona)</strong>
-     <p>${state.agent? (state.agent.provider==='model'
-        ? T('A live model is answering')+' — '+esc(state.agent.model||'')+' @ '+esc(state.agent.model_base||'')+'. '+T('Grounded in')+' '+state.agent.topics+' '+T('published site facts.')
-        : T('Local retrieval only')+': '+state.agent.topics+' '+T('approved facts, no API key, no outbound request.')+' '+T('Set AXIA_AGENT_KEY and AXIA_AGENT_URL to let a model answer.'))
+     <p>${state.agent? (function(a){
+        /* "A key is set" is not "the model answers". The old copy said a live
+           model was answering whenever a key existed, so a revoked key or a
+           model Google had shut down still read as healthy while every visitor
+           silently got the on-site answer. Ask what actually happened. */
+        const base=T('Grounded in')+' '+a.topics+' '+T('published site facts.');
+        const at=a.model_base? ' @ '+esc(a.model_base||'') : '';
+        if(a.model_state==='ok') return T('A live model is answering')+' — '+esc(a.model||'')+at+'. '+base;
+        if(a.model_state==='untested') return T('A model is configured but has not answered yet')+' — '+esc(a.model||'')+at+'. '+T('Ask the assistant one question to check it.')+' '+base;
+        if(a.model_state==='failing') return T('The model is configured but its last call failed')+' — '+esc(a.model_last_error||'')+'. '+T('Visitors are getting the on-site answer.')+' '+base;
+        if(a.provider==='model') return T('Local retrieval only')+': '+a.topics+' '+T('approved facts, no outbound request.');
+        return T('Local retrieval only')+': '+a.topics+' '+T('approved facts, no API key, no outbound request.')+' '+T('Set AXIA_AGENT_KEY and AXIA_AGENT_URL to let a model answer.');
+      })(state.agent)
         : T('Status unavailable in this mode.')}</p>
      <p class="form-hint">Free options: Groq, Google AI Studio (Gemini), OpenRouter free tier, Mistral, Cerebras, or a local Ollama — all OpenAI-compatible.</p></div>
    <div class="danger-card"><strong>Load sample catalog</strong><p>Demo only: adds six illustrative products with GitHub preview links so the catalog and dashboard have something to show.</p><button class="btn btn-quiet" data-act="demo-samples">Load samples</button></div>
