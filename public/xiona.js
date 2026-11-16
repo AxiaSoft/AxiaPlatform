@@ -1316,6 +1316,10 @@
     '/about': ['about', 'About AXIASOFT'],
     '/contact': ['contact', 'Start a project'],
     '/aurion': ['aurion', 'AURION'],
+    // The plans page is its own route with its own copy (durations, showcase
+    // limits). Without this entry a visitor reading it taught the assistant
+    // nothing, which is how the request-most page stayed invisible.
+    '/aurion/plans': ['aurionPlans', 'AURION plans'],
     '/privacy': ['privacy', 'Privacy policy'],
     '/terms': ['terms', 'Terms and conditions'],
     '/refunds-policy': ['refunds-policy', 'Refund and return policy']

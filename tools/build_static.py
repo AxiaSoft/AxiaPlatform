@@ -531,6 +531,14 @@ XIONA_PAGES = [
     # The page copy is English, so a Persian question needs these to reach it.
     ('services', '#/services', 'Services', None,
      'خدمات سرویس طراحی توسعه وب اپلیکیشن نرم‌افزار services development design'),
+    # AURION is the product visitors ask about most, and it was the one page
+    # missing from this list — the greeting offered to explain it while the
+    # index held nothing. Both routes are separate pages with different copy.
+    ('aurion', '#/aurion', 'AURION', None,
+     'اوریون آورین aurion trading robot ربات معامله متاتریدر metatrader showcase concept '
+     'نمایشی مفهومی plans planspricing licenses'),
+    ('aurionPlans', '#/aurion/plans', 'AURION plans', None,
+     'اوریون پلان پلن برنامه اشتراک مدت aurion plans duration pricing license نمایشی'),
     ('about', '#/about', 'About AXIASOFT', None,
      'درباره شرکت تیم ما آکسیا سافت about company team who are you'),
     ('contact', '#/contact', 'Start a project', None,
@@ -556,18 +564,80 @@ const pages = JSON.parse(process.argv[5]);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
   (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const wanted = [...new Set(pages.map((p) => p[0]))];
-let code = '';
-for (const fn of wanted) {
+
+// A page function calls helpers defined elsewhere in app.js: aurion() builds
+// itself out of aurionWorkflowCards(), aurionPlanGrid() and faqList(). Slicing
+// only the requested function left those undefined, the call threw, and the
+// renderer silently skipped the page — which is why AURION was never part of
+// the assistant's knowledge even though the greeting invited questions about
+// it. Pull the dependencies in too, transitively.
+function bodyOf(fn) {
   const at = src.indexOf('function ' + fn + '(');
-  if (at < 0) continue;
+  if (at < 0) return null;
   let end = src.length;
-  for (const marker of ['\nfunction ', '\n/*']) {
+  // Stop at the next top-level *declaration* of any kind. Missing '\nconst'
+  // meant faqList() swallowed the CATEGORY_COPY literal that follows it, which
+  // then got emitted a second time and broke the sandbox with a duplicate.
+  for (const marker of ['\nfunction ', '\nconst ', '\nlet ', '\nvar ', '\n/*']) {
     const hit = src.indexOf(marker, at + 1);
     if (hit > 0 && hit < end) end = hit;
   }
-  code += src.slice(at, end) + '\n';
+  return src.slice(at, end);
 }
-const sandbox = {products, site: settings, esc, AXIA_T: (s) => s,
+function refsIn(text) {
+  const found = new Set();
+  // Names called as functions...
+  for (const m of text.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) found.add(m[1]);
+  // ...and names referenced without a call. AURION_PLANS is a const, so the
+  // call-shaped pattern above never saw it and the page stayed broken.
+  for (const m of text.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)) found.add(m[1]);
+  return found;
+}
+// A dependency is not always a function: aurion() reads AURION_PLANS, a
+// top-level const. Lift the ones the included code actually references, or the
+// page throws `AURION_PLANS is not defined` and is skipped without a word.
+function constOf(name) {
+  // Match the whole identifier: 'AURION' must not match 'const AURION_PLANS',
+  // which emitted the same declaration twice and broke the sandbox.
+  const re = new RegExp('\\nconst ' + name + '(?![\\w$])');
+  const hit = re.exec(src);
+  if (!hit) return null;
+  const start = hit.index;
+  // A top-level declaration ends at the first newline that is not inside a
+  // bracket; these are single-line literals.
+  let depth = 0, end = src.length;
+  for (let i = start + 1; i < src.length; i++) {   // start+1: skip the newline
+    const c = src[i];
+    if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (c === '\n' && depth <= 0) { end = i; break; }
+  }
+  return src.slice(start + 1, end);
+}
+const include = new Set();
+const consts = new Set();
+const queue = [...wanted];
+while (queue.length) {
+  const fn = queue.shift();
+  if (include.has(fn)) continue;
+  const body = bodyOf(fn);
+  if (!body) continue;
+  include.add(fn);
+  for (const ref of refsIn(body)) {
+    if (ref === fn || include.has(ref)) continue;
+    if (bodyOf(ref)) { queue.push(ref); continue; }   // another function
+    if (consts.has(ref)) continue;
+    const decl = constOf(ref);
+    if (decl != null) consts.add(ref);   // '' is a real (empty) declaration
+  }
+}
+let code = '';
+for (const name of consts) code += constOf(name) + '\n';
+for (const fn of include) code += bodyOf(fn) + '\n';
+// `me` is the signed-in customer. contact() reads it to prefill a name; there
+// is no session while the build renders, and the copy it produces does not
+// depend on it, so an empty user is the honest stand-in.
+const sandbox = {products, site: settings, me: null, esc, AXIA_T: (s) => s,
   document: {documentElement: {lang: 'fa'}}, location: {hash: '#/'}, console};
 vm.createContext(sandbox);
 vm.runInContext(code + '\nthis.__pages = {' + wanted.map((fn) => fn + ': typeof ' + fn + " === 'function' ? " + fn + ' : null').join(', ') + '};', sandbox);
@@ -585,6 +655,11 @@ for (const [fn, route, title, key, aliases] of pages) {
     .replace(/<\/(p|h[1-6]|li|div|section|article|td|th|tr)>/gi, '. ')
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')
+    // Decorative glyphs and navigation crumbs are not facts. Left in, they were
+    // quoted back as part of the answer: "Back to AURION. AURION plans. Four
+    // windows..." reads like a broken page, which is what it was.
+    .replace(/[↗←→↑↓⌘◈◉⛨▣✓·•]/g, ' ')
+    .replace(/\bBack to [A-Z][\w ]{0,20}/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/\.\s*\.+/g, '.')
     .replace(/(^|[\.!?]\s*)\.+/g, '$1')

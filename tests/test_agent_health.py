@@ -14,6 +14,7 @@ suite is deterministic and needs no key.
 """
 import os
 import sys
+import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
@@ -22,6 +23,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'server'))
 import agent  # noqa: E402
+
+# The database module is optional here: these tests read the committed files the
+# build produces, not a live database.
+try:
+    import db as db_module
+except Exception:  # pragma: no cover - importable in this repo
+    db_module = None
 
 CONFIGURED = {
     'AXIA_AGENT_KEY': 'test-key-not-real',
@@ -130,10 +138,14 @@ class ProviderFailureTest(unittest.TestCase):
             def __exit__(self, *exc):
                 return False
         payload = b'{"choices": [{"message": {"content": "   "}}]}'
-        text, reason = self.ask(lambda *a, **k: Response(payload))
-        self.assertIsNone(text)
-        self.assertEqual(reason, 'empty response')
-        self.assertEqual(agent.status()['model_state'], 'failing')
+        # The status call has to stay inside the patched environment: outside
+        # it there is no key and the state reads 'unconfigured', which would
+        # pass the wrong assertion for the right reason.
+        with mock.patch.dict(os.environ, CONFIGURED):
+            text, reason = self.ask(lambda *a, **k: Response(payload))
+            self.assertIsNone(text)
+            self.assertEqual(reason, 'empty response')
+            self.assertEqual(agent.status()['model_state'], 'failing')
 
     def test_a_good_answer_is_recorded_as_success(self):
         class Response:
@@ -216,6 +228,92 @@ class DocumentedModelTest(unittest.TestCase):
         self.assertEqual(len(set(names.values())), 1,
                          f'the docs disagree about the model: {names}')
         self.assertTrue(all(v.startswith('gemini-') for v in names.values()), names)
+
+
+class SiteKnowledgeTest(unittest.TestCase):
+    """The assistant must know the site on a fresh install.
+
+    The reported bug: Xiona answered every question with "I have no knowledge
+    yet — once a product or article is published I will read it", including
+    questions about AURION, which the site has a whole page about. The cause was
+    not the model and not the key: the index was empty. A fresh install seeds no
+    products (SEED_PRODUCTS is deliberately empty) and publishes no articles, and
+    the server passed neither page copy nor the site dictionary to the engine —
+    only the static build did. So the server's assistant knew nothing that was
+    not in the database.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.original = db_module.DB_PATH if db_module else agent.CONTENT_PROVIDERS
+        # Point the agent at the committed files the build produces.
+        cls.saved_providers = agent.CONTENT_PROVIDERS
+        agent.configure_content(lambda: [], lambda: [], lambda: ('test',))
+
+    @classmethod
+    def tearDownClass(cls):
+        agent.configure_content(*cls.saved_providers) if cls.saved_providers else None
+        cls.tmp.cleanup()
+
+    def index(self):
+        return agent.engine()
+
+    def test_the_committed_site_pages_are_in_the_index(self):
+        stats = self.index().stats()
+        self.assertGreater(stats['chunks'], 0, 'a fresh install indexed nothing')
+
+    def test_aurion_is_indexed(self):
+        # The page the assistant advertised and could not answer about.
+        stats = self.index().stats()
+        self.assertIn('aurion', stats['topics'])
+
+    def test_it_answers_a_question_about_aurion(self):
+        result = self.index().answer('اوریون چیست؟', language='fa')
+        self.assertEqual(result['source'], 'knowledge')
+        answer = result['answer']
+        self.assertIn('MetaTrader', answer + ' '.join(
+            str(c.get('title')) for c in result['citations']))
+        self.assertNotIn('هنوز دانشی', answer)
+
+    def test_it_does_not_claim_to_know_nothing(self):
+        # The exact symptom that was reported.
+        for question, language in (('اوریون چیست؟', 'fa'),
+                                   ('what is AURION?', 'en'),
+                                   ('چه خدماتی ارائه می‌دهید؟', 'fa')):
+            answer = self.index().answer(question, language=language)['answer']
+            self.assertNotIn('هنوز دانشی', answer)
+            self.assertNotIn('I have no knowledge yet', answer)
+
+    def test_the_refund_policy_is_still_reachable(self):
+        result = self.index().answer('سیاست بازپرداخت چیست؟', language='fa')
+        self.assertEqual(result['source'], 'knowledge')
+        self.assertIn('14', result['answer'])
+
+    def test_the_persian_faq_answers_are_indexed(self):
+        # The FAQ lives in settings, not on a page function, so it needs its own
+        # way into the index.
+        statements = ' '.join(
+            str(d.get('text') or '') for d in self.index().docs)
+        self.assertTrue('AURION' in statements or 'اوریون' in statements)
+
+    def test_the_word_list_crosses_languages(self):
+        # Without the pairs, a Persian question cannot reach English page copy.
+        pairs = agent.site_pairs()
+        self.assertGreater(len(pairs), 100)
+
+    def test_committed_articles_are_indexed_off_the_database(self):
+        # data/articles.json is committed; the database is empty on a fresh
+        # checkout, and the assistant knew about none of those posts.
+        articles = agent.committed_articles()
+        self.assertGreaterEqual(len(articles), 2)
+        self.assertTrue(all(a.get('status') == 'published' for a in articles))
+
+    def test_the_snapshot_carries_the_page_copy(self):
+        pages = agent.site_pages()
+        topics = {str(p.get('topic')) for p in pages if isinstance(p, dict)}
+        self.assertIn('aurion', topics)
+        self.assertIn('services', topics)
 
 
 if __name__ == '__main__':

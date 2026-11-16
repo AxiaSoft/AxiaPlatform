@@ -139,13 +139,166 @@ def configure_content(products_fn, articles_fn, stamp_fn):
     CONTENT_PROVIDERS = (products_fn, articles_fn, stamp_fn)
 
 
+def _read_snapshot_list(path, name):
+    """Pull one ``window.AXIA_STATIC.<name> = [...]`` literal out of a build file.
+
+    The build writes these as JSON arrays, so they can be read without
+    evaluating JavaScript.
+    """
+    import json
+    try:
+        with open(path, encoding='utf-8') as handle:
+            text = handle.read()
+    except OSError:
+        return []
+    match = re.search(r'window\.AXIA_STATIC\.' + name + r'\s*=\s*(\[.*?\]);',
+                      text, re.S)
+    if not match:
+        return []
+    try:
+        value = json.loads(match.group(1))
+    except ValueError:
+        return []
+    return [v for v in value if isinstance(v, (dict, list))] if isinstance(value, list) else []
+
+
+_SNAPSHOT_CACHE = {'key': None, 'pages': []}
+
+
+def site_pages():
+    """Page copy for the index, with the FAQ answers the console edits.
+
+    The FAQ lives in site settings, not on a page function, so a question the
+    operator wrote there has to be added explicitly or the assistant cannot
+    answer what the site cheerfully displays.
+    """
+    pages = list(_snapshot()['pages'])
+    try:
+        settings = _site_settings()
+    except Exception:
+        settings = {}
+    faq = settings.get('faq') if isinstance(settings, dict) else None
+    if isinstance(faq, list) and faq:
+        lines = []
+        for item in faq:
+            if not isinstance(item, dict):
+                continue
+            question = str(item.get('q') or '').strip()
+            answer = str(item.get('a') or '').strip()
+            if not question or not answer:
+                continue
+            lines.append(f'Q: {question} A: {answer}')
+            # The Persian pair is the same content in the language a Persian
+            # visitor asks in; without it, the answer exists but is unreachable.
+            question_fa = str(item.get('qFa') or '').strip()
+            answer_fa = str(item.get('aFa') or '').strip()
+            if question_fa and answer_fa:
+                lines.append(f'Q: {question_fa} A: {answer_fa}')
+        if lines:
+            pages.append({'topic': 'faq', 'route': '#/aurion', 'title': 'Questions',
+                          'text': ' '.join(lines), 'language': None,
+                          'aliases': 'پرسش سوال پاسخ faq questions answers'})
+    return pages
+
+
+def site_pairs():
+    """The site's own Persian/English word list, for crossing languages.
+
+    It ships in its own file — `data/vocabulary.js` — because the browser loads
+    it on demand rather than on every page. Reading it from the snapshot found
+    nothing, which left a Persian question unable to reach English page copy.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return _read_snapshot_list(os.path.join(root, 'data', 'vocabulary.js'), 'pairs')
+
+
+def committed_articles():
+    """The articles committed to the repository, as a fallback.
+
+    `data/articles.json` is the source of truth for the static build. The server
+    reads its articles from the database, which on a fresh checkout is empty
+    until someone publishes a post — so an install with two published articles
+    in the repository had an assistant that knew about neither. The database
+    wins whenever it has anything; this only fills the floor.
+    """
+    import json
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, 'data', 'articles.json')
+    try:
+        with open(path, encoding='utf-8') as handle:
+            rows = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    out = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or not row.get('slug'):
+            continue
+        item = dict(row)
+        item.setdefault('status', 'published')
+        if item.get('status') != 'published':
+            continue
+        out.append(item)
+    return out
+
+
+def _snapshot():
+    """The snapshot, re-read only when the file behind it changes."""
+    import json
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, 'data', 'products.js')
+    try:
+        stamp = os.path.getmtime(path), os.path.getsize(path)
+    except OSError:
+        stamp = None
+    if _SNAPSHOT_CACHE['key'] != stamp:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        pages = _read_snapshot_list(os.path.join(root, 'data', 'products.js'), 'pages')
+        _SNAPSHOT_CACHE.update(key=stamp, pages=pages)
+    return _SNAPSHOT_CACHE
+
+
+def _site_settings():
+    """The storefront settings, however this process is configured."""
+    global _SETTINGS_PROVIDER
+    if _SETTINGS_PROVIDER is None:
+        return {}
+    return _SETTINGS_PROVIDER() or {}
+
+
+_SETTINGS_PROVIDER = None
+
+
+def configure_settings(reader):
+    """Let the server hand over its settings document (the FAQ lives there)."""
+    global _SETTINGS_PROVIDER
+    _SETTINGS_PROVIDER = reader
+
+
 def engine():
-    """The current index, rebuilt only when the content behind it changed."""
+    """The current index, rebuilt only when the content behind it changed.
+
+    The server used to pass products and articles only. That left the assistant
+    with no knowledge of the site's own pages, and on a fresh install — where
+    the catalog is empty until an administrator adds something, and the blog is
+    empty until a post is published — it had no knowledge at all: every question
+    came back as "I have no knowledge yet". The static build had already solved
+    this by indexing the rendered page copy; the server now does the same, plus
+    the FAQ answers the admin console edits and the site's own word list.
+    """
     from xiona_engine import get_engine
     if not CONTENT_PROVIDERS:
         return get_engine(lambda: [], lambda: [], ('empty',))
     products_fn, articles_fn, stamp_fn = CONTENT_PROVIDERS
-    return get_engine(products_fn, articles_fn, stamp_fn())
+
+    def articles():
+        # The database is authoritative when it has published posts; the
+        # committed file fills in for a fresh install that has published none.
+        live = list(articles_fn() or [])
+        return live if live else committed_articles()
+
+    return get_engine(products_fn, articles, stamp_fn(),
+                      pages_provider=site_pages,
+                      pairs_provider=site_pairs)
 
 
 # The prompt is the contract with the model, and it had two faults that showed
