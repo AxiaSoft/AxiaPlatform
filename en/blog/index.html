@@ -17,25 +17,44 @@
   <meta property="og:title" content="AXIASOFT Blog — notes on engineering and product design">
   <meta property="og:description" content="Articles from Axiasoft on building websites, mobile applications, custom software and digital products.">
   <meta property="og:url" content="https://axiasoft.github.io/AxiaPlatform/en/blog/">
-  <meta property="og:image" content="https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp">
+  <meta property="og:image" content="https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="AXIASOFT Blog — notes on engineering and product design">
   <meta name="twitter:description" content="Articles from Axiasoft on building websites, mobile applications, custom software and digital products.">
-  <meta name="twitter:image" content="https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp">
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Blog", "name": "وبلاگ AXIASOFT", "inLanguage": "fa-IR", "url": "https://axiasoft.github.io/AxiaPlatform/en/blog/", "publisher": {"@type": "Organization", "name": "AXIASOFT"}, "blogPost": [{"@type": "BlogPosting", "headline": "How to build a fast website", "url": "https://axiasoft.github.io/AxiaPlatform//blog/fast-website/", "datePublished": "2026-11-08 22:22:45", "description": "Speed is not a feature you add at the end; it is the result of three decisions made on day one."}]}</script>
-  <link rel="alternate" type="application/rss+xml" title="AXIASOFT · وبلاگ" href="https://axiasoft.github.io/AxiaPlatform//blog/feed.xml">
+  <meta name="twitter:image" content="https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Blog", "name": "وبلاگ AXIASOFT", "inLanguage": "fa-IR", "url": "https://axiasoft.github.io/AxiaPlatform/en/blog/", "publisher": {"@type": "Organization", "name": "AXIASOFT"}, "blogPost": [{"@type": "BlogPosting", "headline": "How to build a fast website", "url": "https://axiasoft.github.io/AxiaPlatform/blog/fast-website/", "datePublished": "2026-11-08 22:22:45", "description": "Speed is not a feature you add at the end; it is the result of three decisions made on day one."}, {"@type": "BlogPosting", "headline": "WordPress or hand-coded: which is right for your project?", "url": "https://axiasoft.github.io/AxiaPlatform/blog/wordpress-vs-code/", "datePublished": "2026-11-20 10:15:00", "description": "WordPress ships a working site in days and hand-coding buys full control. The real difference is not launch speed; it is the five-year cost and the wall you eventually hit."}]}</script>
+  <link rel="alternate" type="application/rss+xml" title="AXIASOFT · وبلاگ" href="https://axiasoft.github.io/AxiaPlatform/blog/feed.xml">
   <script>
   /* The article pages are server-rendered, so they cannot wait for app.js to
      pick a theme: doing that would flash dark on a light visitor. The same
      key and the same system fallback the storefront uses are read here, in
      the head, before anything is painted. */
-  (function(){try{var t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();
+  (function(){
+    /* Three inputs, in priority order, and they are the storefront's three.
+       (1) The visitor's own saved choice. (2) The administrator's default from
+       site settings — 'dark', 'light', or 'system'. (3) The operating system.
+
+       Only (1) and (3) were here, so a site configured to open in light mode
+       opened dark on the blog and light on the storefront: the same visitor,
+       the same session, two different themes, and no setting that could make
+       them agree. The build and the server now pass the default through. */
+    var fallback = "dark";
+    var system = function(){ return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; };
+    try {
+      var saved = localStorage.getItem('axia-theme');
+      var t = saved || (fallback === 'system' || !fallback ? system() : fallback);
+      if (t !== 'light' && t !== 'dark') t = system();
+      document.documentElement.dataset.theme = t;
+    } catch (e) {
+      document.documentElement.dataset.theme = (fallback === 'light' ? 'light' : 'dark');
+    }
+  })();
   </script>
   <link rel="preload" href="/AxiaPlatform/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/AxiaPlatform/styles.css?v=site-21">
   <link rel="stylesheet" href="/AxiaPlatform/effects.css?v=fx-5">
-  <link rel="stylesheet" href="/AxiaPlatform/blog.css?v=7">
+  <link rel="stylesheet" href="/AxiaPlatform/blog.css?v=8">
 </head>
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -56,11 +75,18 @@
   <p>From design and engineering to the details that make a website or application trustworthy.</p>
 </section>
 <section class="blog-grid"><article class="blog-card">
-  <a class="blog-card-link" href="/AxiaPlatform/AxiaPlatform/blog/fast-website/">
+  <a class="blog-card-link" href="/AxiaPlatform/blog/fast-website/">
     <div class="blog-card-meta"><time datetime="2026/11/08">2026/11/08</time><span>1 min read</span></div>
     <h2>How to build a fast website</h2>
     <p>Speed is not a feature you add at the end; it is the result of three decisions made on day one.</p>
     <div class="blog-tags"><span class="blog-tag">سرعت</span><span class="blog-tag">وب</span><span class="blog-tag">تجربه کاربری</span></div>
+  </a>
+</article><article class="blog-card">
+  <a class="blog-card-link" href="/AxiaPlatform/blog/wordpress-vs-code/">
+    <div class="blog-card-meta"><time datetime="2026/11/20">2026/11/20</time><span>1 min read</span></div>
+    <h2>WordPress or hand-coded: which is right for your project?</h2>
+    <p>WordPress ships a working site in days and hand-coding buys full control. The real difference is not launch speed; it is the five-year cost and the wall you eventually hit.</p>
+    <div class="blog-tags"><span class="blog-tag">وردپرس</span><span class="blog-tag">توسعه وب</span><span class="blog-tag">انتخاب فناوری</span></div>
   </a>
 </article></section>
 </div></main>

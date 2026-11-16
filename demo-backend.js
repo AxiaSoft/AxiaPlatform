@@ -70,16 +70,42 @@
     };
   }
 
-  /* Articles start empty for the same reason the catalog does: the published
-     site must not show invented content. The console writes real drafts here,
-     and window.AXIA_DEMO_ARTICLES() can drop in an example to click through. */
+  /* The demo console starts from the articles the static build shipped, in the
+     same way readProducts() seeds from the catalog snapshot. Without this the
+     Articles page was empty on a fresh browser, so the demo article that was
+     written to be clicked through could not be found anywhere in the demo. A
+     published row is created only for an article that exists in the snapshot:
+     nothing is invented. Once the visitor saves a draft, localStorage wins and
+     the seed is no longer consulted. */
+  function seedArticles() {
+    var shipped = (config.articles || []).map(function (a, i) {
+      var now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      return {
+        id: i + 1,
+        slug: String(a.slug || ''),
+        title: String(a.title || ''),
+        summary: String(a.summary || ''),
+        body: String(a.body || ''),
+        cover: String(a.cover || ''),
+        tags: (a.tags || []).filter(Boolean).slice(0, 6),
+        status: a.status === 'draft' ? 'draft' : 'published',
+        language: a.language === 'en' ? 'en' : 'fa',
+        reading_minutes: a.reading_minutes || readingTime(a.body),
+        published_at: a.published_at || now,
+        created_at: a.published_at || now,
+        updated_at: a.published_at || now
+      };
+    }).filter(function (a) { return a.slug && a.title; });
+    return shipped;
+  }
+
   function readArticles() {
     try {
       var raw = localStorage.getItem(ARTICLES_KEY);
-      if (!raw) return [];
+      if (!raw) return seedArticles();
       var parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (err) { return []; }
+      return Array.isArray(parsed) ? parsed : seedArticles();
+    } catch (err) { return seedArticles(); }
   }
 
   function writeArticles(list) {
@@ -479,6 +505,20 @@
       return found ? json(found) : fail('Product not found', 404);
     }
 
+    // ---- articles (public) ----------------------------------------------
+    // These sat inside the /api/admin/ block, so a signed-out visitor asking
+    // for /api/articles fell through to the network and got nothing: the
+    // published blog was unreachable in the demo even though the console could
+    // read it. Published articles are public data; drafts are not.
+    if (path === '/api/articles' && method === 'GET') {
+      return json({ articles: readArticles().filter(function (a) { return a.status === 'published'; }) });
+    }
+    if (path.indexOf('/api/articles/') === 0 && method === 'GET') {
+      var wanted = decodeURIComponent(path.split('/').pop());
+      var found = readArticles().filter(function (a) { return a.slug === wanted && a.status === 'published'; })[0];
+      return found ? json(found) : fail('Article not found', 404);
+    }
+
     // ---- admin ----------------------------------------------------------
     if (path.indexOf('/api/admin/') === 0) {
       if (!signedIn()) return fail('Administrator access required', 403);
@@ -526,14 +566,6 @@
         return json({ ok: true, settings: writeSettings(payload) });
       }
 
-      if (path === '/api/articles' && method === 'GET') {
-        return json({ articles: readArticles().filter(function (a) { return a.status === 'published'; }) });
-      }
-      if (path.indexOf('/api/articles/') === 0 && method === 'GET') {
-        var wanted = decodeURIComponent(path.split('/').pop());
-        var found = readArticles().filter(function (a) { return a.slug === wanted && a.status === 'published'; })[0];
-        return found ? json(found) : json({ error: 'Article not found' }, 404);
-      }
       if (path === '/api/admin/articles' && method === 'GET') {
         return json({ articles: readArticles().slice().sort(function (a, b) {
           return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));

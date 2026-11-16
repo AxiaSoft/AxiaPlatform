@@ -2,16 +2,22 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
   <title><![CDATA[وبلاگ AXIASOFT]]></title>
-  <link>https://axiasoft.github.io/AxiaPlatform//blog/</link>
+  <link>https://axiasoft.github.io/AxiaPlatform/blog/</link>
   <description><![CDATA[یادداشت‌های مهندسی و طراحی محصول AXIASOFT]]></description>
   <language>fa-IR</language>
-  <atom:link href="https://axiasoft.github.io/AxiaPlatform//blog/feed.xml" rel="self" type="application/rss+xml"/>
+  <atom:link href="https://axiasoft.github.io/AxiaPlatform/blog/feed.xml" rel="self" type="application/rss+xml"/>
   <item>
   <title><![CDATA[چطور یک وب‌سایت سریع بسازیم]]></title>
-  <link>https://axiasoft.github.io/AxiaPlatform//blog/fast-website/</link>
-  <guid isPermaLink="true">https://axiasoft.github.io/AxiaPlatform//blog/fast-website/</guid>
+  <link>https://axiasoft.github.io/AxiaPlatform/blog/fast-website/</link>
+  <guid isPermaLink="true">https://axiasoft.github.io/AxiaPlatform/blog/fast-website/</guid>
   <description><![CDATA[سرعت یک ویژگی نیست که در پایان اضافه شود؛ نتیجهٔ سه تصمیم درست از روز اول است.]]></description>
   <pubDate>2026-11-08 22:22:45</pubDate>
+</item><item>
+  <title><![CDATA[وردپرس یا کدنویسی از صفر؛ کدام برای پروژهٔ شما درست است؟]]></title>
+  <link>https://axiasoft.github.io/AxiaPlatform/blog/wordpress-vs-code/</link>
+  <guid isPermaLink="true">https://axiasoft.github.io/AxiaPlatform/blog/wordpress-vs-code/</guid>
+  <description><![CDATA[وردپرس در چند روز یک سایت قابل استفاده می‌دهد و کدنویسی از صفر کنترل کامل. تفاوت واقعی در سرعت راه‌اندازی نیست؛ در هزینهٔ پنج‌ساله و جایی است که روزی به دیوار می‌خورید.]]></description>
+  <pubDate>2026-11-20 10:15:00</pubDate>
 </item>
 </channel>
 </rss>

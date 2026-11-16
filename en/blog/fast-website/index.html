@@ -17,24 +17,43 @@
   <meta property="og:title" content="How to build a fast website — AXIASOFT">
   <meta property="og:description" content="Speed is not a feature you add at the end; it is the result of three decisions made on day one.">
   <meta property="og:url" content="https://axiasoft.github.io/AxiaPlatform/en/blog/fast-website/">
-  <meta property="og:image" content="https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp">
+  <meta property="og:image" content="https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="How to build a fast website — AXIASOFT">
   <meta name="twitter:description" content="Speed is not a feature you add at the end; it is the result of three decisions made on day one.">
-  <meta name="twitter:image" content="https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp">
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "How to build a fast website", "description": "Speed is not a feature you add at the end; it is the result of three decisions made on day one.", "inLanguage": "en", "url": "https://axiasoft.github.io/AxiaPlatform/en/blog/fast-website/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://axiasoft.github.io/AxiaPlatform/en/blog/fast-website/"}, "datePublished": "2026-11-08 22:22:45", "dateModified": "2026-11-08 22:22:45", "keywords": "سرعت, وب, تجربه کاربری", "wordCount": 0, "author": {"@type": "Organization", "name": "AXIASOFT", "url": "https://axiasoft.github.io"}, "publisher": {"@type": "Organization", "name": "AXIASOFT", "logo": {"@type": "ImageObject", "url": "https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp"}}, "image": "https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp"}</script>
+  <meta name="twitter:image" content="https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "How to build a fast website", "description": "Speed is not a feature you add at the end; it is the result of three decisions made on day one.", "inLanguage": "en", "url": "https://axiasoft.github.io/AxiaPlatform/en/blog/fast-website/", "mainEntityOfPage": {"@type": "WebPage", "@id": "https://axiasoft.github.io/AxiaPlatform/en/blog/fast-website/"}, "datePublished": "2026-11-08 22:22:45", "dateModified": "2026-11-08 22:22:45", "keywords": "سرعت, وب, تجربه کاربری", "wordCount": 187, "author": {"@type": "Organization", "name": "AXIASOFT", "url": "https://axiasoft.github.io"}, "publisher": {"@type": "Organization", "name": "AXIASOFT", "logo": {"@type": "ImageObject", "url": "https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp"}}, "image": "https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp"}</script>
   <script>
   /* The article pages are server-rendered, so they cannot wait for app.js to
      pick a theme: doing that would flash dark on a light visitor. The same
      key and the same system fallback the storefront uses are read here, in
      the head, before anything is painted. */
-  (function(){try{var t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();
+  (function(){
+    /* Three inputs, in priority order, and they are the storefront's three.
+       (1) The visitor's own saved choice. (2) The administrator's default from
+       site settings — 'dark', 'light', or 'system'. (3) The operating system.
+
+       Only (1) and (3) were here, so a site configured to open in light mode
+       opened dark on the blog and light on the storefront: the same visitor,
+       the same session, two different themes, and no setting that could make
+       them agree. The build and the server now pass the default through. */
+    var fallback = "dark";
+    var system = function(){ return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; };
+    try {
+      var saved = localStorage.getItem('axia-theme');
+      var t = saved || (fallback === 'system' || !fallback ? system() : fallback);
+      if (t !== 'light' && t !== 'dark') t = system();
+      document.documentElement.dataset.theme = t;
+    } catch (e) {
+      document.documentElement.dataset.theme = (fallback === 'light' ? 'light' : 'dark');
+    }
+  })();
   </script>
   <link rel="preload" href="/AxiaPlatform/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/AxiaPlatform/styles.css?v=site-21">
   <link rel="stylesheet" href="/AxiaPlatform/effects.css?v=fx-5">
-  <link rel="stylesheet" href="/AxiaPlatform/blog.css?v=7">
+  <link rel="stylesheet" href="/AxiaPlatform/blog.css?v=8">
 </head>
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -49,7 +68,7 @@
   <a href="/AxiaPlatform/#/products">Products</a><a href="/AxiaPlatform/#/services">Services</a><a href="/AxiaPlatform/blog/" aria-current="page">Blog</a><a href="/AxiaPlatform/#/aurion">AURION</a><a href="/AxiaPlatform/#/about">About</a><a href="/AxiaPlatform/#/contact">Start a project</a>
 </nav>
 <main class="blog-main" id="main"><div class="container">
-<nav class="blog-crumbs" aria-label="AXIASOFT home"><a href="/AxiaPlatform/AxiaPlatform/">Products</a><span>/</span><a href="/AxiaPlatform/AxiaPlatform/blog/">Blog</a><span>/</span><span>How to build a fast website</span></nav>
+<nav class="blog-crumbs" aria-label="AXIASOFT home"><a href="/AxiaPlatform/">Products</a><span>/</span><a href="/AxiaPlatform/blog/">Blog</a><span>/</span><span>How to build a fast website</span></nav>
 <article class="blog-article">
   <header class="blog-article-head">
     <div class="blog-card-meta"><time datetime="2026/11/08">2026/11/08</time><span>1 min read</span></div>
@@ -59,9 +78,22 @@
   </header>
   
   
-  <div class="blog-prose" dir="ltr"></div>
+  <div class="blog-prose" dir="ltr"><h3>Why speed matters</h3>
+<p>A visitor who waits three seconds usually does not come back. Speed is not a</p>
+<p>feature bolted on at the end of a project; it is the result of decisions taken</p>
+<p>from the very first day.</p>
+<h3>The three decisions that matter most</h3>
+<ul><li><strong>Size your images correctly.</strong> A 4 MB image displayed in a 400-pixel frame does not just waste bandwidth — it makes the page feel broken.</li><li><strong>Keep the font light.</strong> One variable family with a limited weight range beats four separate files.</li><li><strong>Defer your JavaScript.</strong> Work that is not needed for the first paint must not hold up the first paint.</li></ul>
+<h3>Measure, do not guess</h3>
+<p>Before optimising anything, get a number. If you do not know how long the page</p>
+<p>currently takes, you cannot say whether the change you made was better or worse.</p>
+<pre><code>&lt;img src=&quot;cover.webp&quot; width=&quot;1200&quot; height=&quot;630&quot; loading=&quot;lazy&quot; alt=&quot;Article image&quot;&gt;</code></pre>
+<blockquote><p>What is not measured does not improve.</p></blockquote>
+<h3>In summary</h3>
+<p>Speed is decided in the structure of a project from the start. The three</p>
+<p>decisions above make the largest difference with no extra tooling at all.</p></div>
 </article>
-<p class="blog-back"><a href="/AxiaPlatform/AxiaPlatform/blog/">← Back to all articles</a></p>
+<p class="blog-back"><a href="/AxiaPlatform/blog/">← Back to all articles</a></p>
 </div></main>
 <footer class="footer">
   <div class="footer-top"><a class="brand" href="/AxiaPlatform/"><span class="brand-mark"><img src="/AxiaPlatform/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="/AxiaPlatform/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>

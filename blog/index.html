@@ -17,25 +17,44 @@
   <meta property="og:title" content="وبلاگ AXIASOFT — یادداشت‌های مهندسی و طراحی محصول">
   <meta property="og:description" content="مقاله‌های آکسیا سافت درباره طراحی وب‌سایت، اپلیکیشن موبایل، نرم‌افزار سفارشی و ساختن محصول دیجیتال.">
   <meta property="og:url" content="https://axiasoft.github.io/AxiaPlatform/blog/">
-  <meta property="og:image" content="https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp">
+  <meta property="og:image" content="https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp">
   <meta property="og:locale" content="fa_IR">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="وبلاگ AXIASOFT — یادداشت‌های مهندسی و طراحی محصول">
   <meta name="twitter:description" content="مقاله‌های آکسیا سافت درباره طراحی وب‌سایت، اپلیکیشن موبایل، نرم‌افزار سفارشی و ساختن محصول دیجیتال.">
-  <meta name="twitter:image" content="https://axiasoft.github.io/AxiaPlatform//brand/axiasoft-wordmark.webp">
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Blog", "name": "وبلاگ AXIASOFT", "inLanguage": "fa-IR", "url": "https://axiasoft.github.io/AxiaPlatform/blog/", "publisher": {"@type": "Organization", "name": "AXIASOFT"}, "blogPost": [{"@type": "BlogPosting", "headline": "چطور یک وب‌سایت سریع بسازیم", "url": "https://axiasoft.github.io/AxiaPlatform//blog/fast-website/", "datePublished": "2026-11-08 22:22:45", "description": "سرعت یک ویژگی نیست که در پایان اضافه شود؛ نتیجهٔ سه تصمیم درست از روز اول است."}]}</script>
-  <link rel="alternate" type="application/rss+xml" title="AXIASOFT · وبلاگ" href="https://axiasoft.github.io/AxiaPlatform//blog/feed.xml">
+  <meta name="twitter:image" content="https://axiasoft.github.io/AxiaPlatform/brand/axiasoft-wordmark.webp">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Blog", "name": "وبلاگ AXIASOFT", "inLanguage": "fa-IR", "url": "https://axiasoft.github.io/AxiaPlatform/blog/", "publisher": {"@type": "Organization", "name": "AXIASOFT"}, "blogPost": [{"@type": "BlogPosting", "headline": "چطور یک وب‌سایت سریع بسازیم", "url": "https://axiasoft.github.io/AxiaPlatform/blog/fast-website/", "datePublished": "2026-11-08 22:22:45", "description": "سرعت یک ویژگی نیست که در پایان اضافه شود؛ نتیجهٔ سه تصمیم درست از روز اول است."}, {"@type": "BlogPosting", "headline": "وردپرس یا کدنویسی از صفر؛ کدام برای پروژهٔ شما درست است؟", "url": "https://axiasoft.github.io/AxiaPlatform/blog/wordpress-vs-code/", "datePublished": "2026-11-20 10:15:00", "description": "وردپرس در چند روز یک سایت قابل استفاده می‌دهد و کدنویسی از صفر کنترل کامل. تفاوت واقعی در سرعت راه‌اندازی نیست؛ در هزینهٔ پنج‌ساله و جایی است که روزی به دیوار می‌خورید."}]}</script>
+  <link rel="alternate" type="application/rss+xml" title="AXIASOFT · وبلاگ" href="https://axiasoft.github.io/AxiaPlatform/blog/feed.xml">
   <script>
   /* The article pages are server-rendered, so they cannot wait for app.js to
      pick a theme: doing that would flash dark on a light visitor. The same
      key and the same system fallback the storefront uses are read here, in
      the head, before anything is painted. */
-  (function(){try{var t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();
+  (function(){
+    /* Three inputs, in priority order, and they are the storefront's three.
+       (1) The visitor's own saved choice. (2) The administrator's default from
+       site settings — 'dark', 'light', or 'system'. (3) The operating system.
+
+       Only (1) and (3) were here, so a site configured to open in light mode
+       opened dark on the blog and light on the storefront: the same visitor,
+       the same session, two different themes, and no setting that could make
+       them agree. The build and the server now pass the default through. */
+    var fallback = "dark";
+    var system = function(){ return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; };
+    try {
+      var saved = localStorage.getItem('axia-theme');
+      var t = saved || (fallback === 'system' || !fallback ? system() : fallback);
+      if (t !== 'light' && t !== 'dark') t = system();
+      document.documentElement.dataset.theme = t;
+    } catch (e) {
+      document.documentElement.dataset.theme = (fallback === 'light' ? 'light' : 'dark');
+    }
+  })();
   </script>
   <link rel="preload" href="/AxiaPlatform/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/AxiaPlatform/styles.css?v=site-21">
   <link rel="stylesheet" href="/AxiaPlatform/effects.css?v=fx-5">
-  <link rel="stylesheet" href="/AxiaPlatform/blog.css?v=7">
+  <link rel="stylesheet" href="/AxiaPlatform/blog.css?v=8">
 </head>
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -56,11 +75,18 @@
   <p>از طراحی و مهندسی تا جزئیاتی که یک وب‌سایت یا اپلیکیشن را قابل‌اعتماد می‌کند.</p>
 </section>
 <section class="blog-grid"><article class="blog-card">
-  <a class="blog-card-link" href="/AxiaPlatform/AxiaPlatform/blog/fast-website/">
+  <a class="blog-card-link" href="/AxiaPlatform/blog/fast-website/">
     <div class="blog-card-meta"><time datetime="2026/11/08">2026/11/08</time><span>1 دقیقه مطالعه</span></div>
     <h2>چطور یک وب‌سایت سریع بسازیم</h2>
     <p>سرعت یک ویژگی نیست که در پایان اضافه شود؛ نتیجهٔ سه تصمیم درست از روز اول است.</p>
     <div class="blog-tags"><span class="blog-tag">سرعت</span><span class="blog-tag">وب</span><span class="blog-tag">تجربه کاربری</span></div>
+  </a>
+</article><article class="blog-card">
+  <a class="blog-card-link" href="/AxiaPlatform/blog/wordpress-vs-code/">
+    <div class="blog-card-meta"><time datetime="2026/11/20">2026/11/20</time><span>1 دقیقه مطالعه</span></div>
+    <h2>وردپرس یا کدنویسی از صفر؛ کدام برای پروژهٔ شما درست است؟</h2>
+    <p>وردپرس در چند روز یک سایت قابل استفاده می‌دهد و کدنویسی از صفر کنترل کامل. تفاوت واقعی در سرعت راه‌اندازی نیست؛ در هزینهٔ پنج‌ساله و جایی است که روزی به دیوار می‌خورید.</p>
+    <div class="blog-tags"><span class="blog-tag">وردپرس</span><span class="blog-tag">توسعه وب</span><span class="blog-tag">انتخاب فناوری</span></div>
   </a>
 </article></section>
 </div></main>

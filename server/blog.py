@@ -6,9 +6,10 @@ editor typed. The same conversion runs in the browser for the demo console, in
 public/blog.js, so both paths produce identical markup.
 
 Supported: headings (# - ####), paragraphs, **bold**, *italic*, `code`,
-[links](https://…), - / 1. lists, > quotes, fenced code blocks, --- rules and
-blank-line separated blocks. Everything else is escaped text.
+[links](https://…), - / 1. lists, > quotes, fenced code blocks, --- rules,
+pipe tables and blank-line separated blocks. Everything else is escaped text.
 """
+import json
 import html
 import re
 
@@ -108,6 +109,35 @@ def render_markdown(source):
 
         if re.fullmatch(r'-{3,}|\*{3,}', stripped):
             flush(); out.append('<hr>'); index += 1; continue
+
+        # Pipe tables: a header row, a separator of dashes and colons, then body
+        # rows. Handled before the paragraph fallback because a table row is
+        # otherwise just a line containing pipes, and it would be published as
+        # literal '| a | b |' text.
+        if '|' in stripped and index + 1 < len(lines):
+            separator = lines[index + 1].strip()
+            if re.fullmatch(r'\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?', separator):
+                flush()
+                def cells(row):
+                    row = row.strip()
+                    if row.startswith('|'): row = row[1:]
+                    if row.endswith('|'): row = row[:-1]
+                    return [cell.strip() for cell in row.split('|')]
+                head = cells(stripped)
+                index += 2
+                body_rows = []
+                while index < len(lines) and '|' in lines[index]:
+                    body_rows.append(cells(lines[index]))
+                    index += 1
+                table = ['<table>', '<thead><tr>' + ''.join(f'<th>{_inline(c)}</th>' for c in head) + '</tr></thead>', '<tbody>']
+                for row in body_rows:
+                    # Pad or trim so a short row cannot shift the columns.
+                    row = (row + [''] * len(head))[:len(head)]
+                    table.append('<tr>' + ''.join(f'<td>{_inline(c)}</td>' for c in row) + '</tr>')
+                table.append('</tbody>')
+                table.append('</table>')
+                out.append(''.join(table))
+                continue
 
         heading = re.match(r'^(#{1,4})\s+(.*)$', stripped)
         if heading:
@@ -351,8 +381,23 @@ def pick_lang(value):
     return 'en' if str(value or '').lower().startswith('en') else 'fa'
 
 
+def _origin_base(origin, base):
+    """Normalise the two URL roots so joining cannot produce a double slash.
+
+    `base` arrives both ways depending on the caller — '/AxiaPlatform/' from the
+    build's settings document, '/AxiaPlatform' from the dev server — and callers
+    here join it with f-strings that add their own '/'. A trailing slash on base
+    then published 'https://host/AxiaPlatform//brand/...' in og:image, the RSS
+    self-link and every feed item. Stripping it once, here, means a caller's
+    trailing slash can no longer leak into a URL.
+    """
+    root = str(base or '').strip('/')
+    return str(origin or '').rstrip('/'), f'/{root}' if root else ''
+
+
 def head_tags(title, description, canonical, origin, base, kind, article=None, items=None, lang='fa', alt_url=None):
     """Open Graph, Twitter, canonical, hreflang and JSON-LD for one page."""
+    origin, base = _origin_base(origin, base)
     lang = pick_lang(lang)
     t = copy_for(lang)
     # alt_url is this same page in the other language. Whichever language we
@@ -429,7 +474,7 @@ def head_tags(title, description, canonical, origin, base, kind, article=None, i
     return '\n  '.join(blocks)
 
 
-def shell(head, body, lang='fa', base='', slug=''):
+def shell(head, body, lang='fa', base='', slug='', default_theme=''):
     """Complete document around a rendered blog page.
 
     `lang` switches the whole chrome — direction, navigation, footer — so the
@@ -439,6 +484,11 @@ def shell(head, body, lang='fa', base='', slug=''):
     lang = pick_lang(lang)
     t = copy_for(lang)
     direction = 'rtl' if lang == 'fa' else 'ltr'
+    # JSON-encoded so an unexpected value cannot break out of the script. Only
+    # the three settings the console offers can survive; anything else becomes
+    # the empty string, which the script reads as "follow the system".
+    theme = default_theme if default_theme in ('dark', 'light', 'system') else ''
+    theme_json = json.dumps(theme)
     root = base.rstrip('/')
     blog_home = f'{root}/blog/'
     # The language switch points at the same page in the other language.
@@ -461,12 +511,31 @@ def shell(head, body, lang='fa', base='', slug=''):
      pick a theme: doing that would flash dark on a light visitor. The same
      key and the same system fallback the storefront uses are read here, in
      the head, before anything is painted. */
-  (function(){{try{{var t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}}catch(e){{document.documentElement.dataset.theme='dark';}}}})();
+  (function(){{
+    /* Three inputs, in priority order, and they are the storefront's three.
+       (1) The visitor's own saved choice. (2) The administrator's default from
+       site settings — 'dark', 'light', or 'system'. (3) The operating system.
+
+       Only (1) and (3) were here, so a site configured to open in light mode
+       opened dark on the blog and light on the storefront: the same visitor,
+       the same session, two different themes, and no setting that could make
+       them agree. The build and the server now pass the default through. */
+    var fallback = {theme_json};
+    var system = function(){{ return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }};
+    try {{
+      var saved = localStorage.getItem('axia-theme');
+      var t = saved || (fallback === 'system' || !fallback ? system() : fallback);
+      if (t !== 'light' && t !== 'dark') t = system();
+      document.documentElement.dataset.theme = t;
+    }} catch (e) {{
+      document.documentElement.dataset.theme = (fallback === 'light' ? 'light' : 'dark');
+    }}
+  }})();
   </script>
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{root}/styles.css?v=site-21">
   <link rel="stylesheet" href="{root}/effects.css?v=fx-5">
-  <link rel="stylesheet" href="{root}/blog.css?v=7">
+  <link rel="stylesheet" href="{root}/blog.css?v=8">
 </head>
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -603,6 +672,8 @@ def render_article(article, site=None, lang='fa', base=''):
 
 def render_rss(origin, base, items, title='وبلاگ AXIASOFT'):
     """A small RSS 2.0 feed, which search engines and readers both accept."""
+    origin, base = _origin_base(origin, base)
+
     def cdata(text):
         return '<![CDATA[' + str(text).replace(']]>', ']]&gt;') + ']]>'
     entries = []
@@ -634,6 +705,7 @@ def render_sitemap(origin, base, items):
     Each page carries its language mirror as an xhtml:link alternate, which is
     how a crawler is told the Persian and English URLs are one document.
     """
+    origin, base = _origin_base(origin, base)
     pairs = [('', '1.0', 'weekly', ''), ('blog/', '0.9', 'daily', 'en/blog/')]
     for a in items:
         pairs.append((f'blog/{a["slug"]}/', '0.8', 'monthly', f'en/blog/{a["slug"]}/'))
