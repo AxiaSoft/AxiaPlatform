@@ -1007,6 +1007,21 @@ class Handler(SimpleHTTPRequestHandler):
         db = acquire_db()
         user = self.auth()
 
+        if p == '/api/xiona/knowledge':
+            # The page copy the assistant indexes, for the browser engine.
+            #
+            # The static build ships this in data/products.js. The server build
+            # deliberately ships no snapshot (round 26: the server catalog must
+            # stay empty), so window.AXIA_STATIC is undefined in the browser and
+            # learnSite() was handed nothing but the footer. A visitor who opened
+            # the panel on a fresh install got a two-chunk index and was told
+            # "This site does not publish anything about that" for every
+            # question - including AURION, which the same engine answers
+            # correctly on the server. This is public, read-only page copy: the
+            # same text the visitor can read on every page of this site.
+            self._send_json({'pages': agent.site_pages(),
+                             'pairs': agent.site_pairs()}); return
+
         if p == '/api/products':
             cat = clean((q.get('category') or [''])[0], 40)
             # Featured products lead the catalog; the administrator's explicit

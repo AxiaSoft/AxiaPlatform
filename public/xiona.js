@@ -79,6 +79,21 @@
     return /[\u0600-\u06FF]/.test(String(text || ''));
   }
 
+  /* Arabic punctuation that lives inside the Arabic block.
+
+     The token regex below accepts «\u0600-\u06FF», and that range contains the
+     Arabic question mark (U+061F), comma (U+060C), semicolon (U+061B) and the
+     harakat. A word followed by one of them is captured WITH it: 'چیه؟' became
+     the token 'چیه؟', which is not the stopword 'چیه', so the commonest way a
+     Persian speaker asks a question read as a content word and wrecked the
+     score. 'اوریون چیست؟' answered correctly while 'اوریون چیه؟' did not - not
+     because the engine knew less, but because of a punctuation mark.
+
+     The Python twin has folded these to spaces for a while, with a comment
+     saying the tokenizers must agree. This is that agreement, finally: the same
+     characters, the same replacement, in the same order. */
+  var ARABIC_PUNCT = /[\u064B-\u0652\u0670\u0640\u061F\u060C\u061B]/g;
+
   function fold(text) {
     var out = '';
     var input = String(text || '');
@@ -90,7 +105,7 @@
     // sees one word, but the Python twin splits on it, and a tokenizer that
     // disagrees makes the two engines answer differently. It becomes a space on
     // both sides, so 'وب‌سایت' is 'وب' + 'سایت' either way.
-    return out.replace(/\u200c/g, ' ').replace(/\u200f|\u200e/g, '');
+    return out.replace(ARABIC_PUNCT, ' ').replace(/\u200c/g, ' ').replace(/\u200f|\u200e/g, '');
   }
 
   function stripSuffix(word) {
@@ -958,7 +973,19 @@
      real questions ("who built this website" is about the studio, not me). */
   // Persian identity questions arrive with or without the pronoun, and with
   // the copula written several ways: "شما کی هستید", "کی هستی", "تو کی هستی".
-  var IDENTITY = /(\bwho\s+are\s+you\b|\bwhat\s+are\s+you\b|\bwho\s+am\s+i\s+talking\s+to\b|\bare\s+you\s+(a\s+)?(bot|robot|human|ai)\b|(?:شما|تو|شخص)?\s*(?:کی|چی)\s*(?:هستید|هستی|هست|هس|ه)\s*[؟?]?\s*$|(?:شما|تو)\s*کی\s*(?:هستید|هستی))/i;
+  /* "Who are you?" in the shapes a visitor actually types.
+     The Persian half used to be `(?:شما|تو|شخص)?\s*(?:کی|چی)\s*(?:هستید|هستی|هست|هس|ه)$`,
+     which treats the SUBJECT as optional and accepts a bare 'ه'. That made every
+     question ending in the colloquial 'چیه' a question about the assistant:
+     'اوریون چیه؟' and 'هزینه بازپرداخت چیه؟' both got the introduction instead
+     of an answer, and 'محصولات چیه؟' too. The 'چی' in 'چیه' is the same word as
+     in 'چیست', so the pattern cannot simply be narrowed - the pronoun is what
+     separates "what is it" from "who are you".
+     The subject is now required for the 'کی/چی ... ه' forms, and the colloquial
+     copula 'ه' only counts when it stands alone as a word ('تو کی ه'), not as
+     the tail of 'چیه'. 'چیست'/'چیه' without a pronoun is a question about the
+     thing named, so it is left to retrieval. */
+  var IDENTITY = /(\bwho\s+are\s+you\b|\bwhat\s+are\s+you\b|\bwho\s+am\s+i\s+talking\s+to\b|\bare\s+you\s+(a\s+)?(bot|robot|human|ai)\b|(?:شما|تو|شخص)\s+(?:کی|چی)\s*(?:هستید|هستی|هست|هس|ه)(?:\s*[؟?]?\s*$)|(?:شما|تو)\s*کی\s*(?:هستید|هستی))/i;
 
   Engine.prototype._asksIdentity = function (query) {
     return IDENTITY.test(String(query || ''));
@@ -1178,6 +1205,21 @@
        itself: 'شما کی هستید' is entirely pronoun and copula, and the site does
        publish what this assistant is - in the panel text it shows the visitor.
        Answering from that chunk is answering from the site, not from a script. */
+    /* "Who are you?" is a question about the assistant, not about the site, and
+       retrieval answers it badly: 'who are you' matched the privacy page's
+       "contact support to request access" sentence, and the Persian form left
+       the copula 'هستید' as a content word and was refused outright. The panel
+       publishes what this assistant is, so answer from that chunk when the
+       question is an identity question - in whatever words it arrived. */
+    if (this._asksIdentity(query)) {
+      var me = this._selfChunk(language);
+      if (me) {
+        return { text: focus(me.text, [], 320), source: 'knowledge', language: language,
+                 citations: [{ title: me.title, route: me.route, topic: me.topic, score: 1 }] };
+      }
+      return { text: labels.self, source: 'knowledge', language: language, citations: [] };
+    }
+
     if (!terms.length) {
       // The site's own description of this assistant is the chunk that was read
       // from the panel. Look it up by topic so a stray match on 'support' in the
@@ -1200,21 +1242,6 @@
         };
       }
       return { text: labels.unsure, source: 'no-match', language: language, citations: [] };
-    }
-
-    /* "Who are you?" is a question about the assistant, not about the site, and
-       retrieval answers it badly: 'who are you' matched the privacy page's
-       "contact support to request access" sentence, and the Persian form left
-       the copula 'هستید' as a content word and was refused outright. The panel
-       publishes what this assistant is, so answer from that chunk when the
-       question is an identity question - in whatever words it arrived. */
-    if (this._asksIdentity(query)) {
-      var me = this._selfChunk(language);
-      if (me) {
-        return { text: focus(me.text, [], 320), source: 'knowledge', language: language,
-                 citations: [{ title: me.title, route: me.route, topic: me.topic, score: 1 }] };
-      }
-      return { text: labels.self, source: 'knowledge', language: language, citations: [] };
     }
 
     var absent = this.absentTerms(terms);

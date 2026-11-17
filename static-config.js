@@ -3,4 +3,4 @@ window.AXIA_STATIC = window.AXIA_STATIC || {};
 window.AXIA_STATIC.base = "/AxiaPlatform/";
 window.AXIA_STATIC.origin = "https://axiasoft.github.io";
 window.AXIA_STATIC.mode = "static";
-window.AXIA_STATIC.generatedAt = window.AXIA_STATIC.generatedAt || "2026-11-16T19:22:17Z";
+window.AXIA_STATIC.generatedAt = window.AXIA_STATIC.generatedAt || "2026-11-17T18:01:58Z";
