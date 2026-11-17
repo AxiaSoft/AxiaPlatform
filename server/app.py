@@ -1852,6 +1852,41 @@ def graceful_shutdown(server, signame):
     threading.Thread(target=server.shutdown, daemon=True).start()
 
 
+def _report_assistant():
+    """Say at startup whether a model is wired up, and prove it if one is.
+
+    An operator running this in Termux has no console. The old behaviour was to
+    print nothing and let them find out by asking the assistant and reading a
+    reply that looked the same whether a model answered it or the local index
+    did. A failing key is silent too - it is only recorded in status(), which
+    is behind the admin login.
+
+    So: print which mode is on, and when a key is present, make one real call
+    now. The call result is what `model_state` reports, so the console agrees
+    with what was just printed.
+    """
+    try:
+        state = agent.status()
+    except Exception as exc:               # never stop the server over this
+        print('assistant: status unavailable (%s)' % type(exc).__name__)
+        return
+    if state.get('provider') != 'model':
+        print('assistant: on-site retrieval only - no AXIA_AGENT_KEY. '
+              'Put one in .env to let a model answer.')
+        return
+    print('assistant: model configured (%s at %s)'
+          % (state.get('model'), state.get('model_base')))
+    print('assistant: checking the key with one call...', flush=True)
+    result = agent.answer('Reply with the single word: ready', language='en')
+    if result.get('source') == 'model':
+        print('assistant: model OK - it answers. Persian in, Persian out.')
+    else:
+        print('assistant: model FAILED (%s). The site still answers from its own '
+              'pages, but not conversationally. Check AXIA_AGENT_KEY, '
+              'AXIA_AGENT_MODEL (%s) and the network.'
+              % (result.get('detail') or 'no detail', state.get('model')))
+
+
 def main():
     init()
     bootstrap_admin()
@@ -1871,6 +1906,7 @@ def main():
 
     print('AXIASOFT listening on %s:%s (max in-flight %d, %d per client)'
           % (host, port, MAX_INFLIGHT, MAX_INFLIGHT_PER_CLIENT))
+    _report_assistant()
     try:
         server.serve_forever(poll_interval=0.4)
     except KeyboardInterrupt:

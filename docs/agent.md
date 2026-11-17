@@ -26,7 +26,7 @@ agent starts answering with that model:
 ```bash
 export AXIA_AGENT_KEY=your-key
 export AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
-export AXIA_AGENT_MODEL=gemini-3.8-flash
+export AXIA_AGENT_MODEL=gemini-2.5-flash
 ```
 
 The model is what makes Xiona an assistant rather than a search box:

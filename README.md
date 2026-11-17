@@ -302,7 +302,7 @@ tier is adequate for a brochure site and its Persian is good.
 ```
 AXIA_AGENT_KEY=your-key-here
 AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
-AXIA_AGENT_MODEL=gemini-3.8-flash
+AXIA_AGENT_MODEL=gemini-2.5-flash
 ```
 
 3. Restart `./run_local.sh`. The console's Maintenance tab shows

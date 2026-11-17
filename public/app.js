@@ -664,8 +664,7 @@ async function sendChat(text){
     into a refusal. */
  try{
    const res=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},
-     credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6),
-     language:document.documentElement.lang==='fa'?'fa':'en'})});
+     credentials:'same-origin',body:JSON.stringify({question:text,history:chatHistory.slice(-6)})});
    if(res.ok){
      const data=await res.json();
      /* The server's answer is used whether a model produced it or the server's

@@ -372,13 +372,14 @@ class ReplyLanguageTests(unittest.TestCase):
         self.assertNotRegex(english['answer'], '[\u0600-\u06FF]',
                             'an English reply must not contain Persian')
 
-    def test_a_persian_question_on_the_english_site_answers_in_english(self):
-        # The reported bug, from the other direction: the visitor's words must
-        # not switch the reply language.
+    def test_an_explicit_language_still_wins(self):
+        # A caller that knows the language - the tests, the console's preview -
+        # is obeyed. What changed is only the *default*: nobody passing an
+        # argument means the question decides.
         reply = self.engine.answer('چه محصولاتی دارید؟', language='en')
         self.assertEqual(reply['language'], 'en')
         self.assertNotRegex(reply['answer'], '[\u0600-\u06FF]',
-                            'Persian was quoted back at an English reader')
+                            'an explicit English request was answered in Persian')
 
     def test_the_engine_defaults_to_the_question_only_without_an_argument(self):
         # The fallback still exists for a caller that has no interface - the
@@ -387,11 +388,20 @@ class ReplyLanguageTests(unittest.TestCase):
         reply = self.engine.answer('سلام', language=None)
         self.assertEqual(reply['language'], 'fa')
 
-    def test_an_english_question_on_the_persian_site_answers_in_persian(self):
-        reply = self.engine.answer('what do you offer?', language='fa')
+    def test_an_english_question_on_the_persian_site_answers_in_english(self):
+        # The operator's complaint, exactly: the site is open in Persian, the
+        # visitor types English, and the reply came back in Persian. No argument
+        # is passed here, which is what the browser does now.
+        reply = self.engine.answer('what do you offer?')
+        self.assertEqual(reply['language'], 'en')
+        self.assertNotRegex(reply['answer'], '[\u0600-\u06FF]',
+                            'an English question was answered in Persian')
+
+    def test_a_persian_question_is_answered_in_persian_whatever_the_site(self):
+        reply = self.engine.answer('چه محصولاتی دارید؟')
         self.assertEqual(reply['language'], 'fa')
         self.assertRegex(reply['answer'], '[\u0600-\u06FF]',
-                         'a Persian reply must be in Persian script')
+                         'a Persian question must be answered in Persian script')
 
     def test_the_portal_agent_passes_the_language_through(self):
         body = (ROOT / 'server' / 'agent.py').read_text(encoding='utf-8')
@@ -410,15 +420,21 @@ class ReplyLanguageTests(unittest.TestCase):
         self.assertIn("d.get('language')", section)
         self.assertIn('agent.answer(question, history, language)', section)
 
-    def test_the_prompt_does_not_mirror_the_question(self):
+    def test_the_prompt_follows_the_visitors_language(self):
+        # The prompt used to forbid mirroring the question. That is the rule the
+        # operator reported as a bug: speak Persian to it, get English back,
+        # because the site happened to be open in English.
         body = (ROOT / 'server' / 'agent.py').read_text(encoding='utf-8')
-        # The old wording invited the model to follow the visitor's language.
-        self.assertNotIn('That is the language the visitor used', body)
-        self.assertIn('Do not mirror the question', body)
+        self.assertNotIn('Do not mirror the question', body)
+        self.assertIn('the language the visitor wrote in', body)
 
-    def test_the_browser_sends_the_interface_language(self):
+    def test_the_browser_does_not_dictate_the_language(self):
+        # The browser used to send its own interface language, which overrode
+        # the only good signal there is - the words the visitor actually typed.
         js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
-        self.assertIn("language:document.documentElement.lang==='fa'?'fa':'en'", js)
+        self.assertNotIn("language:document.documentElement.lang==='fa'?'fa':'en'", js)
+        start = js.index("fetch('/api/agent'")
+        self.assertNotIn('language:', js[start:start + 260])
 
 
 class PersianPunctuationTests(unittest.TestCase):

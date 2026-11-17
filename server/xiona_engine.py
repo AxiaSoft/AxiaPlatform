@@ -46,7 +46,7 @@ STOPWORDS = {
            # asked. They carry no subject, and leaving them in turned a one-word
            # question into a query about a word the site never says.
            'چنده', 'چند', 'چطوره', 'کدوم', 'کدومه', 'کدام', 'کجاست', 'کجایید',
-           'کجای', 'چطوری',
+           'کجای',
            'چرا', 'آیا', 'باید', 'توانم', 'توانید', 'می‌توانم', 'می‌توانید', 'هست',
            'هستند', 'هستم', 'نیست', 'بوده', 'دارند', 'لطفا', 'لطفاً', 'بگو',
            'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم',
@@ -675,7 +675,15 @@ class Engine:
         if not self.size():
             return {'answer': labels['nodocs'], 'source': 'empty-index',
                     'language': language, 'citations': []}
-        if _GREETING.match(query) and len(tokenize(query)) <= 2:
+        # A greeting is a greeting only when that is *all* it is.
+        #
+        # The guard used to be `len(tokenize(query)) <= 2`, and once the spoken
+        # question words stopped counting as content words it started swallowing
+        # real questions: 'چطوری سایت بسازیم' (how do we build a site) tokenizes
+        # to two words and was answered with 'Hello, I am Xiona'. Measuring the
+        # *frame* rather than the residue fixes it - a greeting is short, and it
+        # is made entirely of greeting words and function words.
+        if _is_only_greeting(query):
             return {'answer': labels['greeting'], 'source': 'greeting',
                     'language': language, 'citations': []}
 
@@ -786,8 +794,34 @@ def uncovered_text(absent, language, topics):
             ' You can raise it on the Start a project page.')
 
 
-_GREETING = re.compile(r'^(hi|hello|hey|salam|سلام|درود|وقت بخیر|چطوری|خوبی)(\s|$|[!,.؟?])',
-                       re.IGNORECASE)
+_GREETING_WORDS = frozenset(
+    'hi hello hey hiya how doing going today morning evening night salam سلام سلامم '
+    'درود وقت بخیر چطوری خوبی خوبید صبح بخیر عصر بخیر شب بخیر ممنون مرسی thanks thank '
+    'there'.split())
+
+
+def _is_only_greeting(query):
+    """True when the question is a greeting and nothing else.
+
+    Every word must be a greeting word or a function word. Two content words
+    after a greeting ("hello, how do I build a site") is a question that opens
+    with a greeting, not a greeting.
+    """
+    if not _GREETING.match(query):
+        return False
+    for word in _TOKEN_RE.findall(fold(query)):
+        if word in _GREETING_WORDS:
+            continue
+        if word in STOPWORDS['fa'] or word in STOPWORDS['en']:
+            continue
+        return False
+    return True
+
+
+_GREETING = re.compile(
+    r'^(hi|hello|hey|hiya|how are you|how is it going|how\'s it going|salam|سلام|درود|'
+    r'وقت بخیر|چطوری|خوبی|صبح بخیر|عصر بخیر|شب بخیر)(\s|$|[!,.؟?])',
+    re.IGNORECASE)
 
 _LABELS = {
     'fa': {
