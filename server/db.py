@@ -78,6 +78,15 @@ def migrate(db):
     if 'position' not in cols:
         db.execute('ALTER TABLE products ADD COLUMN position INTEGER NOT NULL DEFAULT 0')
 
+    # When the visitor last opened each conversation. Without it there is no way
+    # to answer "has the team replied?" - every reply looked the same as no
+    # reply, which is the report that started this.
+    ticket_cols = {row[1] for row in db.execute('PRAGMA table_info(tickets)').fetchall()}
+    if 'customer_read_at' not in ticket_cols:
+        db.execute('ALTER TABLE tickets ADD COLUMN customer_read_at TEXT')
+    if 'admin_read_at' not in ticket_cols:
+        db.execute('ALTER TABLE tickets ADD COLUMN admin_read_at TEXT')
+
 
 
 def connect():

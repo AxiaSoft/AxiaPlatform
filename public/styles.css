@@ -1091,3 +1091,21 @@ body.preview-open .topbar { visibility: hidden; }
   height: 1px;
   background: var(--line);
 }
+
+/* ---------------------------------------------------------- support thread
+   The visitor's side of a conversation. It existed as a flat paragraph with
+   the team's messages appended as line breaks, which is why "has anyone
+   replied?" could not be answered by looking at it. A message from the studio
+   is now a distinct block, and the reply box sits under it. */
+.ticket-thread{margin:14px 0 4px;display:flex;flex-direction:column;gap:9px}
+.ticket-msg{border-left:2px solid var(--line);padding:2px 0 2px 11px}
+.ticket-msg.team{border-left-color:var(--blue)}
+.ticket-msg small{font-size:9px;color:var(--faint);display:block;margin-bottom:3px}
+.ticket-msg.team small b{color:var(--blue)}
+.ticket-msg p{font-size:11px;color:var(--text);margin:0;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.ticket-reply-form{margin-top:14px}
+.ticket-reply-form textarea{min-height:74px}
+.ticket-reply-actions{display:flex;align-items:center;gap:11px;margin-top:9px}
+.order-card{align-items:flex-start}
+.order-card>div{flex:1;min-width:0}
+@media(max-width:640px){.order-card{flex-direction:column}.order-card>.status-pill{align-self:flex-start}}

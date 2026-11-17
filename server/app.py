@@ -237,6 +237,34 @@ def clean(s, n=5000):
     return str(s or '').strip()[:n]
 
 
+# A ticket's status, in every form the interface can produce.
+#
+# The database stores three canonical values. The console displays them through
+# the site's dictionary, so a Persian operator clicks 'در حال انجام' and - until
+# the <option value=> fix - that is literally what arrived here. Normalising at
+# the edge means the stored data stays canonical no matter which console, cached
+# or current, sent the request.
+TICKET_STATUSES = ('Open', 'In progress', 'Closed')
+TICKET_STATUS_ALIASES = {
+    'open': 'Open', 'باز': 'Open',
+    'in progress': 'In progress', 'in_progress': 'In progress',
+    'در حال انجام': 'In progress', 'در حال پیگیری': 'In progress',
+    'closed': 'Closed', 'closed.': 'Closed', 'بسته‌شده': 'Closed', 'بسته': 'Closed',
+}
+
+
+def ticket_status(value):
+    """The canonical status for what a client sent, or None if it is unknown."""
+    if value is None:
+        return None
+    if value in TICKET_STATUSES:
+        return value
+    text = str(value).strip()
+    if text in TICKET_STATUSES:
+        return text
+    return TICKET_STATUS_ALIASES.get(text.lower())
+
+
 def public_user(row):
     return {'id': row['id'], 'name': row['name'], 'email': row['email'], 'role': row['role'], 'phone': row['phone']}
 
@@ -1115,8 +1143,26 @@ class Handler(SimpleHTTPRequestHandler):
             for r in rows:
                 item = dict(r)
                 item['messages'] = [dict(m) for m in db.execute(
-                    'SELECT tm.message,tm.created_at,u.name sender FROM ticket_messages tm LEFT JOIN users u ON u.id=tm.sender_id WHERE tm.ticket_id=? ORDER BY tm.created_at',
-                    (r['id'],))]
+                    'SELECT tm.id,tm.message,tm.created_at,tm.sender_id,u.name sender,u.role sender_role '
+                    'FROM ticket_messages tm LEFT JOIN users u ON u.id=tm.sender_id '
+                    'WHERE tm.ticket_id=? ORDER BY tm.created_at', (r['id'],))]
+                # Who wrote it. The console speaks as the studio; a message from
+                # any administrator is "from the team" to the visitor, and only
+                # then is it something they have not seen yet.
+                for m in item['messages']:
+                    m['from_team'] = m.get('sender_role') == 'admin' or m.get('sender_id') is None
+                # Two unread counts, because the two sides need different
+                # answers. The visitor asks "has the team replied?"; the console
+                # asks "has the customer said anything new?".
+                keys = r.keys()
+                customer_read = r['customer_read_at'] if 'customer_read_at' in keys else None
+                admin_read = r['admin_read_at'] if 'admin_read_at' in keys else None
+                item['unread'] = sum(
+                    1 for m in item['messages']
+                    if m['from_team'] and (not customer_read or (m.get('created_at') or '') > customer_read))
+                item['unread_for_team'] = sum(
+                    1 for m in item['messages']
+                    if not m['from_team'] and (not admin_read or (m.get('created_at') or '') > admin_read))
                 tickets.append(item)
             self._send_json(tickets); return
 
@@ -1497,6 +1543,61 @@ class Handler(SimpleHTTPRequestHandler):
             self.audit(user, 'create', 'ticket', refno)
             self._send_json({'ref': refno, 'message': 'A support request has been created. Our team will follow up.'}, 201); return
 
+        if p.startswith('/api/support/') and p.endswith('/messages'):
+            # The visitor replying inside a conversation they already have.
+            #
+            # This did not exist. A visitor could open exactly one support
+            # request and then had no way to say anything else - the thread was
+            # one-way, with the studio able to write and the customer not. The
+            # only channel left was "create another ticket", which fragments a
+            # conversation into unrelated references.
+            if method != 'POST':
+                self._send_json({'error': 'Method not allowed'}, 405); return
+            if not self.rate('support'):
+                return
+            try:
+                tid = int(p.split('/')[3])
+            except (IndexError, ValueError):
+                self._send_json({'error': 'A valid ticket id is required.'}, 400); return
+            row = db.execute('SELECT * FROM tickets WHERE id=?', (tid,)).fetchone()
+            # 404 rather than 403 for someone else's ticket: whether a reference
+            # exists is not something to confirm to a stranger.
+            if not row or (row['user_id'] != user['id'] and user['role'] != 'admin'):
+                self._send_json({'error': 'Ticket not found'}, 404); return
+            message = clean(d.get('message'), 3000)
+            if len(message) < 2:
+                self._send_json({'error': 'Write a message of at least 2 characters.'}, 400); return
+            try:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute('INSERT INTO ticket_messages(ticket_id,sender_id,message) VALUES(?,?,?)',
+                           (tid, user['id'], message))
+                # A visitor writing reopens a closed ticket: they are not done.
+                if row['status'] == 'Closed':
+                    db.execute("UPDATE tickets SET status='Open' WHERE id=?", (tid,))
+                db.execute('COMMIT')
+            except Exception:
+                self._rollback(db)
+                raise
+            self.audit(user, 'ticket_message', 'ticket', tid)
+            self._send_json({'ok': True, 'id': tid, 'status':
+                             'Open' if row['status'] == 'Closed' else row['status']}, 201); return
+
+        if p == '/api/support/read':
+            # "I have seen the replies." Called when the visitor opens a
+            # conversation, so the unread count is theirs to clear and nobody
+            # else can clear it for them.
+            if method != 'POST':
+                self._send_json({'error': 'Method not allowed'}, 405); return
+            try:
+                tid = int(d.get('id'))
+            except (TypeError, ValueError):
+                self._send_json({'error': 'A valid ticket id is required.'}, 400); return
+            row = db.execute('SELECT * FROM tickets WHERE id=?', (tid,)).fetchone()
+            if not row or row['user_id'] != user['id']:
+                self._send_json({'error': 'Ticket not found'}, 404); return
+            db.execute('UPDATE tickets SET customer_read_at=CURRENT_TIMESTAMP WHERE id=?', (tid,))
+            self._send_json({'ok': True}); return
+
         if p == '/api/refunds':
             if method != 'POST':
                 self._send_json({'error': 'Method not allowed'}, 405); return
@@ -1533,8 +1634,16 @@ class Handler(SimpleHTTPRequestHandler):
                 tid = int(d.get('id'))
             except (TypeError, ValueError):
                 self._send_json({'error': 'A valid ticket id is required.'}, 400); return
-            status = d.get('status')
-            if status not in ('Open', 'In progress', 'Closed'):
+            # The <option> elements in the console used to carry no value=, so
+            # the browser posted whatever text the visitor could see. On a
+            # Persian console that was 'در حال انجام', and this check answered
+            # "Unknown support status" - the button was broken for exactly the
+            # operators who read Persian. The console now sends the canonical
+            # value, and this normalises anything else that arrives in the two
+            # languages the interface ships in, so an older cached console
+            # keeps working instead of silently failing.
+            status = ticket_status(d.get('status'))
+            if status is None:
                 self._send_json({'error': 'Unknown support status'}, 400); return
             cur = db.execute('UPDATE tickets SET status=? WHERE id=?', (status, tid))
             if not cur.rowcount:
@@ -1561,6 +1670,16 @@ class Handler(SimpleHTTPRequestHandler):
                 self._rollback(db)
                 raise
             self.audit(user, 'ticket_reply', 'ticket', tid)
+            self._send_json({'ok': True}); return
+
+        if p == '/api/admin/tickets/read' and method == 'POST':
+            # The console has looked at the thread. Clears its own unread count
+            # only; the visitor's stays until they open it.
+            try:
+                tid = int(d.get('id'))
+            except (TypeError, ValueError):
+                self._send_json({'error': 'A valid ticket id is required.'}, 400); return
+            db.execute('UPDATE tickets SET admin_read_at=CURRENT_TIMESTAMP WHERE id=?', (tid,))
             self._send_json({'ok': True}); return
 
         if p == '/api/admin/orders/status' and method == 'PUT':
