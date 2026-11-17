@@ -521,3 +521,31 @@ html[lang="fa"] .article-row h3{line-height:1.65}
 @media (max-width: 720px) {
   .brand-asset-preview { height: 78px; }
 }
+
+/* ---------------------------------------------------------- customer profile
+   One account, opened from the directory. The rows are the same shape as the
+   ticket rows in the messenger so an operator who knows one screen knows this
+   one, and every control keeps its label visible: a button whose meaning lives
+   in its colour is a button that stops meaning anything on a monochrome
+   screen. */
+.cust-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.cust-facts div{min-width:0}
+.cust-facts small{display:block;font-size:9px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.cust-facts b{font-size:12.5px;font-weight:550;word-break:break-word}
+.cust-actions{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.lock-note{font-size:10px;color:var(--muted);line-height:1.6;max-width:56ch}
+.cust-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.cust-row:first-of-type{border-top:none}
+.cust-row-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.cust-row-main b{font-size:12px;font-weight:550}
+.cust-row-side{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap}
+.cust-status{font:inherit;font-size:11px;padding:5px 8px;border-radius:8px;background:var(--panel,#141c2b);color:inherit;border:1px solid var(--line)}
+.cust-event{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:11px;flex-wrap:wrap}
+.cust-event:first-of-type{border-top:none}
+.cust-event>span:first-child{color:var(--muted);font-size:10px;min-width:96px}
+.cust-event b{font-weight:550}
+.empty-note{font-size:11px;color:var(--muted);margin:0;padding:9px 0}
+.pri{font-size:9px;font-weight:600;letter-spacing:.03em;padding:1px 6px;border-radius:6px;border:1px solid currentColor}
+.pri-low{opacity:.6}
+.pri-high{color:#f4c879}
+.pri-urgent{color:#ff8791}

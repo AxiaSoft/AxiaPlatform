@@ -265,6 +265,28 @@ def ticket_status(value):
     return TICKET_STATUS_ALIASES.get(text.lower())
 
 
+# A ticket's priority. Same reasoning as the status above: the column already
+# existed with a 'Normal' default, but nothing ever wrote another value, so a
+# customer could not say "this is urgent" and the console could not sort by it.
+TICKET_PRIORITIES = ('Low', 'Normal', 'High', 'Urgent')
+TICKET_PRIORITY_ALIASES = {
+    'low': 'Low', 'کم': 'Low', 'پایین': 'Low',
+    'normal': 'Normal', 'medium': 'Normal', 'معمولی': 'Normal', 'متوسط': 'Normal',
+    'high': 'High', 'بالا': 'High', 'زیاد': 'High',
+    'urgent': 'Urgent', 'critical': 'Urgent', 'فوری': 'Urgent', 'خیلی فوری': 'Urgent',
+}
+
+
+def ticket_priority(value, default='Normal'):
+    """The canonical priority for what a client sent, or the default."""
+    if value is None:
+        return default
+    text = str(value).strip()
+    if text in TICKET_PRIORITIES:
+        return text
+    return TICKET_PRIORITY_ALIASES.get(text.lower(), default)
+
+
 def public_user(row):
     return {'id': row['id'], 'name': row['name'], 'email': row['email'], 'role': row['role'], 'phone': row['phone']}
 
@@ -1234,6 +1256,51 @@ class Handler(SimpleHTTPRequestHandler):
                     "ORDER BY u.created_at DESC LIMIT 500", (term, like, like, like)).fetchall()
                 self._send_json({'customers': [dict(x) for x in rows], 'total': len(rows)}); return
 
+            if p == '/api/admin/customers/detail':
+                # Everything the console needs to show one customer in full.
+                # Assembled in one request rather than five: the page is a
+                # profile, and five round trips meant five chances to show a
+                # half-loaded record.
+                try:
+                    cid = int((q.get('id') or ['0'])[0])
+                except (TypeError, ValueError):
+                    cid = 0
+                row = db.execute('SELECT * FROM users WHERE id=?', (cid,)).fetchone()
+                if not row:
+                    self._send_json({'error': 'No such customer'}, 404); return
+                profile = dict(row)
+                # Never hand the credential material to the browser, even to an
+                # administrator: there is no screen that shows it, and a hash in
+                # a JSON response is a hash in a log.
+                for secret in ('password_hash', 'token', 'reset_token'):
+                    profile.pop(secret, None)
+                orders = [dict(x) for x in db.execute(
+                    'SELECT o.*,p.title product_title FROM orders o '
+                    'LEFT JOIN products p ON p.id=o.product_id '
+                    'WHERE o.user_id=? ORDER BY o.created_at DESC LIMIT 200', (cid,))]
+                refunds = [dict(x) for x in db.execute(
+                    'SELECT r.*,o.number order_number FROM refunds r '
+                    'LEFT JOIN orders o ON o.id=r.order_id '
+                    'WHERE r.user_id=? ORDER BY r.created_at DESC LIMIT 200', (cid,))]
+                tickets = []
+                for t in db.execute('SELECT * FROM tickets WHERE user_id=? ORDER BY created_at DESC LIMIT 200', (cid,)):
+                    item = dict(t)
+                    item['messages'] = [dict(m) for m in db.execute(
+                        'SELECT tm.id,tm.message,tm.created_at,tm.sender_id,u.name sender,u.role sender_role '
+                        'FROM ticket_messages tm LEFT JOIN users u ON u.id=tm.sender_id '
+                        'WHERE tm.ticket_id=? ORDER BY tm.created_at', (t['id'],))]
+                    for m in item['messages']:
+                        m['from_team'] = m.get('sender_role') == 'admin' or m.get('sender_id') is None
+                    tickets.append(item)
+                events = [dict(x) for x in db.execute(
+                    'SELECT a.id,a.action,a.entity,a.entity_id,a.created_at,u.name actor_name '
+                    'FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_id '
+                    'WHERE a.actor_id=? OR (a.entity=? AND a.entity_id=?) '
+                    'ORDER BY a.created_at DESC,a.id DESC LIMIT 100',
+                    (cid, 'user', str(cid)))]
+                self._send_json({'customer': profile, 'orders': orders, 'refunds': refunds,
+                                 'tickets': tickets, 'events': events}); return
+
             if p == '/api/admin/audit':
                 try:
                     limit = max(1, min(int((q.get('limit') or ['100'])[0]), 200))
@@ -1538,10 +1605,12 @@ class Handler(SimpleHTTPRequestHandler):
             if len(subject) < 3 or len(message) < 10:
                 self._send_json({'error': 'Please add a subject and a message of at least 10 characters.'}, 400); return
             refno = ref('AXS')
-            db.execute('INSERT INTO tickets(ref,user_id,email,subject,message) VALUES(?,?,?,?,?)',
-                       (refno, user['id'], user['email'], subject, message))
+            priority = ticket_priority(d.get('priority'))
+            db.execute('INSERT INTO tickets(ref,user_id,email,subject,message,priority) VALUES(?,?,?,?,?,?)',
+                       (refno, user['id'], user['email'], subject, message, priority))
             self.audit(user, 'create', 'ticket', refno)
-            self._send_json({'ref': refno, 'message': 'A support request has been created. Our team will follow up.'}, 201); return
+            self._send_json({'ref': refno, 'priority': priority,
+                             'message': 'A support request has been created. Our team will follow up.'}, 201); return
 
         if p.startswith('/api/support/') and p.endswith('/messages'):
             # The visitor replying inside a conversation they already have.

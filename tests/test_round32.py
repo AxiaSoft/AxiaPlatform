@@ -180,10 +180,16 @@ class MessengerStyleTests(unittest.TestCase):
     def setUp(self):
         self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
 
-    def test_the_two_pane_layout_collapses_on_a_phone(self):
-        block = self.css[self.css.index('@media(max-width:820px){'):]
-        self.assertIn('.msg-app.thread-open .msg-side{display:none}', block)
-        self.assertIn('.msg-app:not(.thread-open) .msg-pane{display:none}', block)
+    def test_the_views_take_the_whole_page(self):
+        # Round 33 replaced the side-by-side panes with one full-page view at a
+        # time: a list of rows, or one conversation, or the compose form.
+        self.assertIn('.msg-column', self.css)
+        self.assertIn('.msg-page-chat', self.css)
+        self.assertNotIn('.msg-app', self.css, 'the two-pane frame is gone')
+
+    def test_a_row_is_a_whole_row_not_a_card_in_a_grid(self):
+        # The ask was a column: one conversation per line, full width.
+        self.assertIn('.msg-column{display:flex;flex-direction:column', self.css)
 
     def test_the_bubbles_have_both_sides(self):
         for selector in ('.msg-bubble', '.msg-row.mine .msg-bubble', '.msg-meta'):
