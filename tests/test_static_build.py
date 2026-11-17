@@ -48,15 +48,21 @@ class ShellBundleOrderTests(unittest.TestCase):
     def setUp(self):
         self.html = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
 
+    @staticmethod
+    def app_tag(html):
+        # The source page carries no ?v= - the build stamps it - so match the
+        # tag itself rather than a marker that may or may not be there yet.
+        return html.index('src="/app.js')
+
     def test_static_adapter_is_loaded_before_the_app(self):
         html = build_static.inject_adapter(self.html, '/AxiaPlatform/')
         adapter = html.index('static-adapter.js')
-        app = html.index('app.js?v=')
+        app = self.app_tag(html)
         self.assertLess(adapter, app, 'the adapter must install before the app boots')
 
     def test_brand_layer_loads_before_the_app(self):
         # applyBrand() reads window.AXIA_BRANDS, which brands.js defines.
-        self.assertLess(self.html.index('brands.js'), self.html.index('app.js?v='))
+        self.assertLess(self.html.index('brands.js'), self.app_tag(self.html))
 
     def test_injection_is_idempotent(self):
         once = build_static.inject_adapter(self.html, '/AxiaPlatform/')
@@ -707,9 +713,20 @@ class CacheBusterTests(unittest.TestCase):
         return found
 
     def test_every_local_asset_is_versioned(self):
-        for name, html in (('storefront', self.index), ('console', self.console)):
-            for src in re.findall(r'(?:href|src)="(/[^"]+\.(?:css|js))"', html):
-                self.fail(f'{name} loads {src} with no ?v= marker')
+        # The source pages carry no marker on purpose: the build derives one
+        # from each file's bytes, because a hand-typed number silently went
+        # stale and shipped old JS against new HTML. So the check belongs on
+        # the output - and the source must not hand-type a number either.
+        dist = ROOT / 'dist'
+        if not (dist / 'index.html').is_file():
+            self.skipTest('no dist build to inspect')
+        for name, page in (('storefront', dist / 'index.html'),
+                           ('console', dist / 'admin' / 'index.html')):
+            if not page.is_file():
+                continue
+            html = page.read_text(encoding='utf-8')
+            for src in re.findall(r'(?:href|src)="([^"]+?\.(?:css|js))"', html):
+                self.fail(f'{name} loads {src} with no ?v= marker in the built page')
 
     def test_no_asset_is_listed_at_two_versions(self):
         for name, html in (('storefront', self.index), ('console', self.console)):
@@ -2513,3 +2530,79 @@ class BlogBuildOutputTests(unittest.TestCase):
     def test_the_article_theme_follows_the_setting(self):
         page = self.read('blog', 'wordpress-vs-code', 'index.html')
         self.assertIn('var fallback = "dark";', page)
+
+
+class AssetBusterTests(unittest.TestCase):
+    """A changed asset must never keep its old URL.
+
+    The version numbers were typed into the HTML by hand: `/app.js?v=site-29`.
+    Nothing checked them, so an edited app.js shipped under the old number was
+    served from cache and the fix never reached the phone - which is exactly
+    what happened to a translation this round. The build now derives the number
+    from the file's bytes, so the URL cannot lag the content.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import build_static
+        self.build = build_static
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def test_the_build_stamps_a_bare_tag_and_overwrites_a_stale_one(self):
+        # Exercised through the function, not through dist/: a check that reads
+        # a build made earlier still passes after the stamping is disabled.
+        (self.tmp / 'app.js').write_text('boot();', encoding='utf-8')
+        (self.tmp / 'styles.css').write_text('body{}', encoding='utf-8')
+        expected = self.build.content_buster(self.tmp / 'app.js', 'app.js')
+        for page in ('<script src="/app.js" defer></script>',
+                     '<script src="/app.js?v=site-29" defer></script>',
+                     '<script src="/AxiaPlatform/app.js?v=old" defer></script>'):
+            out = self.build.stamp_asset_urls(page, self.tmp, '/AxiaPlatform/')
+            self.assertIn(f'app.js?v={expected}', out, f'unstamped: {page} -> {out}')
+        # An asset the build does not own keeps its own number.
+        kept = self.build.stamp_asset_urls(
+            '<script src="/data/products.js?v=static-2"></script>', self.tmp, '/')
+        self.assertIn('products.js?v=static-2', kept)
+
+    def test_a_changed_file_gets_a_new_url(self):
+        asset = self.tmp / 'app.js'
+        asset.write_text('one();', encoding='utf-8')
+        first = self.build.content_buster(asset, 'app.js')
+        asset.write_text('two();', encoding='utf-8')
+        second = self.build.content_buster(asset, 'app.js')
+        self.assertNotEqual(first, second, 'an edited file kept its old cache key')
+
+    def test_an_unchanged_file_keeps_its_url(self):
+        # Rewriting a file with identical bytes must not evict every cache.
+        asset = self.tmp / 'app.js'
+        asset.write_text('same();', encoding='utf-8')
+        self.assertEqual(self.build.content_buster(asset, 'app.js'),
+                         self.build.content_buster(asset, 'app.js'))
+
+    def test_every_stamped_asset_exists_in_the_built_page(self):
+        dist = ROOT / 'dist'
+        if not (dist / 'index.html').is_file():
+            self.skipTest('no dist build to inspect')
+        for page in (dist / 'index.html', dist / 'admin' / 'index.html'):
+            if not page.is_file():
+                continue
+            text = page.read_text(encoding='utf-8')
+            for href in re.findall(r'(?:src|href)="[^"]*?((?:app|styles|i18n|effects|brands'
+                                   r'|xiona|admin/admin)\.(?:js|css))\?v=([^"]+)"', text):
+                name, buster = href
+                target = dist / name
+                self.assertTrue(target.is_file(), f'{page.name} points at a missing {name}')
+                expected = self.build.content_buster(target, name)
+                if expected is not None:
+                    self.assertEqual(buster, expected,
+                                     f'{name} is served under a stale cache key')
+
+    def test_the_page_does_not_carry_a_hand_typed_number(self):
+        # A leftover `?v=site-29` in the source is a landmine: it works until
+        # someone edits the file and the build never overwrites it.
+        for rel in ('public/index.html', 'public/admin/index.html'):
+            text = (ROOT / rel).read_text(encoding='utf-8')
+            for number in re.findall(r'\?v=(site|console)-\d+', text):
+                self.fail(f'{rel} still hand-types ?v={number}-<n>; '
+                          f'the build derives this from the file')
