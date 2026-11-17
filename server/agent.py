@@ -30,10 +30,13 @@ Using Google AI Studio (Gemini) instead of OpenAI:
 
   AXIA_AGENT_KEY=<your AI Studio key>
   AXIA_AGENT_URL=https://generativelanguage.googleapis.com/v1beta/openai
-  AXIA_AGENT_MODEL=gemini-3.8-flash
+  AXIA_AGENT_MODEL=gemini-2.5-flash
 
 Gemini exposes an OpenAI-compatible surface at that base URL, so nothing else
 changes. Any other provider that speaks /chat/completions works the same way.
+The model ID is the part that goes stale: `gemini-3.8-flash`, the example this
+docstring carried, is not a model Google lists. A 404 from the provider is a
+wrong name, not a wrong key - check https://ai.google.dev/gemini-api/docs/models
 
 Check the model name when setting this up. Google retires model IDs on a
 published schedule — gemini-2.0-flash, the example this file used to carry,
@@ -79,8 +82,20 @@ def load_env_file(path=None):
     anything more clever would be a place for a key to go somewhere unexpected.
     """
     if path is None:
+        # Look next to this file's parent (the repository root) and also in the
+        # directory the server was started from. The second is what catches the
+        # operator who runs `python3 -u server/app.py` from a copy of the site
+        # whose `.env` lives beside the folder rather than in it - and Android
+        # shared storage, where this site is deployed, is exactly that situation
+        # often enough to be worth handling.
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        path = os.path.join(root, '.env')
+        candidates = [os.path.join(root, '.env'), os.path.join(os.getcwd(), '.env')]
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                path = candidate
+                break
+        else:
+            path = candidates[0]
     try:
         with open(path, encoding='utf-8') as handle:
             lines = handle.readlines()
@@ -357,29 +372,42 @@ def _pages_with_assistant():
 # the model must never invent those.
 SYSTEM_PROMPT = (
     'You are Xiona, the assistant for AXIASOFT, an independent software studio in Nuremberg. '
-    'AXIASOFT builds websites, mobile applications and custom software, and AURION is its '
-    'trading-robot companion concept — a showcase only, with no broker connection, no '
+    'AXIASOFT builds websites, mobile applications and custom software. AURION is its '
+    'trading-robot companion concept: a showcase only, with no broker connection, no '
     'execution and nothing for sale.\n\n'
+
     'HOW TO ANSWER\n'
-    '- Be genuinely useful. You may explain, compare, reason and recommend. '
-    'If a visitor asks which product or plan fits them, say which one and why.\n'
-    '- Facts about AXIASOFT — products, prices, policies, what exists and what does not — '
-    'must come from the PUBLISHED text below. Do not invent a product, a price, a delivery '
-    'date, a customer name or an account detail, and never claim access to orders, payments '
-    "or the visitor's data.\n"
-    '- If the visitor asks for something the site genuinely does not cover and you cannot '
-    'answer from general knowledge, say so in one sentence and point them to the contact '
-    'page. Do not recite a refusal when a helpful answer is available.\n'
-    '- Keep it to at most four sentences. Plain language, no marketing filler, no bullet '
-    'lists unless the visitor asked for a list.\n\n'
+    '- Be genuinely useful. Talk like a knowledgeable person, not like a search '
+    'greeting. A question gets a real answer with reasoning, comparison and a '
+    'recommendation where one is honest to give.\n'
+    '- You may use general professional knowledge: how websites are built, what makes an '
+    'app slow, whether WordPress or custom code suits a small shop, how long such work '
+    'usually takes. Visitors are asking for judgement, not for a paragraph copied out '
+    'of the page.\n'
+    '- The one thing you must not invent is what AXIASOFT itself has done, charges, or '
+    'promises. Products, prices, delivery dates, customer names and policies come from '
+    'the PUBLISHED text below. If a specific fact about AXIASOFT is not there, say you '
+    'do not have that detail and offer what you do know, or point to the contact page. '
+    'Never claim access to orders, payments or the visitor\'s account.\n'
+    '- Never quote the PUBLISHED text verbatim at length. Absorb it and answer in your '
+    'own words. If the text is in the other language, translate the meaning rather than '
+    'pasting it.\n'
+    '- Length follows the question. A greeting is one line. A "what is this" is two or '
+    'three sentences. A comparison or a "help me choose" can be a short paragraph or a '
+    'few bullets - use a list when the answer really is a list.\n'
+    '- No marketing filler, no preamble like "Great question!", no restating the '
+    'question back.\n\n'
+
     'LANGUAGE\n'
-    'Reply in {language}. That is the language the visitor is reading the site in, '
-    'and it is not negotiable: they may type the question in the other language, or '
-    'quote a product name, or paste English text — the answer is still {language}. '
-    'Do not mirror the question. Use it even if the PUBLISHED text below is in the '
-    'other language. Write Persian in Persian script, never transliterated. Keep '
-    'product names (AXIASOFT, AURION) and technical terms (MetaTrader, API) as they '
-    'are.\n\n'
+    'Reply in {language}, the language the visitor wrote in. Detect it from their '
+    'message, not from the site. If they write Persian, answer in Persian even if the '
+    'PUBLISHED text below is English, and translate anything you take from it. If they '
+    'write English, answer in English. If they mix the two, follow the language the '
+    'question is actually asked in. Write Persian in Persian script, never '
+    'transliterated, in the natural register of someone speaking to a person: '
+    '\u200c"می\u200cتوانم" not "می توانم". Keep product names (AXIASOFT, AURION) and '
+    'technical terms (MetaTrader, API, WordPress) as they are.\n\n'
+
     'PUBLISHED:\n{context}'
 )
 
@@ -418,8 +446,12 @@ def ask_provider(question, history=None, context='', language=None):
             messages.append({'role': role, 'content': content})
     messages.append({'role': 'user', 'content': question})
 
-    body = json.dumps({'model': model, 'messages': messages, 'temperature': 0.4,
-                       'max_tokens': 400}).encode('utf-8')
+    # 400 tokens was a paragraph at most, which is why a question that deserved
+    # a comparison got a clipped sentence. The prompt now asks the model to let
+    # a greeting be one line and a "help me choose" be a real answer, so the cap
+    # has to leave room for the second kind.
+    body = json.dumps({'model': model, 'messages': messages, 'temperature': 0.6,
+                       'max_tokens': 800}).encode('utf-8')
     request = urllib.request.Request(
         base + '/chat/completions', data=body, method='POST',
         headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key})
@@ -482,10 +514,19 @@ def answer(question, history=None, language=None):
     """
     question = str(question or '').strip()[:MAX_QUESTION]
     index = engine()
-    # The interface language, not the question's. A visitor reading the site in
-    # English who types Persian must still be answered in English - inferring
-    # from the text was how a Persian question came back in English (or, worse,
-    # in Persian on the English site, quoting the wrong-language corpus).
+    # The question's language, not the interface's.
+    #
+    # This was the other way round, and the reversal is deliberate. The old rule
+    # - answer in the language the visitor is *reading the site* in - was meant
+    # to stop a Persian paragraph on the English build from being quoted at an
+    # English reader. In practice it produced the opposite complaint, from the
+    # operator: speak Persian to it and it answers in English, because the site
+    # happened to be open in English. A person types in the language they want
+    # to be answered in; that is the strongest signal there is, and it is right
+    # there in the request.
+    #
+    # `language` from the caller still wins when a caller knows better, but the
+    # browser no longer sends one, so this is what decides.
     if language not in LANGUAGE_NAMES:
         language = 'fa' if _looks_persian(question) else 'en'
     local = index.answer(question, language=language)
@@ -520,8 +561,17 @@ def answer(question, history=None, language=None):
 
 def status():
     """What the console shows about the assistant."""
-    index = engine()
-    state = index.stats()
+    # `engine()` builds the index, which reads the database through the
+    # providers app.py installs. Everything this function actually reports -
+    # provider, model, the last call - comes from the environment and from
+    # _LAST_CALL, so a caller asking "is the model wired up?" should not fail
+    # because there is no database to build an index from (a test, a fresh
+    # checkout, the blog translator). The counts are reported when the index is
+    # available and omitted when it is not.
+    try:
+        state = engine().stats()
+    except Exception:
+        state = {'chunks': 0, 'topics': [], 'fa': 0, 'en': 0}
     return {
         # 'local' is the historical name for "no provider, answers on-site";
         # the assistant is always local now, so it is always true.

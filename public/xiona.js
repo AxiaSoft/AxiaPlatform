@@ -66,7 +66,7 @@
       'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم', 'دهید', 'دهد',
       'کن', 'شد', 'کرده', 'دار', 'است؟', 'انجام', 'طور', 'مورد', 'پس',
       'چنده', 'چند', 'چطوره', 'کدوم', 'کدومه', 'کدام', 'کجاست', 'کجایید',
-      'کجای', 'چطوری',
+      'کجای',
       // copula and question fragments, as they arrive after stemming
       'هست', 'نیست', 'بودن', 'باش', 'باشه', 'شده', 'کردن', 'دادن', 'گفتن',
       'لازم', 'لطف', 'عزیز', 'بله', 'نه'],
@@ -850,7 +850,31 @@
 
   // \b is ASCII-only in JavaScript, so it never fires after a Persian letter.
   // The greeting test therefore anchors at the start and checks the token.
-  var GREETING = /^(hi|hello|hey|salam|سلام|درود|وقت بخیر|چطوری|خوبی)(\s|$|[!,.؟?])/i;
+  var GREETING = /^(hi|hello|hey|hiya|how are you|how is it going|how's it going|salam|سلام|درود|وقت بخیر|چطوری|خوبی|صبح بخیر|عصر بخیر|شب بخیر)(\s|$|[!,.؟?])/i;
+
+  /* The words that make a greeting and nothing else. */
+  var GREETING_WORDS = {};
+  ('hi hello hey hiya how doing going today morning evening night salam سلام سلامم ' +
+   'درود وقت بخیر چطوری خوبی خوبید صبح بخیر عصر بخیر شب بخیر ممنون مرسی thanks thank ' +
+   'there').split(' ').forEach(function (word) { GREETING_WORDS[word] = true; });
+
+  /* A greeting is a greeting only when that is all it is.
+     See the twin function in server/xiona_engine.py: measuring the token count
+     of the *residue* meant that once the spoken question words became function
+     words, 'چطوری سایت بسازیم' (how do we build a site) had two tokens left and
+     was answered with 'Hello, I am Xiona'. */
+  function isOnlyGreeting(query) {
+    if (!GREETING.test(query)) return false;
+    var words = fold(query).toLowerCase().match(/[a-z0-9]+|[\u0600-\u06FF]+/g) || [];
+    for (var i = 0; i < words.length; i++) {
+      var word = words[i];
+      if (GREETING_WORDS[word]) continue;
+      if ((STOPWORDS.fa || []).indexOf(word) >= 0) continue;
+      if ((STOPWORDS.en || []).indexOf(word) >= 0) continue;
+      return false;
+    }
+    return true;
+  }
 
   /* The language Xiona answers in is the language the site is being read in.
 
@@ -1185,11 +1209,23 @@
   Engine.prototype.answer = function (question, options) {
     var opts = options || {};
     var query = String(question || '').trim();
-    /* The reply language is the site's language. `opts.language` exists so the
-       tests and the server can be explicit; the visitor's question never
-       decides it, because a Persian question on the English site must still be
-       answered in English. */
-    var language = (opts.language === 'fa' || opts.language === 'en') ? opts.language : uiLanguage();
+    /* The reply language is the language the visitor wrote in.
+
+       This is the opposite of what it was, and the reversal is deliberate. The
+       rule used to be "answer in the site's language, because a Persian
+       question on the English site must still be answered in English" - which
+       is right for a visitor who browsed to the English site and pasted a
+       Persian product name, and wrong for every visitor who simply types in
+       their own language and expects to be met in it. The operator's report is
+       the second case: "it only speaks English when I speak Persian to it."
+
+       Persian and English are the two languages this site is written in, so a
+       question in either one is a question the site can answer in that same
+       one. Detection is the same test the retrieval already uses, and
+       `opts.language` still wins when a caller knows better (the tests, and
+       the server, which passes the language it scored the question with). */
+    var language = (opts.language === 'fa' || opts.language === 'en') ? opts.language
+      : (isPersian(query) ? 'fa' : 'en');
     var labels = LABELS[language];
     if (!query) {
       return { text: labels.unsure, source: 'empty', language: language, citations: [] };
@@ -1197,7 +1233,7 @@
     if (!this.size()) {
       return { text: labels.nodocs, source: 'empty-index', language: language, citations: [] };
     }
-    if (GREETING.test(query) && tokenize(query).length <= 2) {
+    if (isOnlyGreeting(query)) {
       return { text: labels.greeting, source: 'greeting', language: language, citations: [] };
     }
 
@@ -1325,7 +1361,7 @@
        the other language are translated for display a few lines below, so the
        reply is still Persian. A genuine Persian answer still wins, because this
        only runs when the Persian search found nothing to stand on. */
-    if (language === 'fa' && hits.length) {
+    if (language === 'fa') {
       var wider = this.search(query, { language: 'any', limit: this.maxResults });
       /* Take the wider result only when the other-language chunk is about the
          thing that was asked.
@@ -1342,7 +1378,13 @@
          the wider result must carry one of the visitor's subject words in its
          title, topic or keywords. That is the same measure the ranker already
          trusts for 'which page is this about'. */
-      if (wider.length && wider[0].score >= hits[0].score) {
+      // `hits` may be empty - the Persian corpus has no chunk for the word at
+      // all, which is the common case for anything the catalog covers - and
+      // then there is nothing to be beaten by, so the labelled wider result
+      // simply wins. Guarding on `hits.length` above instead meant the widening
+      // never ran in exactly that case, and 'بازپرداخت' was refused while the
+      // Python twin answered it from the refund policy.
+      if (wider.length && (!hits.length || wider[0].score >= hits[0].score)) {
         var label = String(wider[0].doc.title + ' ' + wider[0].doc.topic + ' ' +
                            (wider[0].doc.keywords || '')).toLowerCase();
         var labelled = false;
