@@ -7,7 +7,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const moneyFreeDate=v=>{if(!v)return'—';const d=new Date(String(v).replace(' ','T')+'Z');return Number.isNaN(+d)?esc(v):new Intl.DateTimeFormat(document.documentElement.lang==='fa'?'fa-IR':'en-GB',{dateStyle:'medium',timeStyle:'short'}).format(d)};
 const ordersStatus=['Submitted','Under Review','Requirements Analysis','Quotation Sent','Awaiting Confirmation','In Development','Testing','Ready for Delivery','Delivered','Cancelled'];
 const PAGES=['dashboard','site','products','articles','orders','customers','support','refunds','activity'];
-const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],articles:[],articleDraft:null,agent:null,settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null};
+const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],articles:[],articleDraft:null,agent:null,settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null,customerId:null,customer:null};
 async function api(path,{method='GET',body,headers={}}={}){
  const h={'Content-Type':'application/json',...headers};
  if(method!=='GET'&&path!=='/api/login'){if(!state.csrf){const session=await fetch('/api/me',{credentials:'same-origin'}).then(r=>r.json()).catch(()=>({}));state.csrf=session.csrf||null}if(state.csrf)h['X-CSRF-Token']=state.csrf}
@@ -500,8 +500,100 @@ function siteHTML(){
  ${dirty?`<div class="dirty-note" role="status"><span>●</span> Unsaved changes on this page — press <strong>Save</strong> to publish them to the site.</div>`:''}
  <div class="site-tab-body">${siteTabHTML()}</div>`;
 }
-function customersHTML(){const data=state.customers.filter(c=>{const q=state.search.toLowerCase();return !q||[c.name,c.email,c.phone].join(' ').toLowerCase().includes(q)});return`${pageHead('Customer records','Customers','View customer accounts and their support/request counts. Account access changes revoke active sessions.',`<button class="btn btn-quiet" data-act="export" data-kind="customers">⇩ Export CSV</button>`)}${toolbar('Search name, email or phone…')}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Customer directory</h2><p>${fmtNum(data.length)} ${T('records · customer accounts only')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Contact</th><th>Joined</th><th>Requests</th><th>Tickets</th><th>Access</th><th>Action</th></tr></thead><tbody>${data.map(c=>`<tr><td><span class="cell-main">${esc(c.name)}</span><span class="cell-sub">Customer ID ${c.id}</span></td><td>${esc(c.email)}<span class="cell-sub">${esc(c.phone||'No phone on file')}</span></td><td>${moneyFreeDate(c.created_at)}</td><td>${fmtNum(c.order_count)}</td><td>${fmtNum(c.ticket_count)}</td><td>${pill(T(c.active?'Active':'Suspended'))}</td><td><button class="btn btn-sm ${c.active?'btn-danger':'btn-quiet'}" data-act="customer-status" data-id="${c.id}" data-active="${c.active?1:0}">${T(c.active?'Suspend':'Reactivate')}</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No customers found.</div>`}<div class="notice">Suspending an account blocks future sign-in and invalidates its active sessions. Admin accounts cannot be changed from this screen.</div></div>`}
-function supportHTML(){const data=state.tickets.filter(t=>{const q=state.search.toLowerCase();return(!q||[t.ref,t.email,t.subject,t.message].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||t.status===state.statusFilter)});return`${pageHead('Customer care','Support tickets','Review conversations and reply through the website support channel.',`<button class="btn btn-quiet" data-act="export" data-kind="tickets">⇩ Export CSV</button>`)}${toolbar('Search reference, email or subject…',['All','Open','In progress','Closed'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Support inbox</h2><p>${fmtNum(data.length)} ${T('matching tickets')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer email</th><th>Subject / first message</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${data.map(t=>`<tr><td><span class="cell-main">${esc(t.ref)}</span></td><td>${esc(t.email)}</td><td><span class="cell-main">${esc(t.subject)}</span><span class="cell-sub">${esc(t.message)}</span></td><td>${moneyFreeDate(t.created_at)}</td><td>${pill(t.status)}</td><td style="white-space:nowrap">${t.unread_for_team?`<span class="pill amber">${t.unread_for_team} new</span> `:''}<button class="btn btn-sm btn-quiet" data-act="view-ticket" data-id="${t.id}">Open thread</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">✳</div>No tickets found.</div>`}</div>`}
+/* ------------------------------------------------------------ one customer
+   The directory answers "who are my customers". This answers "who is this
+   one", and it is the page an operator asks for when a customer writes in:
+   their details, what they ordered, what they paid or asked back, what they
+   have said to support, and what has happened on the account.
+
+   Every control here is one the server already enforces. Nothing on this page
+   can move money or reveal a credential, and the page says so where a control
+   looks more powerful than it is.
+   ---------------------------------------------------------------------- */
+
+async function openCustomer(id) {
+  state.customerId = Number(id);
+  state.customer = null;
+  $('#pageContent').innerHTML = `<div class="panel" style="padding:26px"><p class="empty-note">Loading customer…</p></div>`;
+  try {
+    const r = await api('/api/admin/customers/detail?id=' + Number(id));
+    state.customer = r;
+  } catch (e) {
+    $('#pageContent').innerHTML = `<div class="panel" style="padding:26px"><p class="empty-note">${esc(e.message)}</p><button class="btn btn-quiet" data-act="customer-back">← Back to customers</button></div>`;
+    return;
+  }
+  $('#pageContent').innerHTML = customerHTML();
+}
+
+function backToCustomers() {
+  state.customerId = null;
+  state.customer = null;
+  $('#pageContent').innerHTML = customersHTML();
+}
+
+/* The profile is one record split into the four questions an operator
+   actually has, in that order, rather than one long dump. */
+function customerHTML() {
+  const r = state.customer;
+  if (!r) return '';
+  const c = r.customer;
+  const open = r.tickets.filter(t => t.status !== 'Closed').length;
+  const appr = r.refunds.filter(x => x.status === 'Approved').length;
+  const ticketRows = r.tickets.length ? r.tickets.map(t => `<div class="cust-row"><div class="cust-row-main"><b>${esc(t.subject)}</b><span class="cell-sub">${esc(t.ref)} · ${esc(moneyFreeDate(t.created_at))}${t.priority && t.priority !== 'Normal' ? ` · <span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>` : ''}</span></div><div class="cust-row-side">${pill(T(t.status))}<button class="btn btn-sm btn-quiet" data-act="customer-ticket" data-id="${t.id}">Open thread</button></div></div>`).join('') : '<p class="empty-note">No support conversations.</p>';
+  const orderRows = r.orders.length ? r.orders.map(o => `<div class="cust-row"><div class="cust-row-main"><b>${esc(o.number)} · ${esc(o.product_title || 'Project request')}</b><span class="cell-sub">${esc(moneyFreeDate(o.created_at))}</span></div><div class="cust-row-side"><span class="status-pill">${esc(T(o.status))}</span><select class="cust-status" data-order-status="${o.id}">${['Submitted', 'Under Review', 'Requirements Analysis', 'Quotation Sent', 'Awaiting Confirmation', 'In Development', 'Testing', 'Ready for Delivery', 'Delivered', 'Cancelled'].map(s => `<option value="${s}"${o.status === s ? ' selected' : ''}>${esc(T(s))}</option>`).join('')}</select></div></div>`).join('') : '<p class="empty-note">No project requests.</p>';
+  const refundRows = r.refunds.length ? r.refunds.map(x => `<div class="cust-row"><div class="cust-row-main"><b>${esc(x.order_number || '')} · ${esc(x.ref)}</b><span class="cell-sub">${esc(x.reason)}</span></div><div class="cust-row-side">${pill(T(x.status))}${x.status === 'Under review' ? `<button class="btn btn-sm btn-quiet" data-act="customer-refund" data-id="${x.id}" data-decision="Approved">${esc(T('Approve'))}</button><button class="btn btn-sm btn-quiet" data-act="customer-refund" data-id="${x.id}" data-decision="Rejected">${esc(T('Reject'))}</button>` : ''}</div></div>`).join('') : '<p class="empty-note">No refund requests.</p>';
+  const eventRows = r.events.length ? r.events.slice(0, 18).map(e => `<div class="cust-event"><span>${esc(moneyFreeDate(e.created_at))}</span><b>${esc(T(e.action))}</b><span class="cell-sub">${esc(e.entity)}${e.entity_id ? ' · ' + esc(e.entity_id) : ''}${e.actor_name ? ' · ' + esc(e.actor_name) : ''}</span></div>`).join('') : '<p class="empty-note">No recorded activity.</p>';
+  return `${pageHead(esc(c.name), 'Customer profile', 'Everything recorded about this account, and the controls the server allows over it.', `<button class="btn btn-quiet" data-act="customer-back">← All customers</button>`)}
+  <div class="stat-grid">
+    <div class="panel stat"><small>${esc(T('Requests'))}</small><strong>${fmtNum(r.orders.length)}</strong></div>
+    <div class="panel stat"><small>${esc(T('Open conversations'))}</small><strong>${fmtNum(open)}</strong></div>
+    <div class="panel stat"><small>${esc(T('Refunds'))}</small><strong>${fmtNum(r.refunds.length)}${appr ? ` <span class="cell-sub">${appr} ${esc(T('approved'))}</span>` : ''}</strong></div>
+    <div class="panel stat"><small>${esc(T('Account'))}</small><strong style="font-size:15px">${pill(T(c.active ? 'Active' : 'Suspended'))}</strong></div>
+  </div>
+  <div class="panel" style="padding:18px;margin-bottom:18px">
+    <h2 style="font-size:15px;margin:0 0 14px">${esc(T('Details'))}</h2>
+    <div class="cust-facts">
+      <div><small>${esc(T('Name'))}</small><b>${esc(c.name)}</b></div>
+      <div><small>${esc(T('Email'))}</small><b>${esc(c.email)}</b></div>
+      <div><small>${esc(T('Phone'))}</small><b>${esc(c.phone || T('No phone on file'))}</b></div>
+      <div><small>${esc(T('Customer ID'))}</small><b>${c.id}</b></div>
+      <div><small>${esc(T('Joined'))}</small><b>${esc(moneyFreeDate(c.created_at))}</b></div>
+      <div><small>${esc(T('Role'))}</small><b>${esc(T(c.role))}</b></div>
+    </div>
+    <div class="cust-actions">
+      <button class="btn ${c.active ? 'btn-danger' : 'btn-quiet'}" data-act="customer-status" data-id="${c.id}" data-active="${c.active ? 1 : 0}">${esc(T(c.active ? 'Suspend account' : 'Reactivate account'))}</button>
+      <span class="lock-note">${esc(T('Suspending revokes active sessions immediately.'))} ${esc(T('Passwords and card details are never shown, and nothing here moves money.'))}</span>
+    </div>
+  </div>
+  <div class="panel" style="padding:18px;margin-bottom:18px"><div class="panel-head"><div><h2>${esc(T('Project requests'))}</h2><p>${esc(T('Change a status here and the customer sees it in their account.'))}</p></div></div>${orderRows}</div>
+  <div class="panel" style="padding:18px;margin-bottom:18px"><div class="panel-head"><div><h2>${esc(T('Refunds'))}</h2><p>${esc(T('A decision is recorded only. No money is transferred.'))}</p></div></div>${refundRows}</div>
+  <div class="panel" style="padding:18px;margin-bottom:18px"><div class="panel-head"><div><h2>${esc(T('Support'))}</h2><p>${esc(T('Replies written from the ticket thread reach the customer in their messages page.'))}</p></div></div>${ticketRows}</div>
+  <div class="panel" style="padding:18px"><div class="panel-head"><div><h2>${esc(T('Activity'))}</h2><p>${esc(T('Sign-ins, changes and decisions recorded against this account.'))}</p></div></div>${eventRows}</div>`;
+}
+
+/* Order status and refund decisions are re-issued from here, reusing the same
+   endpoints the Orders and Refunds tabs use, then the profile is redrawn so the
+   operator sees the new state in place. */
+async function customerOrderStatus(sel) {
+  try {
+    await api('/api/admin/orders/status', { method: 'PUT', body: { id: Number(sel.dataset.orderStatus), status: sel.value } });
+    toast(T('Order status updated.'));
+    await openCustomer(state.customerId);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function customerRefund(btn) {
+  const decision = btn.dataset.decision;
+  if (!confirm(`${decision} this refund? The decision is recorded; no money moves.`)) return;
+  try {
+    await api('/api/admin/refunds/decision', { method: 'PUT', body: { id: Number(btn.dataset.id), status: decision, note: '' } });
+    toast(T('Refund decision recorded.'));
+    await openCustomer(state.customerId);
+  } catch (e) { toast(e.message, true); }
+}
+
+function customersHTML(){const data=state.customers.filter(c=>{const q=state.search.toLowerCase();return !q||[c.name,c.email,c.phone].join(' ').toLowerCase().includes(q)});return`${pageHead('Customer records','Customers','View customer accounts and their support/request counts. Account access changes revoke active sessions.',`<button class="btn btn-quiet" data-act="export" data-kind="customers">⇩ Export CSV</button>`)}${toolbar('Search name, email or phone…')}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Customer directory</h2><p>${fmtNum(data.length)} ${T('records · customer accounts only')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Contact</th><th>Joined</th><th>Requests</th><th>Tickets</th><th>Access</th><th>Action</th></tr></thead><tbody>${data.map(c=>`<tr><td><span class="cell-main"><a href="#" data-act="customer-open" data-id="${c.id}" style="color:inherit;text-decoration:none;border-bottom:1px solid var(--line)">${esc(c.name)}</a></span><span class="cell-sub">Customer ID ${c.id}</span></td><td>${esc(c.email)}<span class="cell-sub">${esc(c.phone||'No phone on file')}</span></td><td>${moneyFreeDate(c.created_at)}</td><td>${fmtNum(c.order_count)}</td><td>${fmtNum(c.ticket_count)}</td><td>${pill(T(c.active?'Active':'Suspended'))}</td><td style="white-space:nowrap"><button class="btn btn-sm btn-quiet" data-act="customer-open" data-id="${c.id}">${T('Open profile')}</button> <button class="btn btn-sm ${c.active?'btn-danger':'btn-quiet'}" data-act="customer-status" data-id="${c.id}" data-active="${c.active?1:0}">${T(c.active?'Suspend':'Reactivate')}</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No customers found.</div>`}<div class="notice">Suspending an account blocks future sign-in and invalidates its active sessions. Admin accounts cannot be changed from this screen.</div></div>`}
+function supportHTML(){const data=state.tickets.filter(t=>{const q=state.search.toLowerCase();return(!q||[t.ref,t.email,t.subject,t.message].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||t.status===state.statusFilter)});return`${pageHead('Customer care','Support tickets','Review conversations and reply through the website support channel.',`<button class="btn btn-quiet" data-act="export" data-kind="tickets">⇩ Export CSV</button>`)}${toolbar('Search reference, email or subject…',['All','Open','In progress','Closed'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Support inbox</h2><p>${fmtNum(data.length)} ${T('matching tickets')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer email</th><th>Subject / first message</th><th>Priority</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${data.map(t=>`<tr><td><span class="cell-main">${esc(t.ref)}</span></td><td>${esc(t.email)}</td><td><span class="cell-main">${esc(t.subject)}</span><span class="cell-sub">${esc(t.message)}</span></td><td>${t.priority&&t.priority!=='Normal'?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:`<span class="cell-sub">${esc(T('Normal'))}</span>`}</td><td>${moneyFreeDate(t.created_at)}</td><td>${pill(t.status)}</td><td style="white-space:nowrap">${t.unread_for_team?`<span class="pill amber">${t.unread_for_team} new</span> `:''}<button class="btn btn-sm btn-quiet" data-act="view-ticket" data-id="${t.id}">Open thread</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">✳</div>No tickets found.</div>`}</div>`}
 function refundsHTML(){const data=state.refunds.filter(r=>{const q=state.search.toLowerCase();return(!q||[r.ref,r.order_number,r.reason,r.status].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||r.status===state.statusFilter)});return`${pageHead('Policy review','Refund requests','Review requests against the published policy. This panel does not issue payments or move funds.',`<button class="btn btn-quiet" data-act="export" data-kind="refunds">⇩ Export CSV</button>`)}${toolbar('Search request, order or reason…',['All','Under review','Approved','Rejected'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Refund queue</h2><p>${fmtNum(data.filter(x=>x.status==='Under review').length)} ${T('awaiting a decision')} · ${fmtNum(data.length)} ${T('total shown')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Order</th><th>Reason</th><th>Submitted</th><th>Status</th><th>Decision</th></tr></thead><tbody>${data.map(r=>`<tr><td><span class="cell-main">${esc(r.ref)}</span></td><td>${esc(r.order_number)}</td><td><span class="cell-sub reason-cell">${esc(r.reason)}</span></td><td>${moneyFreeDate(r.created_at)}</td><td>${pill(r.status)}</td><td>${r.status==='Under review'?`<div class="row-actions"><button class="btn btn-sm btn-primary" data-act="refund-decision" data-id="${r.id}" data-decision="Approved">Approve</button><button class="btn btn-sm btn-danger" data-act="refund-decision" data-id="${r.id}" data-decision="Rejected">Reject</button></div>`:`<span class="cell-sub">${esc(r.admin_note||'Decision recorded')}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No refund requests found.</div>`}<div class="notice">Approval records a review decision only. No payment is processed or guaranteed. Requests are subject to applicable law and the published policy.</div></div>`}
 /* ---------------------------------------------------------------------------
    Blog articles
@@ -870,7 +962,7 @@ async function productForm(p=null){
   <div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">${T('Cancel')}</button><button class="btn btn-primary">${edit?T('Save product'):T('Create product')}</button></div>
  </form>`,true)}
 
-function openTicket(id){const t=state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label><select name="status">${['Open','In progress','Closed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${esc(T(s))}</option>`).join('')}</select></div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
+function openTicket(id){const t=state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div><div class="detail-item"><small>Priority</small><strong>${t.priority?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:'—'}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label><select name="status">${['Open','In progress','Closed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${esc(T(s))}</option>`).join('')}</select></div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
 function refundModal(id,decision){const r=state.refunds.find(x=>x.id===Number(id));if(!r)return;showModal(`${modalHead('Refund review',`${decision} request ${esc(r.ref)}`,`Order ${esc(r.order_number)} · submitted ${moneyFreeDate(r.created_at)}`)}<div class="detail-item"><small>Customer's stated reason</small><p>${esc(r.reason)}</p></div><form data-form="refund" data-id="${r.id}" data-decision="${decision}"><div class="field" style="margin-top:12px"><label>Administrative note</label><textarea name="note" maxlength="1000" placeholder="Record the review rationale. This will not trigger a payment."></textarea></div><div class="field" style="margin-top:10px"><label>Transaction reference (optional, record only)</label><input name="transaction_ref" maxlength="120"></div><div class="notice">${decision==='Approved'?'Approval records a decision only.':'Rejection records a decision only.'} The website does not process or confirm payment-provider refunds.</div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn ${decision==='Approved'?'btn-primary':'btn-danger'}">Record ${decision.toLowerCase()}</button></div></form>`)}
 function exportCsv(kind){const data=({orders:state.orders,products:state.products,customers:state.customers,tickets:state.tickets,refunds:state.refunds})[kind]||[];if(!data.length){toast('There are no records to export.');return}const columns=Object.keys(data[0]).filter(k=>!['password_hash','csrf','token_hash'].includes(k));const csv=[columns.map(qcsv).join(','),...data.map(row=>columns.map(k=>qcsv(Array.isArray(row[k])?row[k].join('; '):row[k])).join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`axiasoft-${kind}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('CSV export downloaded.')}
 function qcsv(v){return'"'+String(v??'').replace(/"/g,'""')+'"'}
@@ -952,6 +1044,10 @@ return}
   return}
  if(act==='export-settings'){exportSettings();return}
  if(act==='customer-status'){changeCustomerStatus(b);return}
+ if(act==='customer-open'){openCustomer(b.dataset.id);return}
+ if(act==='customer-back'){backToCustomers();return}
+ if(act==='customer-refund'){customerRefund(b);return}
+ if(act==='customer-ticket'){state.page='tickets';openTicket(b.dataset.id);return}
 }
 async function bulkPublishAll(){
  if(!confirm('Publish every hidden product?'))return;
@@ -1191,7 +1287,7 @@ function brandInput(e){
  if(el.dataset.field==='accent'){const sw=$('.brand-swatch',card);if(sw)sw.style.setProperty('--swatch',row.accent)}
 }
 function inputHandler(e){
- brandInput(e);faqInput(e);if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
+ brandInput(e);faqInput(e);if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-order-status]')&&state.customerId){customerOrderStatus(e.target);return}
 if(e.target.matches('[data-cat-name],[data-cat-name-fa]')){
  const id=e.target.dataset.catName||e.target.dataset.catNameFa;
  const field=e.target.dataset.catName?'name':'nameFa';
