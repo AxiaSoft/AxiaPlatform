@@ -133,19 +133,29 @@ class MessengerSignalTests(unittest.TestCase):
         self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
         self.i18n = (ROOT / 'public' / 'i18n.js').read_text(encoding='utf-8')
 
-    def test_the_header_carries_an_unread_count(self):
-        self.assertIn('function unreadChrome()', self.app_js)
-        self.assertIn('nav-count', self.app_js)
+    def test_the_messages_entry_no_longer_sits_in_the_header(self):
+        # It was asked for in round 32 and removed in round 35: the header was
+        # carrying a link that only existed for signed-in customers, and the
+        # account panel now carries both the entry and the count. This pins the
+        # removal so the header cannot quietly grow it back.
+        self.assertNotIn('messagesButton', self.app_js)
+        self.assertNotIn('unreadChrome', self.app_js)
+        shell = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
+        self.assertNotIn('messagesButton', shell)
+        self.assertNotIn('nav-messages', shell)
 
-    def test_the_header_entry_is_hidden_and_never_removed(self):
-        # refresh() runs before anyone signs in. Removing the node there meant
-        # signing in afterwards had nothing to draw into.
-        self.assertIn('slot.hidden=true', self.app_js.replace(' ', ''))
-        self.assertNotIn('slot.remove()', self.app_js)
+    def test_the_account_panel_still_carries_the_entry_and_the_count(self):
+        # The header button is gone, so this is the only way in and the only
+        # place the unread count is shown. Losing it would strand messages.
+        self.assertIn('stat-link', self.app_js)
+        self.assertIn("href=\"#/messages\"", self.app_js)
+        self.assertIn('msg-badge', self.app_js)
 
     def test_the_count_clears_when_the_conversation_is_read(self):
+        # Reading a thread has to tell the server, or the count comes back on
+        # the next page load. The local copy is cleared alongside it.
         self.assertIn("api('/api/support/read'", self.app_js)
-        self.assertIn('unreadChrome();', self.app_js)
+        self.assertIn('open.unread = 0', self.app_js)
 
     def test_opening_a_conversation_marks_it_read(self):
         self.assertIn('if (open && open.unread)', self.app_js)
@@ -196,12 +206,14 @@ class MessengerStyleTests(unittest.TestCase):
             self.assertIn(selector, self.css)
 
     def test_the_unread_count_has_a_style(self):
-        for selector in ('.msg-badge', '.nav-count'):
-            self.assertIn(selector, self.css)
+        # .nav-count styled the header badge that has been removed; the panel's
+        # .msg-badge is now the only place a count is drawn.
+        self.assertIn('.msg-badge', self.css)
+        self.assertNotIn('.nav-count', self.css)
 
-    def test_the_header_entry_survives_the_smallest_screen(self):
-        # The header has the least room on a phone and the most need for this.
-        self.assertNotIn('@media(max-width:640px){.nav-messages{display:none}}', self.css)
+    def test_no_rule_still_targets_the_removed_header_link(self):
+        # A leftover .nav-messages rule is dead CSS that outlives the feature.
+        self.assertNotIn('.nav-messages', self.css)
 
 
 class MessengerMarkupTests(unittest.TestCase):
@@ -210,12 +222,12 @@ class MessengerMarkupTests(unittest.TestCase):
     def setUp(self):
         self.html = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
 
-    def test_the_shell_has_the_slot_the_script_fills(self):
-        self.assertIn('id="messagesButton"', self.html)
+    def test_the_shell_no_longer_has_the_header_slot(self):
+        self.assertNotIn('id="messagesButton"', self.html)
 
-    def test_it_starts_hidden_because_the_visitor_may_not_be_signed_in(self):
-        anchor = self.html[self.html.index('id="messagesButton"'):]
-        self.assertIn('hidden', anchor[:120])
+    def test_the_header_still_has_its_account_entry(self):
+        # Signing in has to stay reachable from every page.
+        self.assertIn('id="accountButton"', self.html)
 
 
 if __name__ == '__main__':

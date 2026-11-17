@@ -55,3 +55,7 @@ dist/
 # Uploaded product covers are runtime data: the file a visitor sees is written by
 # the deployment, not by the repository. The folder is created on first upload.
 public/uploads/
+
+# A rendered sample of the icon set, made on demand for review - not source.
+icon-set.png
+icon-set.html

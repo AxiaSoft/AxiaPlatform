@@ -549,3 +549,67 @@ html[lang="fa"] .article-row h3{line-height:1.65}
 .pri-low{opacity:.6}
 .pri-high{color:#f4c879}
 .pri-urgent{color:#ff8791}
+
+/* ---------------------------------------------------------------- buttons
+   Same ask as the storefront: no button touching another, and one size per
+   tier. The console had grown five heights (36, 37, 38 and two unset) and gaps
+   of 6, 7 and 8px, so a row of row-actions could look like two rows. These are
+   the console's own numbers - it is denser than the public site - but they are
+   now the only numbers. */
+:root {
+  --btn-h: 38px;
+  --btn-h-sm: 30px;
+  --btn-gap: 10px;
+  --btn-pad-x: 14px;
+  --btn-pad-x-sm: 10px;
+}
+.btn {
+  min-height: var(--btn-h);
+  padding: 0 var(--btn-pad-x);
+  gap: 7px;
+  border-radius: 10px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.btn-sm {
+  min-height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-x-sm);
+  font-size: 10px;
+}
+.btn .icon { width: 15px; height: 15px; flex: none; }
+.icon-btn { width: var(--btn-h); height: var(--btn-h); min-width: var(--btn-h); padding: 0; }
+.icon-btn .icon { width: 17px; height: 17px; }
+
+/* One gap wherever buttons sit side by side. */
+.row-actions,
+.card-actions,
+.modal-actions,
+.form-actions,
+.toolbar,
+.filter-bar,
+.cust-actions,
+.msg-composer { gap: var(--btn-gap); flex-wrap: wrap; }
+.row-actions { grid-template-columns: none; display: flex; }
+.row-actions .btn { min-height: var(--btn-h); justify-content: center; }
+
+/* A button stretched to fill its track is the other way two buttons end up
+   looking different: one has a fixed width from its label, the next has the
+   column's. Rows keep natural widths and wrap instead. */
+.btn { flex: 0 0 auto; }
+.btn-block, .btn[data-block] { width: 100%; flex: 1 1 100%; }
+
+/* ------------------------------------------------------------ icon sizing
+   The sidebar's wayfinding icons and the top bar's controls come from the shared
+   set now, so they need a size and a colour of their own - the characters they
+   replaced carried both implicitly through the font. */
+.nav-icon { width: 16px; height: 16px; }
+.side-link .nav-icon { color: var(--muted); }
+.side-link.active .nav-icon { color: var(--blue); }
+.quick-card .icon { width: 20px; height: 20px; color: var(--blue); }
+.empty-icon .icon { width: 30px; height: 30px; }
+.activity-glyph .icon { width: 14px; height: 14px; }
+.icon-btn .icon { width: 17px; height: 17px; }
+.btn .icon { width: 15px; height: 15px; }
+.cat-handle .icon { width: 14px; height: 14px; }
+[dir="rtl"] .dir-icon { transform: scaleX(-1); }
