@@ -42,7 +42,20 @@ function themeInit(){let t=localStorage.getItem('axia-theme')||(matchMedia('(pre
 /* The administrator can choose what a first-time visitor sees. A visitor's own
    saved choice always wins - this only decides the default. */
 function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=paintThemeIcon()}$('.theme-toggle').onclick=()=>{let t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);paintThemeIcon()};
-async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');b.textContent=me?(me.role==='admin'?'Admin panel':'My account'):'Sign in';b.onclick=()=>me?(me.role==='admin'?location.assign('/admin/'):go('/account')):openAuth()}
+async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');b.textContent=me?(me.role==='admin'?'Admin panel':'My account'):'Sign in';b.onclick=()=>me?(me.role==='admin'?location.assign('/admin/'):go('/account')):openAuth();unreadChrome()}
+/* The header's way into the messenger. It is drawn beside the account button
+   rather than inside the nav: it only exists for someone who is signed in, and
+   it carries a count that the nav has no room for. */
+async function unreadChrome(){
+  const slot=$('#messagesButton');
+  if(!slot)return;
+  if(!me||me.role==='admin'){slot.hidden=true;slot.textContent='';return}
+  let n=0;
+  try{const t=await api('/api/support');if(Array.isArray(t))n=t.reduce((a,x)=>a+(x.unread||0),0)}catch{}
+  slot.setAttribute('href','#/messages');
+  slot.innerHTML=`${esc(AXIA_T('Messages'))}${n>0?` <span class="nav-count">${n}</span>`:''}`;
+  slot.hidden=false;
+}
 function sectionOff(name){const label=({about:'About',services:'Services',contact:'Contact',aurion:'AURION',catalog:'Products'})[name]||'This page';return `<div class="container"><section class="page-head"><div class="eyebrow">SECTION HIDDEN</div><h1>${label} is not<br><span class="gradient">published right now.</span></h1><p>An administrator has hidden this section of the site. The rest of AXIASOFT is still available.</p><a class="button button-primary" href="#/">Return home ↗</a></section></div>`}
 /* The strip of promises directly under the hero buttons. It used to be four
    static spans spread across the width; they now travel as one continuous line,
@@ -200,7 +213,272 @@ function authModal(mode='login',after=null){modalRoot.innerHTML=`<div class="mod
  const close=()=>modalRoot.innerHTML='';$('.close-button',modalRoot).onclick=close;$('.modal-overlay',modalRoot).onclick=e=>{if(e.target.classList.contains('modal-overlay'))close()};$('[data-auth-switch]',modalRoot)?.addEventListener('click',e=>authModal(e.target.dataset.authSwitch,after));$('#auth-form',modalRoot).onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),payload=Object.fromEntries(f);let box=$('#auth-error');box.innerHTML='';try{let result=await api(mode==='login'?'/api/login':'/api/register',{method:'POST',body:JSON.stringify(payload)});me=result.user;let state=await api('/api/me');csrf=state.csrf;close();refresh();toast(mode==='login'?'Signed in successfully.':'Your account is ready.');if(after)after()}catch(err){box.innerHTML=`<div class="form-error">${esc(err.message)}</div>`}}}
 function openAuth(after){authModal('login',after)}
 function orderModal(pid){let p=products.find(x=>x.id===Number(pid));if(!p)return;if(!me){openAuth(()=>orderModal(pid));return}modalRoot.innerHTML=`<div class="modal-overlay"><div class="modal modal-wide" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">PROJECT REQUEST</div><h2>Let's talk about ${esc(p.title)}.</h2><p>Share enough to start a conversation. Scope and pricing are confirmed separately.</p></div><button class="close-button">×</button></div><form id="order-form"><div class="form-grid"><div class="field"><label>Full name *</label><input name="name" value="${esc(me.name)}" required maxlength="120"></div><div class="field"><label>Email *</label><input name="email" type="email" value="${esc(me.email)}" required></div><div class="field"><label>Phone *</label><input name="phone" value="${esc(me.phone||'')}" required minlength="5" maxlength="40"></div><div class="field"><label>Preferred contact</label><select name="contact_method"><option>Email</option><option>Phone</option></select></div><div class="field full"><label>Project description * (minimum 15 characters)</label><textarea name="description" required minlength="15" maxlength="3000" placeholder="What are you hoping to build? Who is it for? What should it help you do?"></textarea></div><div class="field full"><label>Additional requirements (optional)</label><textarea name="requirements" maxlength="2000" placeholder="Key dates, integrations, references or other context"></textarea></div><div class="field full"><span class="form-hint">No payment is taken on this site. Do not include passwords, confidential credentials or sensitive personal data. Reference-file uploads are not enabled in this phase.</span></div></div><div id="order-feedback"></div><button class="button button-primary button-block" style="margin-top:17px">Submit project request ↗</button></form></div></div>`;$('.close-button',modalRoot).onclick=()=>modalRoot.innerHTML='';$('.modal-overlay',modalRoot).onclick=e=>{if(e.target.classList.contains('modal-overlay'))modalRoot.innerHTML=''};$('#order-form').onsubmit=async e=>{e.preventDefault();let payload=Object.fromEntries(new FormData(e.target));payload.product_id=p.id;let box=$('#order-feedback');try{let r=await api('/api/orders',{method:'POST',body:JSON.stringify(payload)});box.innerHTML=`<div class="form-success">Request received. Your reference is <b>${esc(r.number)}</b>. You can follow its progress from your account.</div>`;e.target.querySelector('button[type=submit],button:not([type])').disabled=true;setTimeout(()=>{modalRoot.innerHTML='';go('/account')},2200)}catch(err){box.innerHTML=`<div class="form-error">${esc(err.message)}</div>`}}}
-async function account(){if(!me){app.innerHTML=`<div class="container"><section class="page-head"><div class="eyebrow">CUSTOMER SPACE</div><h1>Your projects,<br><span class="gradient">all in one place.</span></h1><p>Sign in to see your project requests, follow progress and reach our support team.</p><button class="button button-primary" data-open-auth>Sign in ↗</button></section></div>`;return}let orders=[],refunds=[],tickets=[];try{orders=await api('/api/orders');refunds=await api('/api/refunds');tickets=await api('/api/support')}catch{}app.innerHTML=`<div class="container"><section class="dashboard-head"><div><div class="eyebrow">CUSTOMER SPACE</div><h1>Good to see you, ${esc(me.name.split(' ')[0])}.</h1><p>Here is where your AXIASOFT projects take shape.</p></div><button class="button button-quiet button-small" id="logout-btn">Sign out</button></section><div class="stat-grid"><div class="card stat-card"><small>All requests</small><strong>${orders.length}</strong></div><div class="card stat-card"><small>In progress</small><strong>${orders.filter(o=>!['Delivered','Cancelled'].includes(o.status)).length}</strong></div><div class="card stat-card"><small>Delivered</small><strong>${orders.filter(o=>o.status==='Delivered').length}</strong></div><div class="card stat-card"><small>Refund requests</small><strong>${refunds.length}</strong></div></div><div class="dash-grid"><div class="card dash-panel"><h3>Your project requests</h3>${orders.length?orders.map(o=>`<div class="order-card card"><div><h3>${esc(o.product_title)} <span style="color:var(--faint);font-weight:400">· ${esc(o.number)}</span></h3><p>Submitted ${esc(o.created_at)}<br>${esc(o.description.slice(0,135))}${o.description.length>135?'…':''}</p></div><span class="status-pill ${o.status==='Delivered'?'green':o.status==='Submitted'?'amber':''}">${esc(o.status)}</span></div>`).join(''):`<div class="empty-state">No project requests yet. <a class="text-button" href="#/products">Explore the catalog ↗</a></div>`}</div><div class="card dash-panel"><h3>Account</h3><div class="account-info"><div class="eyebrow">PROFILE</div><p style="font-size:12px">${esc(me.name)}</p><p style="font-size:11px;color:var(--muted)">${esc(me.email)}</p><p style="font-size:11px;color:var(--muted)">${esc(me.phone||'No phone number added')}</p><button class="button button-quiet button-small" id="support-request">Contact support</button></div></div></div><div class="card dash-panel" style="margin-top:18px"><h3>Support conversations${tickets.some(t=>t.unread)?` <span class="status-pill amber">${tickets.reduce((a,t)=>a+(t.unread||0),0)} ${esc(AXIA_T('new'))}</span>`:''}</h3>${tickets.length?tickets.map(t=>`<div class="order-card card" data-ticket="${t.id}"><div><h3>${esc(t.subject)} · ${esc(t.ref)}${t.unread?` <span class="status-pill amber">${t.unread} ${esc(AXIA_T('new'))}</span>`:''}</h3><p>${esc(t.message.slice(0,180))}${t.message.length>180?'…':''}</p>${t.messages?.length?`<div class="ticket-thread">${t.messages.map(m=>`<div class="ticket-msg${m.from_team?' team':''}"><small><b>${esc(m.from_team?AXIA_T('AXIASOFT support'):(m.sender||AXIA_T('You')))}</b>${m.created_at?' · '+esc(m.created_at):''}</small><p>${esc(m.message)}</p></div>`).join('')}</div>`:''}${t.status==='Closed'?`<p class="form-hint">${esc(AXIA_T('This conversation is closed. Writing again reopens it.'))}</p>`:''}<form class="ticket-reply-form" data-ticket-form="${t.id}"><div class="field"><textarea name="message" required minlength="2" maxlength="3000" rows="3" placeholder="${esc(AXIA_T('Write a reply to the team…'))}"></textarea></div><div class="ticket-reply-actions"><button class="button button-primary button-small" type="submit">${esc(AXIA_T('Send reply'))}</button><span class="form-hint ticket-reply-note"></span></div></form></div><span class="status-pill${t.status==='Open'?' amber':t.status==='Closed'?' green':''}">${esc(AXIA_T(t.status))}</span></div>`).join(''):`<p class="form-hint">${esc(AXIA_T('No support conversations yet.'))}</p>`}</div><div class="card dash-panel" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Refund requests</h3><button class="button button-quiet button-small" id="refund-start" ${orders.length?'':'disabled'}>Request a review</button></div>${refunds.length?refunds.map(r=>`<div class="order-card"><div><h3>${esc(r.order_number)} · ${esc(r.ref)}</h3><p>${esc(r.reason)}</p></div><span class="status-pill">${esc(r.status)}</span></div>`).join(''):`<p class="form-hint">Refund decisions are reviewed against order details and applicable terms. No payment is made or reversed by this request form.</p>`}</div></div></div>`;
+/* ---------------------------------------------------------- the messenger
+   Support used to be a card buried on the account page: one flat paragraph per
+   request with a reply box under it. It worked, but it did not read as a
+   conversation, and a visitor with a question had to find the account page
+   first and scroll past their orders to ask it.
+
+   This is the same data (/api/support already returns every ticket with its
+   messages, read state and unread counts) drawn the way people expect a
+   messenger to work: conversations on one side, the thread on the other, and
+   the box to write in always at the bottom of the open one.
+
+   No new endpoints. Everything here is a view over what round 31 added.
+   ---------------------------------------------------------------- messenger */
+
+let msgTickets = [], msgOpen = null, msgPoll = null, msgDraft = {}, msgGen = 0;
+
+/* The list is ordered by "most recent thing said", not by creation, because a
+   conversation the team answered a minute ago belongs at the top even if it is
+   a month old. */
+function msgLastAt(t) {
+  const m = (t.messages || [])[(t.messages || []).length - 1];
+  return (m && m.created_at) || t.created_at || '';
+}
+
+function msgSorted(tickets) {
+  return tickets.slice().sort((a, b) => String(msgLastAt(b)).localeCompare(String(msgLastAt(a))));
+}
+
+function msgTime(stamp) {
+  if (!stamp) return '';
+  /* SQLite hands back 'YYYY-MM-DD HH:MM:SS' in UTC. Parsed as UTC so a visitor
+     in another timezone does not read a reply as arriving hours from now. */
+  const iso = String(stamp).replace(' ', 'T');
+  const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z');
+  if (isNaN(d)) return String(stamp);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function msgDay(stamp) {
+  const iso = String(stamp || '').replace(' ', 'T');
+  const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z');
+  if (isNaN(d)) return '';
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return AXIA_T('Today');
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return AXIA_T('Yesterday');
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function msgInitials(name) {
+  const parts = String(name || 'AXIASOFT').trim().split(/\s+/).filter(Boolean);
+  return (parts[0] || 'A').slice(0, 1) + (parts[1] || '').slice(0, 1);
+}
+
+/* One bubble. `mine` decides which side and which colour, and the sender is
+   only drawn when it changes, so a run of replies from the same side does not
+   repeat the name over every bubble. */
+function msgBubble(m, prev, isLast) {
+  const mine = !m.from_team;
+  const who = m.from_team ? AXIA_T('AXIASOFT support') : (m.sender || AXIA_T('You'));
+  const prevWho = prev ? (prev.from_team ? AXIA_T('AXIASOFT support') : (prev.sender || AXIA_T('You'))) : null;
+  const showWho = !prev || prevWho !== who;
+  const day = msgDay(m.created_at);
+  const prevDay = prev ? msgDay(prev.created_at) : null;
+  return `${day && day !== prevDay ? `<div class="msg-day"><span>${esc(day)}</span></div>` : ''}<div class="msg-row${mine ? ' mine' : ''}${showWho ? ' first' : ''}${isLast ? ' last' : ''}"><div class="msg-bubble"><div class="msg-meta">${showWho ? `<b>${esc(who)}</b>` : ''}<span>${esc(msgTime(m.created_at))}</span></div><p>${esc(m.message)}</p></div></div>`;
+}
+
+/* A ticket is created with its opening message in tickets.message and nothing
+   in ticket_messages; replies are the only thing appended to the table. The
+   thread therefore has to put the opening back in front, or the reader sees
+   answers to a question that is not on the page. */
+function msgWithOpening(t, msgs) {
+  const opening = { message: t.message, created_at: t.created_at, from_team: false };
+  if (!msgs || !msgs.length) return [opening];
+  /* A ticket created from the console or the assistant can already carry its
+     opening as the first row, so the copy is only added when it is missing. */
+  const first = msgs[0];
+  if ((first.message || '').trim() === (t.message || '').trim()) return msgs;
+  return [opening, ...msgs];
+}
+
+/* The conversation list. Unread is a number on the row, which is the whole
+   point: a visitor glancing at the page should see "someone answered" without
+   opening anything. */
+function msgList(tickets) {
+  if (!tickets.length) return '';
+  return tickets.map(t => {
+    const msgs = t.messages || [];
+    const last = msgs[msgs.length - 1];
+    const preview = last ? (last.from_team ? AXIA_T('Support') + ': ' : AXIA_T('You') + ': ') + String(last.message).replace(/\s+/g, ' ').slice(0, 62) : String(t.message || '').slice(0, 62);
+    return `<a class="msg-item${t.id === msgOpen ? ' active' : ''}${t.unread ? ' unread' : ''}" href="#/messages/${t.id}" data-msg-open="${t.id}"><span class="msg-avatar">${esc(msgInitials(me && me.name))}</span><span class="msg-item-body"><span class="msg-item-top"><b>${esc(t.subject)}</b><small>${esc(msgTime(msgLastAt(t)))}</small></span><span class="msg-item-bottom"><span class="msg-item-preview">${esc(preview)}${preview.length >= 62 ? '…' : ''}</span>${t.unread ? `<span class="msg-badge">${t.unread}</span>` : ''}</span><span class="msg-item-ref">${esc(t.ref)} · ${esc(AXIA_T(t.status))}</span></span></a>`;
+  }).join('');
+}
+
+/* The open conversation, or the empty state that asks for a new one. */
+function msgThread(t) {
+  if (!t) {
+    return `<div class="msg-empty"><div class="msg-empty-mark" aria-hidden="true">✉</div><h2>${esc(AXIA_T('No conversation open'))}</h2><p>${esc(AXIA_T('Pick a conversation on the left, or start a new one. A person on the team answers — you will see their reply right here.'))}</p><button class="button button-primary" data-msg-new>${esc(AXIA_T('Start a conversation'))}</button></div>`;
+  }
+  const msgs = t.messages || [];
+  const closed = t.status === 'Closed';
+  const all = msgWithOpening(t, msgs);
+  const body = all.map((m, i) => msgBubble(m, all[i - 1], i === all.length - 1)).join('');
+  return `<div class="msg-thread-head"><div><h2>${esc(t.subject)}</h2><p class="msg-thread-sub"><span class="status-pill${t.status === 'Open' ? ' amber' : t.status === 'Closed' ? ' green' : ''}">${esc(AXIA_T(t.status))}</span> <span>${esc(AXIA_T('Reference'))}: <b>${esc(t.ref)}</b></span></p></div><a class="button button-quiet button-small msg-back" href="#/messages">${esc(AXIA_T('All conversations'))}</a></div><div class="msg-scroll" id="msg-scroll" data-ticket="${t.id}">${body}</div>${closed ? `<p class="msg-closed-hint">${esc(AXIA_T('This conversation is closed. Writing again reopens it.'))}</p>` : ''}<form class="msg-composer" id="msg-composer" data-ticket="${t.id}"><textarea name="message" rows="1" maxlength="3000" placeholder="${esc(AXIA_T('Write a message…'))}" aria-label="${esc(AXIA_T('Write a message…'))}"></textarea><button class="button button-primary msg-send" type="submit" aria-label="${esc(AXIA_T('Send'))}">${esc(AXIA_T('Send'))}</button><span class="msg-composer-note" aria-live="polite"></span></form>`;
+}
+
+/* The "new conversation" form, drawn in the thread pane so the first message is
+   written in the same place as every later one. */
+function msgCompose() {
+  return `<div class="msg-thread-head"><div><h2>${esc(AXIA_T('New conversation'))}</h2><p class="msg-thread-sub">${esc(AXIA_T('Tell us what you need and a person on the team will answer here.'))}</p></div><a class="button button-quiet button-small msg-back" href="#/messages">${esc(AXIA_T('All conversations'))}</a></div><div class="msg-scroll msg-scroll-form"><form class="msg-new-form" id="msg-new-form"><div class="field"><label for="msg-subject">${esc(AXIA_T('Subject'))}</label><input id="msg-subject" name="subject" required minlength="3" maxlength="140" placeholder="${esc(AXIA_T('A short title for your question'))}"></div><div class="field"><label for="msg-body">${esc(AXIA_T('Message'))}</label><textarea id="msg-body" name="message" required minlength="10" maxlength="3000" rows="6" placeholder="${esc(AXIA_T('Describe the problem in a sentence or two. Plain words are fine.'))}"></textarea></div><div id="msg-new-feedback"></div><button class="button button-primary" type="submit">${esc(AXIA_T('Send message'))}</button></form></div>`;
+}
+
+async function messenger(openId) {
+  if (!me) {
+    app.innerHTML = `<div class="container"><section class="page-head"><div class="eyebrow">MESSAGES</div><h1>Talk to us,<br><span class="gradient">in one place.</span></h1><p>Sign in to read the team's replies and write back in the same conversation.</p><button class="button button-primary" data-open-auth>Sign in ↗</button></section></div>`;
+    const b = $('[data-open-auth]'); if (b) b.onclick = () => openAuth(() => messenger(openId));
+    return;
+  }
+  /* An admin reaching /messages by hand is sent to the console, where the same
+     threads are answered from a list built for volume. */
+  if (me.role === 'admin') { location.assign('/admin/'); return; }
+
+  if (msgPoll) { clearInterval(msgPoll); msgPoll = null; }
+
+  const gen = ++msgGen;
+  let tickets = [];
+  let loadFailed = false;
+  try { tickets = await api('/api/support'); } catch (e) { tickets = []; loadFailed = true; }
+  /* Someone has navigated away, or to another conversation, while this request
+     was in flight. That newer render owns the page now. */
+  if (gen !== msgGen) return;
+  msgTickets = Array.isArray(tickets) ? msgSorted(tickets) : [];
+  msgOpen = openId ? Number(openId) : (msgOpen && msgTickets.some(t => t.id === msgOpen) ? msgOpen : (msgTickets[0] ? msgTickets[0].id : null));
+
+  const open = msgTickets.find(t => t.id === msgOpen) || null;
+  const composing = openId === 'new';
+
+  app.innerHTML = `<div class="container msg-page"><section class="msg-head"><div><div class="eyebrow">MESSAGES</div><h1>Support<br><span class="gradient">conversations.</span></h1><p>${esc(AXIA_T('Everything you and the AXIASOFT team have said to each other, in one thread per question.'))}</p></div><button class="button button-primary" data-msg-new>${esc(AXIA_T('New conversation'))}</button></section><div class="msg-app${(composing || open) ? ' thread-open' : ''}"><aside class="msg-side"><div class="msg-side-head"><h3>${esc(AXIA_T('Conversations'))}${msgTickets.some(t => t.unread) ? ` <span class="msg-badge">${msgTickets.reduce((a, t) => a + (t.unread || 0), 0)}</span>` : ''}</h3></div><div class="msg-list">${msgList(msgTickets) || `<p class="msg-list-empty">${esc(AXIA_T(loadFailed ? 'Could not load your conversations. Check the connection and try again.' : 'Nothing here yet. Start a conversation and it will appear here.'))}</p>`}</div></aside><section class="msg-pane">${composing ? msgCompose() : msgThread(open)}</section></div></div>`;
+
+  /* --- list ---------------------------------------------------------- */
+  $$('[data-msg-open]').forEach(a => {
+    a.onclick = (e) => { e.preventDefault(); go('/messages/' + a.dataset.msgOpen); };
+  });
+  $$('[data-msg-new]').forEach(b => {
+    b.onclick = () => { msgOpen = null; go('/messages/new'); };
+  });
+
+  /* --- new conversation ---------------------------------------------- */
+  const newForm = $('#msg-new-form');
+  if (newForm) newForm.onsubmit = async e => {
+    e.preventDefault();
+    const btn = newForm.querySelector('button[type=submit]');
+    const feedback = $('#msg-new-feedback');
+    btn.disabled = true;
+    try {
+      const made = await api('/api/support', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(newForm))) });
+      /* Land on the thread that was just created, not on a toast that goes
+         away: the visitor should be looking at the conversation they started. */
+      const fresh = await api('/api/support');
+      msgTickets = msgSorted(Array.isArray(fresh) ? fresh : []);
+      const t = msgTickets.find(x => x.ref === made.ref) || msgTickets[0];
+      if (t) { msgOpen = t.id; go('/messages/' + t.id); } else { go('/messages'); }
+    } catch (err) {
+      feedback.innerHTML = `<div class="form-error">${esc(err.message)}</div>`;
+      btn.disabled = false;
+    }
+  };
+
+  /* --- the open thread ------------------------------------------------ */
+  const scroll = $('#msg-scroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+
+  const form = $('#msg-composer');
+  if (form) {
+    const box = form.elements.message;
+    box.value = msgDraft[form.dataset.ticket] || '';
+    const grow = () => { box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight, 160) + 'px'; };
+    grow();
+    box.addEventListener('input', () => { msgDraft[form.dataset.ticket] = box.value; grow(); });
+    /* Enter sends, Shift+Enter breaks the line - the habit a messenger user
+       already has. On a phone the keyboard's return key is expected to make a
+       newline, so the shortcut only applies to a hardware keyboard. */
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && window.matchMedia('(pointer: fine)').matches) {
+        e.preventDefault(); form.requestSubmit();
+      }
+    });
+    form.onsubmit = async e => {
+      e.preventDefault();
+      const note = form.querySelector('.msg-composer-note');
+      const btn = form.querySelector('.msg-send');
+      const message = (box.value || '').trim();
+      if (message.length < 2) { note.textContent = AXIA_T('Write a message first.'); return; }
+      btn.disabled = true; note.textContent = AXIA_T('Sending…');
+      try {
+        await api('/api/support/' + form.dataset.ticket + '/messages', { method: 'POST', body: JSON.stringify({ message }) });
+        delete msgDraft[form.dataset.ticket];
+        await messenger(form.dataset.ticket);
+      } catch (err) {
+        note.textContent = err.message; btn.disabled = false;
+      }
+    };
+  }
+
+  /* Opening a conversation is reading it. Sent after the paint so a slow
+     request never delays the messages appearing. */
+  if (open && open.unread) {
+    api('/api/support/read', { method: 'POST', body: JSON.stringify({ id: open.id }) })
+      .then(() => { const t = msgTickets.find(x => x.id === open.id); if (t) t.unread = 0; unreadChrome(); })
+      .catch(() => {});
+  }
+
+  /* --- keeping it live ------------------------------------------------ */
+  /* A reply that only appears after a refresh is a reply the visitor thinks
+     never came. Polling stops when the tab is hidden and when the route
+     changes, so a parked tab costs nothing. */
+  const watch = () => {
+    if (document.hidden) return;
+    if (!location.hash.startsWith('#/messages')) { clearInterval(msgPoll); msgPoll = null; return; }
+    msgRefreshQuietly();
+  };
+  msgPoll = setInterval(watch, 15000);
+}
+
+/* Re-reads the data and redraws only what changed, so a poll never interrupts
+   typing: the composer keeps its text, and the page does not scroll. */
+async function msgRefreshQuietly() {
+  let fresh = [];
+  try { fresh = await api('/api/support'); } catch { return; }
+  if (!Array.isArray(fresh)) return;
+  const next = msgSorted(fresh);
+  const before = JSON.stringify(msgTickets.map(t => [t.id, t.unread, t.status, (t.messages || []).length]));
+  const after = JSON.stringify(next.map(t => [t.id, t.unread, t.status, (t.messages || []).length]));
+  if (before === after) return;
+  /* Something did change. If the visitor is typing, do not throw their draft
+     away: the composer text survives a redraw because it is read back from
+     msgDraft. */
+  msgTickets = next;
+  const open = msgTickets.find(t => t.id === msgOpen);
+  const list = document.querySelector('.msg-list');
+  if (list) list.innerHTML = msgList(msgTickets) || `<p class="msg-list-empty">${esc(AXIA_T('Nothing here yet. Start a conversation and it will appear here.'))}</p>`;
+  const scroll = document.querySelector('.msg-scroll');
+  const composer = document.querySelector('#msg-composer');
+  if (open && scroll && composer) {
+    const tid = String(open.id);
+    if (composer.dataset.ticket === tid) {
+      const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 60;
+      const all = msgWithOpening(open, open.messages || []);
+      scroll.innerHTML = all.map((m, i) => msgBubble(m, all[i - 1], i === all.length - 1)).join('');
+      if (atBottom) scroll.scrollTop = scroll.scrollHeight;
+      if (open.unread) { open.unread = 0; api('/api/support/read', { method: 'POST', body: JSON.stringify({ id: open.id }) }).catch(() => {}); unreadChrome(); }
+    }
+  }
+  const head = document.querySelector('.msg-side-head h3');
+  if (head) head.innerHTML = `${esc(AXIA_T('Conversations'))}${msgTickets.some(t => t.unread) ? ` <span class="msg-badge">${msgTickets.reduce((a, t) => a + (t.unread || 0), 0)}</span>` : ''}`;
+  /* A redrawn list has fresh nodes, so the click handlers go back on. */
+  $$('[data-msg-open]').forEach(a => {
+    a.onclick = (e) => { e.preventDefault(); go('/messages/' + a.dataset.msgOpen); };
+  });
+}
+
+async function account(){if(!me){app.innerHTML=`<div class="container"><section class="page-head"><div class="eyebrow">CUSTOMER SPACE</div><h1>Your projects,<br><span class="gradient">all in one place.</span></h1><p>Sign in to see your project requests, follow progress and reach our support team.</p><button class="button button-primary" data-open-auth>Sign in ↗</button></section></div>`;return}let orders=[],refunds=[],tickets=[];try{orders=await api('/api/orders');refunds=await api('/api/refunds');tickets=await api('/api/support')}catch{}app.innerHTML=`<div class="container"><section class="dashboard-head"><div><div class="eyebrow">CUSTOMER SPACE</div><h1>Good to see you, ${esc(me.name.split(' ')[0])}.</h1><p>Here is where your AXIASOFT projects take shape.</p></div><button class="button button-quiet button-small" id="logout-btn">Sign out</button></section><div class="stat-grid"><div class="card stat-card"><small>All requests</small><strong>${orders.length}</strong></div><div class="card stat-card"><small>In progress</small><strong>${orders.filter(o=>!['Delivered','Cancelled'].includes(o.status)).length}</strong></div><div class="card stat-card"><small>Delivered</small><strong>${orders.filter(o=>o.status==='Delivered').length}</strong></div><div class="card stat-card"><small>Refund requests</small><strong>${refunds.length}</strong></div></div><div class="dash-grid"><div class="card dash-panel"><h3>Your project requests</h3>${orders.length?orders.map(o=>`<div class="order-card card"><div><h3>${esc(o.product_title)} <span style="color:var(--faint);font-weight:400">· ${esc(o.number)}</span></h3><p>Submitted ${esc(o.created_at)}<br>${esc(o.description.slice(0,135))}${o.description.length>135?'…':''}</p></div><span class="status-pill ${o.status==='Delivered'?'green':o.status==='Submitted'?'amber':''}">${esc(o.status)}</span></div>`).join(''):`<div class="empty-state">No project requests yet. <a class="text-button" href="#/products">Explore the catalog ↗</a></div>`}</div><div class="card dash-panel"><h3>Account</h3><div class="account-info"><div class="eyebrow">PROFILE</div><p style="font-size:12px">${esc(me.name)}</p><p style="font-size:11px;color:var(--muted)">${esc(me.email)}</p><p style="font-size:11px;color:var(--muted)">${esc(me.phone||'No phone number added')}</p><button class="button button-quiet button-small" id="support-request">Contact support</button> <a class="button button-quiet button-small" href="#/messages">Messages ↗</a></div></div></div><div class="card dash-panel" style="margin-top:18px"><h3>Support conversations${tickets.some(t=>t.unread)?` <span class="status-pill amber">${tickets.reduce((a,t)=>a+(t.unread||0),0)} ${esc(AXIA_T('new'))}</span>`:''}</h3>${tickets.length?tickets.map(t=>`<div class="order-card card" data-ticket="${t.id}"><div><h3>${esc(t.subject)} · ${esc(t.ref)}${t.unread?` <span class="status-pill amber">${t.unread} ${esc(AXIA_T('new'))}</span>`:''}</h3><p>${esc(t.message.slice(0,180))}${t.message.length>180?'…':''}</p>${t.messages?.length?`<div class="ticket-thread">${t.messages.map(m=>`<div class="ticket-msg${m.from_team?' team':''}"><small><b>${esc(m.from_team?AXIA_T('AXIASOFT support'):(m.sender||AXIA_T('You')))}</b>${m.created_at?' · '+esc(m.created_at):''}</small><p>${esc(m.message)}</p></div>`).join('')}</div>`:''}${t.status==='Closed'?`<p class="form-hint">${esc(AXIA_T('This conversation is closed. Writing again reopens it.'))}</p>`:''}<form class="ticket-reply-form" data-ticket-form="${t.id}"><div class="field"><textarea name="message" required minlength="2" maxlength="3000" rows="3" placeholder="${esc(AXIA_T('Write a reply to the team…'))}"></textarea></div><div class="ticket-reply-actions"><button class="button button-primary button-small" type="submit">${esc(AXIA_T('Send reply'))}</button><span class="form-hint ticket-reply-note"></span></div></form></div><span class="status-pill${t.status==='Open'?' amber':t.status==='Closed'?' green':''}">${esc(AXIA_T(t.status))}</span></div>`).join(''):`<p class="form-hint">${esc(AXIA_T('No support conversations yet.'))}</p>`}</div><div class="card dash-panel" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Refund requests</h3><button class="button button-quiet button-small" id="refund-start" ${orders.length?'':'disabled'}>Request a review</button></div>${refunds.length?refunds.map(r=>`<div class="order-card"><div><h3>${esc(r.order_number)} · ${esc(r.ref)}</h3><p>${esc(r.reason)}</p></div><span class="status-pill">${esc(r.status)}</span></div>`).join(''):`<p class="form-hint">Refund decisions are reviewed against order details and applicable terms. No payment is made or reversed by this request form.</p>`}</div></div></div>`;
  $('#logout-btn').onclick=async()=>{try{await api('/api/logout',{method:'POST',body:'{}'})}catch{}me=null;csrf=null;refresh();go('/');toast('You have signed out.')};$('#support-request').onclick=()=>supportModal();
 /* Replying inside an existing conversation, and marking it read.
    Neither existed: a visitor could create one request and then had no way to
@@ -226,7 +504,7 @@ $$('[data-ticket]').forEach(card=>{
     api('/api/support/read',{method:'POST',body:JSON.stringify({id:+card.dataset.ticket})}).catch(()=>{});
   }
 });$('#refund-start').onclick=()=>refundModal(orders)}
-function supportModal(){if(!me){openAuth(()=>supportModal());return}modalRoot.innerHTML=`<div class="modal-overlay"><div class="modal"><div class="modal-head"><div><div class="eyebrow">HUMAN SUPPORT</div><h2>How can we help?</h2><p>Send a message to the AXIASOFT team.</p></div><button class="close-button">×</button></div><form id="support-form"><div class="field"><label>Subject</label><input name="subject" required minlength="3" maxlength="140"></div><div class="field" style="margin-top:13px"><label>Message</label><textarea name="message" required minlength="10" maxlength="3000"></textarea></div><div id="support-feedback"></div><button class="button button-primary button-block" style="margin-top:16px">Create support request</button></form></div></div>`;$('.close-button',modalRoot).onclick=()=>modalRoot.innerHTML='';$('#support-form').onsubmit=async e=>{e.preventDefault();try{let r=await api('/api/support',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});$('#support-feedback').innerHTML=`<div class="form-success"><b>${esc(AXIA_T('Message sent.'))}</b> ${esc(AXIA_T('Reference'))}: <b>${esc(r.ref)}</b><br>${esc(AXIA_T('Your message is with the team. Replies appear in your account, and this is where you answer them.'))}<br><a class="text-button" href="#/account" data-close-support>${esc(AXIA_T('Open my conversations ↗'))}</a></div>`;e.target.querySelector('button').disabled=true}catch(err){$('#support-feedback').innerHTML=`<div class="form-error">${esc(err.message)}</div>`}}}
+function supportModal(){if(!me){openAuth(()=>supportModal());return}modalRoot.innerHTML=`<div class="modal-overlay"><div class="modal"><div class="modal-head"><div><div class="eyebrow">HUMAN SUPPORT</div><h2>How can we help?</h2><p>Send a message to the AXIASOFT team.</p></div><button class="close-button">×</button></div><form id="support-form"><div class="field"><label>Subject</label><input name="subject" required minlength="3" maxlength="140"></div><div class="field" style="margin-top:13px"><label>Message</label><textarea name="message" required minlength="10" maxlength="3000"></textarea></div><div id="support-feedback"></div><button class="button button-primary button-block" style="margin-top:16px">Create support request</button></form></div></div>`;$('.close-button',modalRoot).onclick=()=>modalRoot.innerHTML='';$('#support-form').onsubmit=async e=>{e.preventDefault();try{let r=await api('/api/support',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});$('#support-feedback').innerHTML=`<div class="form-success"><b>${esc(AXIA_T('Message sent.'))}</b> ${esc(AXIA_T('Reference'))}: <b>${esc(r.ref)}</b><br>${esc(AXIA_T('Your message is with the team. Replies appear in your account, and this is where you answer them.'))}<br><a class="text-button" href="#/messages" data-close-support>${esc(AXIA_T('Open my conversations ↗'))}</a></div>`;e.target.querySelector('button').disabled=true}catch(err){$('#support-feedback').innerHTML=`<div class="form-error">${esc(err.message)}</div>`}}}
 function refundModal(orders){let eligible=orders.filter(o=>{let t=Date.parse(o.created_at.replace(' ','T')+'Z');return Date.now()-t<14*864e5});if(!eligible.length){toast('No orders appear within the 14-day request period. Contact support if you need help.');return}modalRoot.innerHTML=`<div class="modal-overlay"><div class="modal"><div class="modal-head"><div><div class="eyebrow">REFUND REVIEW</div><h2>Request a review</h2><p>Within 14 calendar days, subject to published terms and applicable law.</p></div><button class="close-button">×</button></div><form id="refund-form"><div class="field"><label>Order</label><select name="order_id">${eligible.map(o=>`<option value="${o.id}">${esc(o.number)} · ${esc(o.product_title)}</option>`).join('')}</select></div><div class="field" style="margin-top:13px"><label>Reason</label><textarea name="reason" required minlength="5" maxlength="2000"></textarea></div><p class="form-hint">Submitting a request does not guarantee approval or mean a payment has been processed. Custom services, delivered products and license products may be treated differently.</p><div id="refund-feedback"></div><button class="button button-primary button-block" style="margin-top:15px">Submit for review</button></form></div></div>`;$('.close-button',modalRoot).onclick=()=>modalRoot.innerHTML='';$('#refund-form').onsubmit=async e=>{e.preventDefault();try{let r=await api('/api/refunds',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});$('#refund-feedback').innerHTML=`<div class="form-success">Request <b>${esc(r.ref)}</b> submitted for review.</div>`;e.target.querySelector('button').disabled=true;setTimeout(()=>{modalRoot.innerHTML='';account()},1600)}catch(err){$('#refund-feedback').innerHTML=`<div class="form-error">${esc(err.message)}</div>`}}}
 async function admin(){if(!me){app.innerHTML=`<div class="container"><section class="page-head"><div class="eyebrow">RESTRICTED AREA</div><h1>Administrator<br><span class="gradient">sign in required.</span></h1><p>Admin capabilities are enforced by server-side role checks; hiding this route does not grant access.</p><button class="button button-primary" data-open-auth>Sign in ↗</button></section></div>`;return}if(me.role!=='admin'){app.innerHTML=`<div class="container"><section class="page-head"><div class="eyebrow">ACCESS DENIED</div><h1>Administrator access<br><span class="gradient">required.</span></h1><p>Your account does not have administrative privileges.</p><a class="button button-quiet" href="#/account">Return to account</a></section></div>`;return}let d;try{d=await api('/api/admin/overview')}catch(e){app.innerHTML=`<div class="container page-head"><h1>Admin unavailable</h1><p>${esc(e.message)}</p></div>`;return}let c=d.counts;app.innerHTML=`<div class="container"><section class="dashboard-head"><div><div class="eyebrow">CONTROL ROOM / ADMIN</div><h1>Operations overview.</h1><p>Welcome back, ${esc(me.name)}. Sensitive changes are recorded in the audit log.</p></div><button class="button button-quiet button-small" id="logout-btn">Sign out</button></section><div class="stat-grid">${[['Customers',c.customers],['Orders',c.orders],['Awaiting review',c.pending],['In development',c.active],['Delivered',c.completed],['Open support',c.tickets]].map(x=>`<div class="card stat-card"><small>${x[0]}</small><strong>${x[1]}</strong></div>`).join('')}</div><div class="admin-tabs">${['Orders','Products','Support','Refunds'].map(x=>`<button class="admin-tab ${adminTab===x?'active':''}" data-admin-tab="${x}">${x}</button>`).join('')}</div><div id="admin-content"></div></div>`;$('#logout-btn').onclick=async()=>{await api('/api/logout',{method:'POST',body:'{}'}).catch(()=>{});me=null;csrf=null;refresh();go('/')};$$('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;admin()});renderAdminTab(d)}
 async function renderAdminTab(d){let box=$('#admin-content');if(!box)return;if(adminTab==='Orders'){box.innerHTML=`<div class="card dash-panel"><h3>All project requests</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer</th><th>Product</th><th>Received</th><th>Status</th><th>Update</th></tr></thead><tbody>${d.orders.map(o=>`<tr><td>${esc(o.number)}</td><td>${esc(o.name)}<br>${esc(o.email)}</td><td>${esc(o.product_title)}</td><td>${esc(o.created_at)}</td><td><span class="status-pill">${esc(o.status)}</span></td><td><select data-order-status="${o.id}" class="admin-status">${['Submitted','Under Review','Requirements Analysis','Quotation Sent','Awaiting Confirmation','In Development','Testing','Ready for Delivery','Delivered','Cancelled'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></td></tr>`).join('')||`<tr><td colspan="6">No order requests yet.</td></tr>`}</tbody></table></div></div>`;$$('[data-order-status]').forEach(sel=>sel.onchange=async()=>{try{await api('/api/admin/orders/status',{method:'PUT',body:JSON.stringify({id:+sel.dataset.orderStatus,status:sel.value})});toast('Order status updated.');admin()}catch(e){toast(e.message)}})}
@@ -329,7 +607,7 @@ function render(){let raw=decodeURIComponent(location.hash.slice(1)||'/');let [p
    asking for the studio, not for the last product brand they browsed, so the
    brand is dropped here too. Without this the header kept showing e.g. Homa
    after a trip home, and the brand could only be cleared from the catalog. */
-if(path==='/'){productFilter='All';if(localStorage.getItem(BRAND_STORAGE)){localStorage.removeItem(BRAND_STORAGE);activeBrand=null}applyBrand();app.innerHTML=home();return}if(path==='/about'){app.innerHTML=visible('show_about')?about():sectionOff('about');return}if(path==='/services'){app.innerHTML=visible('show_services')?services():sectionOff('services');return}if(path==='/contact'){app.innerHTML=visible('show_contact')?contact():sectionOff('contact');if(visible('show_contact'))bindContactForm();return}if(path==='/aurion'){app.innerHTML=visible('show_aurion')?aurion():sectionOff('aurion');return}if(path==='/aurion/plans'){app.innerHTML=visible('show_aurion')?aurionPlans():sectionOff('aurion');return}if(path==='/account'){account();return}if(path==='/admin'){location.assign('/admin/');return}if(path==='/privacy'||path==='/terms'||path==='/refunds-policy'){app.innerHTML=policy(path.slice(1));return}if(path.startsWith('/products/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){api('/api/products/'+encodeURIComponent(slug)).then(x=>{products.push(x);app.innerHTML=detail(x)}).catch(()=>{app.innerHTML='<div class="container page-head"><h1>Product not found</h1><a href="#/products">Return to products</a></div>'});return}app.innerHTML=detail(p);return}/* The preview is a layer over the page, not a route of its own: it opens over
+if(path==='/'){productFilter='All';if(localStorage.getItem(BRAND_STORAGE)){localStorage.removeItem(BRAND_STORAGE);activeBrand=null}applyBrand();app.innerHTML=home();return}if(path==='/about'){app.innerHTML=visible('show_about')?about():sectionOff('about');return}if(path==='/services'){app.innerHTML=visible('show_services')?services():sectionOff('services');return}if(path==='/contact'){app.innerHTML=visible('show_contact')?contact():sectionOff('contact');if(visible('show_contact'))bindContactForm();return}if(path==='/aurion'){app.innerHTML=visible('show_aurion')?aurion():sectionOff('aurion');return}if(path==='/aurion/plans'){app.innerHTML=visible('show_aurion')?aurionPlans():sectionOff('aurion');return}if(path==='/account'){account();return}if(path==='/messages'||path.startsWith('/messages/')){messenger(path.split('/')[2]||null);return}if(path==='/admin'){location.assign('/admin/');return}if(path==='/privacy'||path==='/terms'||path==='/refunds-policy'){app.innerHTML=policy(path.slice(1));return}if(path.startsWith('/products/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){api('/api/products/'+encodeURIComponent(slug)).then(x=>{products.push(x);app.innerHTML=detail(x)}).catch(()=>{app.innerHTML='<div class="container page-head"><h1>Product not found</h1><a href="#/products">Return to products</a></div>'});return}app.innerHTML=detail(p);return}/* The preview is a layer over the page, not a route of its own: it opens over
    whatever the visitor was looking at and closing it returns them there. The
    hash is kept in step so a shared link lands on the same preview, and the
    route below re-creates the layer when the page loads directly at that hash. */
