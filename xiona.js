@@ -44,6 +44,17 @@
   /* Function words. These carry no subject, so they are dropped before scoring -
      otherwise 'چرا سرعت مهم است' is a question about the word 'است'.
      They are the grammar of the language, not knowledge about the site. */
+  /* The fa list below also carries the colloquial question words - چنده، چند،
+     چطوره، کدوم، کدومه، کدام، کجاست، کجایید، کجای، چطوری.
+
+     The site is read by people who write "قیمت چنده" and "خدماتتون چطوره", not
+     the bookish forms. Only the bookish ones were listed, so a spoken question
+     kept a word the site never publishes, and a one-word question became a
+     two-word query that matched nothing. They are function words, not subject.
+
+     This note sits outside the list on purpose: tests/test_agent_health.py reads
+     the fa block and compares it with xiona_engine.STOPWORDS['fa'], and a quoted
+     example inside the block would be read as an entry. */
   var STOPWORDS = {
     fa: ['و', 'در', 'به', 'از', 'که', 'این', 'را', 'با', 'است', 'برای', 'آن',
       'یک', 'خود', 'تا', 'کرد', 'بر', 'هم', 'نیز', 'یا', 'شد', 'شده', 'های',
@@ -54,6 +65,8 @@
       'هستند', 'هستم', 'نیست', 'بوده', 'دارند', 'لطفا', 'لطفاً', 'بگو',
       'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم', 'دهید', 'دهد',
       'کن', 'شد', 'کرده', 'دار', 'است؟', 'انجام', 'طور', 'مورد', 'پس',
+      'چنده', 'چند', 'چطوره', 'کدوم', 'کدومه', 'کدام', 'کجاست', 'کجایید',
+      'کجای', 'چطوری',
       // copula and question fragments, as they arrive after stemming
       'هست', 'نیست', 'بودن', 'باش', 'باشه', 'شده', 'کردن', 'دادن', 'گفتن',
       'لازم', 'لطف', 'عزیز', 'بله', 'نه'],
@@ -71,9 +84,16 @@
      ending ('سریع‌تر') but also the last two letters of ordinary nouns, and
      stripping it turns 'کامپیوتر' into 'کامپیو'. A stemmer that mangles the
      word it was given is worse than one that keeps a plural. */
+  /* Suffixes, longest first, so 'خدماتتون' loses 'تون' and not 'ن'.
+     'تون'/'مون'/'شون' are the colloquial spoken forms of 'تان'/'مان'/'شان'
+     ('خدماتتون' = 'خدمات شما'). They were missing, so a question written the way
+     people actually speak kept a word the site never publishes, and the answer
+     was a refusal: 'خدماتتون چیه؟' -> "this site publishes nothing about
+     'خدماتتون'", when 'خدمات' is mapped to Services in the site's own
+     dictionary. Listed AFTER the longer forms they belong to. */
   var FA_SUFFIXES = ['هایشان', 'هایمان', 'هایتان', 'هایش', 'هایم', 'هایت',
-    'های', 'هایی', 'ها', 'ترین', 'شان', 'مان', 'تان', 'یی', 'یم', 'ید',
-    'ند', 'هاست', 'ای', 'ی'];
+    'های', 'هایی', 'ها', 'ترین', 'شون', 'تون', 'مون', 'شان', 'مان', 'تان',
+    'یی', 'یم', 'ید', 'ند', 'هاست', 'ای', 'ی'];
 
   function isPersian(text) {
     return /[\u0600-\u06FF]/.test(String(text || ''));
@@ -726,6 +746,15 @@
       if (labelHits && allTerms.length) {
         score *= 1 + 1.8 * (labelHits / allTerms.length);
       }
+      /* The chunk that opens a page says what the page is about; the ones after
+         it continue. Asked "what is AURION?", the engine answered from a closing
+         legal paragraph - "No live trading, broker connection..." - which shares
+         the page's keywords, is shorter, and so scores higher per word. It is a
+         true sentence and a bad answer to "what is this". A page's opening chunk
+         is the one carrying the page's own keywords (learn() gives them to the
+         first piece only), so this asks something the index already knows.
+         The Python twin carries the same boost at the same place. */
+      if (doc.keywords) score *= 1.25;
 
       ranked.push({
         doc: doc, score: score, matched: matched,
@@ -1284,6 +1313,48 @@
       // can still be served the (English) product copy the site mostly uses.
       hits = this.search(query, { language: 'any', limit: this.maxResults });
     }
+    /* A Persian reader must reach the catalog too.
+
+       Only page copy is indexed as Persian; every product is an English chunk,
+       because that is how it is written and the dictionary translates it at
+       render time. Searching 'fa' alone therefore made the whole catalog
+       invisible to the readers who need the filter row most: 'محصولات چیه؟'
+       matched the contact page's "price" and answered from there, with the
+       catalog sitting one search away. When the visitor's own language has no
+       real answer, look across the whole index; the passages that come back in
+       the other language are translated for display a few lines below, so the
+       reply is still Persian. A genuine Persian answer still wins, because this
+       only runs when the Persian search found nothing to stand on. */
+    if (language === 'fa' && hits.length) {
+      var wider = this.search(query, { language: 'any', limit: this.maxResults });
+      /* Take the wider result only when the other-language chunk is about the
+         thing that was asked.
+
+         A raw score ratio was not enough. 'محصولات چیه؟' scores contact 0.79
+         against the catalog's 0.87 - the contact page mentions price and the
+         catalog's summary is short - so any fixed margin missed it. 'قیمت
+         چنده؟' scores terms HIGHER than contact (1.14 against 0.97) and would
+         have answered a price question with a refund-and-conditions paragraph.
+
+         The reliable signal is the page's own label. The catalog chunk is
+         labelled 'product'; the services chunk is labelled 'services'; the
+         terms chunk is labelled 'terms' and has nothing to do with price. So:
+         the wider result must carry one of the visitor's subject words in its
+         title, topic or keywords. That is the same measure the ranker already
+         trusts for 'which page is this about'. */
+      if (wider.length && wider[0].score >= hits[0].score) {
+        var label = String(wider[0].doc.title + ' ' + wider[0].doc.topic + ' ' +
+                           (wider[0].doc.keywords || '')).toLowerCase();
+        var labelled = false;
+        for (var l = 0; l < terms.length; l++) {
+          if (label.indexOf(terms[l]) !== -1) { labelled = true; break; }
+          var partner = (this.lexicon.fa && this.lexicon.fa[terms[l]]) ||
+                        (this.lexicon.en && this.lexicon.en[terms[l]]);
+          if (partner && label.indexOf(partner) !== -1) { labelled = true; break; }
+        }
+        if (labelled) hits = wider;
+      }
+    }
     if (this._judge(hits[0])) {
       return { text: labels.unsure + this._otherLanguageHint(query, language), source: 'no-match',
                language: language, citations: [] };
@@ -1313,6 +1384,39 @@
         function (w) { return engine.labelled(w); });
       var body = focus(hit.doc.text, matchedWords(hit.doc, terms, this, used), budget);
       if (!body) continue;
+      /* A chunk in the other language, shown to a visitor reading this one.
+
+         The catalog is written in English and the Persian build translates it
+         through the site's own dictionary, so a Persian reader sees "آریا —
+         نرم‌افزاری با بال‌های پرواز" on the card while the index holds the
+         English sentence. Quoting the English here would put the wrong language
+         in the answer - and, because the catalog is indexed as English, it is
+         also why a Persian 'محصولات چیه؟' never reached the catalog at all: the
+         Persian corpus holds only page copy, so the catalog was invisible.
+
+         Translate the passage with the same dictionary the page uses, so what
+         the assistant says and what the card says cannot drift. A sentence the
+         dictionary does not know is left as it was, which is what the page does
+         too. */
+      /* A chunk in the other language, shown as the site itself shows it.
+
+         The catalog is written in English; the Persian build translates each
+         product's title and summary on the card through the site's dictionary,
+         but its long descriptions have no pairs at all (measured: 0% of
+         description characters translate). Quoting an English paragraph inside
+         a Persian sentence is the wrong-language leak this engine exists to
+         avoid, so the passage is translated where the site can and the reply
+         says plainly which page it came from, in the reader's language.
+
+         This is also how a Persian reader reaches the catalog at all: the
+         catalog is indexed as English, so 'محصولات چیه؟' used to match the
+         contact page's incidental 'price' and never the products. */
+      if (language === 'fa' && hit.doc.language === 'en') {
+        var label = (typeof window !== 'undefined' && window.AXIA_T)
+          ? window.AXIA_T(hit.doc.title) : hit.doc.title;
+        if (!label || label === hit.doc.title) label = hit.doc.title;
+        body = labels.from + ' ' + label + ': ' + body;
+      }
       parts.push(body);
       citations.push({
         title: hit.doc.title,

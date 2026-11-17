@@ -1007,6 +1007,21 @@ class Handler(SimpleHTTPRequestHandler):
         db = acquire_db()
         user = self.auth()
 
+        if p == '/api/xiona/vocabulary':
+            # The assistant's Persian/English dictionary, for the browser.
+            #
+            # loadVocabulary() fetches '/data/vocabulary.js', which is where the
+            # static build puts it. The server serves public/ and nothing else -
+            # and must, because data/ also holds axiasoft.sqlite3 - so that path
+            # was a 404 on every server install. Without the dictionary the
+            # engine cannot cross languages: 'محصولات چیه؟' reads as a word the
+            # site never publishes and gets refused, even though the catalog is
+            # indexed a request away. The visitor sees "the AI does not answer".
+            #
+            # Served as JSON here, and as a static file there, so the same
+            # browser code works on both builds.
+            self._send_json({'pairs': agent.site_pairs() or []}); return
+
         if p == '/api/xiona/knowledge':
             # The page copy the assistant indexes, for the browser engine.
             #

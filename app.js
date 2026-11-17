@@ -383,17 +383,36 @@ function loadVocabulary(){
   if(vocabularyRequest)return vocabularyRequest;
   const base=document.baseURI||location.href;
   /* Same guard as loadKnowledge(): a throw here would escape before the promise
-     exists, so the caller's .catch() could never see it. */
+     exists, so the caller's .catch() could never see it.
+
+     Two homes, tried in order. The static build writes data/vocabulary.js, a
+     plain script that assigns into window.AXIA_STATIC. The server build serves
+     public/ and cannot serve that path - data/ also holds the SQLite database -
+     so it answered 404, and without the dictionary the engine cannot cross
+     languages: 'محصولات چیه؟' was refused as an unpublished word even though the
+     catalog was indexed one request away. The server now offers the same table
+     as JSON at /api/xiona/vocabulary; the second attempt is what a server
+     install actually uses. A static build never needs it. */
   vocabularyRequest=Promise.resolve()
     .then(()=>fetch(new URL('data/vocabulary.js',base).href,{cache:'force-cache'}))
-    .then(r=>r.ok?r.text():'')
-    .then(text=>{
-      if(!text)return[];
-      /* A snapshot file is a plain script, not JSON: it assigns to the same
-         window.AXIA_STATIC the rest of the build writes to. Evaluating it is
-         what the browser would have done had the tag been in the page. */
-      new Function(text)();
-      return (window.AXIA_STATIC&&window.AXIA_STATIC.pairs)||[];
+    .then(r=>{
+      if(r.ok)return r.text().then(text=>{
+        if(!text)return[];
+        /* A snapshot file is a plain script, not JSON: it assigns to the same
+           window.AXIA_STATIC the rest of the build writes to. Evaluating it is
+           what the browser would have done had the tag been in the page. */
+        new Function(text)();
+        return (window.AXIA_STATIC&&window.AXIA_STATIC.pairs)||[];
+      });
+      /* No static file: ask the server for the same table. */
+      return fetch('/api/xiona/vocabulary',{credentials:'same-origin',cache:'force-cache'})
+        .then(r2=>r2.ok?r2.json():null)
+        .then(d=>{
+          if(!d||!Array.isArray(d.pairs)||!d.pairs.length)return[];
+          window.AXIA_STATIC=window.AXIA_STATIC||{};
+          window.AXIA_STATIC.pairs=d.pairs;
+          return d.pairs;
+        });
     })
     .catch(()=>[]);
   return vocabularyRequest;
