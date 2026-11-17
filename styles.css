@@ -5,13 +5,13 @@
    the footer rests on the bottom edge even when a route is short — an empty
    account page, a policy page on a tall monitor — instead of floating in the
    middle above dead space. min-height, not height: a long page still scrolls. */
-body{margin:0;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;overflow-x:clip;transition:background .3s,color .3s;display:flex;flex-direction:column}a{color:inherit;text-decoration:none}button,input,textarea,select{font:inherit}button{color:inherit}.ambient{position:fixed;z-index:-1;pointer-events:none;filter:blur(90px);border-radius:50%;opacity:.2;inset:0;width:auto;height:auto}.ambient-one{background:radial-gradient(closest-side at 26% 0%, #126bff, transparent 72%)}.ambient-two{background:radial-gradient(closest-side at 96% 52%, #5431c8, transparent 72%)}.topbar{height:76px;position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:0 max(calc((100vw - 1200px)/2),5.5vw);border-bottom:1px solid var(--line);background:var(--header);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}.brand{display:flex;gap:4px;align-items:center;font-size:15px;font-weight:750;letter-spacing:.12em}.brand-light{font-weight:450;color:var(--muted)}.brand-mark{width:33px;height:33px;color:var(--blue);display:inline-flex;filter:drop-shadow(0 0 10px var(--blueglow));transform-style:preserve-3d;animation:floatmark 6s ease-in-out infinite}.brand-mark svg{width:100%;height:100%}@keyframes floatmark{0%,100%{transform:translateY(0) rotateY(-7deg)}50%{transform:translateY(-3px) rotateY(7deg)}}.nav-links{display:flex;gap:34px;margin-left:90px}.nav-links a,.footer-links a{font-size:13px;color:var(--muted);transition:color .2s}.nav-links a:hover,.footer-links a:hover{color:var(--text)}.nav-actions{display:flex;gap:11px;align-items:center}.button{border:1px solid transparent;border-radius:12px;padding:12px 18px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-size:13px;font-weight:650;cursor:pointer;transition:transform .22s,background .22s,border-color .22s,box-shadow .22s;color:var(--text)}.button:hover{transform:translateY(-2px)}.button-primary{background:linear-gradient(130deg,#347fe9,#255fca);color:white;box-shadow:0 8px 26px rgba(38,111,220,.22)}.button-primary:hover{box-shadow:0 10px 32px rgba(38,111,220,.38)}.button-quiet{background:var(--surface);border-color:var(--line);backdrop-filter:blur(16px)}.button-outline{background:transparent;border-color:var(--line)}.button-small{padding:10px 15px;font-size:12px;border-radius:10px}.button-block{width:100%}.icon-button{border:1px solid var(--line);background:var(--surface);width:38px;height:38px;border-radius:11px;cursor:pointer;display:grid;place-items:center}.mobile-menu{display:none}.loading{min-height:65vh;display:flex;gap:12px;align-items:center;justify-content:center;color:var(--muted)}.spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+body{margin:0;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;overflow-x:clip;transition:background .3s,color .3s;display:flex;flex-direction:column}a{color:inherit;text-decoration:none}button,input,textarea,select{font:inherit}button{color:inherit}.ambient{position:fixed;z-index:-1;pointer-events:none;filter:blur(90px);border-radius:50%;opacity:.2;inset:0;width:auto;height:auto}.ambient-one{background:radial-gradient(closest-side at 26% 0%, #126bff, transparent 72%)}.ambient-two{background:radial-gradient(closest-side at 96% 52%, #5431c8, transparent 72%)}.topbar{height:76px;position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:0 max(calc((100vw - 1200px)/2),5.5vw);border-bottom:1px solid var(--line);background:var(--header);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}.brand{display:flex;gap:4px;align-items:center;font-size:15px;font-weight:750;letter-spacing:.12em}.brand-light{font-weight:450;color:var(--muted)}.brand-mark{width:33px;height:33px;color:var(--blue);display:inline-flex;filter:drop-shadow(0 0 10px var(--blueglow));transform-style:preserve-3d;animation:floatmark 6s ease-in-out infinite}.brand-mark svg{width:100%;height:100%}@keyframes floatmark{0%,100%{transform:translateY(0) rotateY(-7deg)}50%{transform:translateY(-3px) rotateY(7deg)}}.nav-links{display:flex;gap:34px;margin-left:90px}.nav-links a,.footer-links a{font-size:13px;color:var(--muted);transition:color .2s}.nav-links a:hover,.footer-links a:hover{color:var(--text)}.nav-actions{display:flex;gap:var(--btn-gap);align-items:center}.button{border:1px solid transparent;border-radius:12px;padding:12px 18px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-size:13px;font-weight:650;cursor:pointer;transition:transform .22s,background .22s,border-color .22s,box-shadow .22s;color:var(--text)}.button:hover{transform:translateY(-2px)}.button-primary{background:linear-gradient(130deg,#347fe9,#255fca);color:white;box-shadow:0 8px 26px rgba(38,111,220,.22)}.button-primary:hover{box-shadow:0 10px 32px rgba(38,111,220,.38)}.button-quiet{background:var(--surface);border-color:var(--line);backdrop-filter:blur(16px)}.button-outline{background:transparent;border-color:var(--line)}.button-small{padding:10px 15px;font-size:12px;border-radius:10px}.button-block{width:100%}.icon-button{border:1px solid var(--line);background:var(--surface);border-radius:11px;cursor:pointer;display:grid;place-items:center}.mobile-menu{display:none}.loading{min-height:65vh;display:flex;gap:12px;align-items:center;justify-content:center;color:var(--muted)}.spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 /* main takes the slack in the body column above, so the footer sits on the
    bottom edge of a short page. `flex:1 0 auto` rather than `flex:1`: a page
    taller than the viewport must keep its natural height and scroll, not
    compress to fit. */
 main{position:relative;flex:1 0 auto}
-.footer{flex:none}.container{width:min(1120px,89vw);margin:0 auto}.section{padding:95px 0}.section-sm{padding:64px 0}.eyebrow{display:flex;align-items:center;gap:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.16em;font-size:10px;font-weight:750}.eyebrow:before{content:"";width:23px;height:1px;background:currentColor}.headline{font-size:clamp(39px,6vw,70px);line-height:1.06;letter-spacing:-.055em;font-weight:590;margin:22px 0}.headline .gradient,.gradient{background:linear-gradient(110deg,#8bc3ff 8%,#438fff 55%,#b2a5ff 100%);background-clip:text;-webkit-background-clip:text;color:transparent}.subhead{font-size:16px;color:var(--muted);line-height:1.85;max-width:600px}.section-heading{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:32px}.section-heading h2{margin:10px 0 0;font-size:clamp(27px,4vw,40px);font-weight:560;letter-spacing:-.04em}.section-heading p{margin:0;max-width:420px;color:var(--muted);line-height:1.7;font-size:13px}.hero{padding:88px 0 82px;min-height:570px;display:grid;grid-template-columns:1.12fr .88fr;gap:34px;align-items:center}.hero-copy{padding-bottom:14px}.hero-copy .headline{max-width:680px}.hero-copy .subhead{max-width:510px}.hero-actions{display:flex;gap:12px;margin-top:30px}.hero-note{display:flex;gap:13px;align-items:center;margin-top:40px;color:var(--muted);font-size:11px}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}.hero-art{height:390px;position:relative;display:grid;place-items:center;perspective:800px}.hero-orbit{position:absolute;border:1px solid var(--line);border-radius:50%;width:330px;aspect-ratio:1;height:auto;transform:rotateX(65deg) rotateZ(-25deg);box-shadow:0 0 55px var(--blueglow),inset 0 0 45px rgba(70,142,255,.04)}.hero-orbit:before,.hero-orbit:after{content:"";position:absolute;border:1px solid var(--line);border-radius:50%;inset:26px;pointer-events:none}.hero-orbit:after{inset:56px}.hero-logo{width:188px;height:188px;display:grid;place-items:center;position:relative;transform-style:preserve-3d;animation:logofloat 6s ease-in-out infinite}.hero-logo svg{width:100%;height:100%;filter:drop-shadow(0 22px 25px rgba(0,0,0,.34)) drop-shadow(0 0 25px rgba(60,135,255,.35));overflow:visible}.hero-logo:after{content:"AXIA / 01";position:absolute;bottom:-25px;letter-spacing:.22em;font-size:9px;color:var(--faint);pointer-events:none}@keyframes logofloat{0%,100%{transform:translateY(0) rotateY(-9deg) rotateX(4deg)}50%{transform:translateY(-11px) rotateY(9deg) rotateX(-3deg)}}.orbit-tag{position:absolute;max-width:min(200px,64%);background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--line);box-shadow:var(--shadow);padding:12px 15px;border-radius:14px;font-size:11px;color:var(--muted)}.orbit-tag b{display:block;color:var(--text);font-size:12px;margin-top:4px}.tag-one{top:50px;right:0}.tag-two{bottom:55px;left:0}/* The line under the hero buttons, now a moving one. .trust-strip is the
+.footer{flex:none}.container{width:min(1120px,89vw);margin:0 auto}.section{padding:95px 0}.section-sm{padding:64px 0}.eyebrow{display:flex;align-items:center;gap:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.16em;font-size:10px;font-weight:750}.eyebrow:before{content:"";width:23px;height:1px;background:currentColor}.headline{font-size:clamp(39px,6vw,70px);line-height:1.06;letter-spacing:-.055em;font-weight:590;margin:22px 0}.headline .gradient,.gradient{background:linear-gradient(110deg,#8bc3ff 8%,#438fff 55%,#b2a5ff 100%);background-clip:text;-webkit-background-clip:text;color:transparent}.subhead{font-size:16px;color:var(--muted);line-height:1.85;max-width:600px}.section-heading{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:32px}.section-heading h2{margin:10px 0 0;font-size:clamp(27px,4vw,40px);font-weight:560;letter-spacing:-.04em}.section-heading p{margin:0;max-width:420px;color:var(--muted);line-height:1.7;font-size:13px}.hero{padding:88px 0 82px;min-height:570px;display:grid;grid-template-columns:1.12fr .88fr;gap:34px;align-items:center}.hero-copy{padding-bottom:14px}.hero-copy .headline{max-width:680px}.hero-copy .subhead{max-width:510px}.hero-actions{display:flex;gap:var(--btn-gap);margin-top:30px}.hero-note{display:flex;gap:13px;align-items:center;margin-top:40px;color:var(--muted);font-size:11px}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}.hero-art{height:390px;position:relative;display:grid;place-items:center;perspective:800px}.hero-orbit{position:absolute;border:1px solid var(--line);border-radius:50%;width:330px;aspect-ratio:1;height:auto;transform:rotateX(65deg) rotateZ(-25deg);box-shadow:0 0 55px var(--blueglow),inset 0 0 45px rgba(70,142,255,.04)}.hero-orbit:before,.hero-orbit:after{content:"";position:absolute;border:1px solid var(--line);border-radius:50%;inset:26px;pointer-events:none}.hero-orbit:after{inset:56px}.hero-logo{width:188px;height:188px;display:grid;place-items:center;position:relative;transform-style:preserve-3d;animation:logofloat 6s ease-in-out infinite}.hero-logo svg{width:100%;height:100%;filter:drop-shadow(0 22px 25px rgba(0,0,0,.34)) drop-shadow(0 0 25px rgba(60,135,255,.35));overflow:visible}.hero-logo:after{content:"AXIA / 01";position:absolute;bottom:-25px;letter-spacing:.22em;font-size:9px;color:var(--faint);pointer-events:none}@keyframes logofloat{0%,100%{transform:translateY(0) rotateY(-9deg) rotateX(4deg)}50%{transform:translateY(-11px) rotateY(9deg) rotateX(-3deg)}}.orbit-tag{position:absolute;max-width:min(200px,64%);background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--line);box-shadow:var(--shadow);padding:12px 15px;border-radius:14px;font-size:11px;color:var(--muted)}.orbit-tag b{display:block;color:var(--text);font-size:12px;margin-top:4px}.tag-one{top:50px;right:0}.tag-two{bottom:55px;left:0}/* The line under the hero buttons, now a moving one. .trust-strip is the
    viewport (it owns the rules and the clip) and .trust-track is the belt that
    moves. The track holds the list twice; the keyframe translates it by exactly
    half its own width, which is where the second copy begins, so the reset at
@@ -36,7 +36,7 @@ main{position:relative;flex:1 0 auto}
 @keyframes trustScrollRtl{from{transform:translateX(0)}to{transform:translateX(50%)}}
 html[dir="rtl"] .trust-track{animation-name:trustScrollRtl}
 .card{background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.category-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.category-card{padding:23px 23px 58px;min-height:210px;position:relative;overflow:hidden;transition:transform .25s,border-color .25s}.category-card:hover,.product-card:hover{transform:translateY(-4px);border-color:rgba(100,163,255,.36)}.category-card:after{content:"";position:absolute;right:-34px;bottom:-95px;width:190px;height:190px;border-radius:50%;background:var(--blueglow);filter:blur(30px);pointer-events:none}.category-icon{width:42px;height:42px;border:1px solid var(--line);border-radius:13px;display:grid;place-items:center;color:var(--blue);font-size:18px;background:var(--surface2)}.category-card h3{font-weight:570;font-size:18px;margin:26px 0 8px}.category-card p{font-size:12px;color:var(--muted);line-height:1.65;margin:0;max-width:275px}.arrow-link{position:absolute;right:22px;bottom:20px;color:var(--blue);font-size:18px;pointer-events:none}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}.feature-panel{min-height:300px;padding:30px;position:relative;overflow:hidden}.feature-panel .big-symbol{font-size:82px;color:var(--blue);opacity:.76;text-shadow:0 0 40px var(--blueglow);margin-bottom:14px}.feature-panel:before{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:var(--blueglow);filter:blur(42px);right:-100px;top:-100px;pointer-events:none}.feature-list{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;margin-top:24px}.feature-item{display:flex;gap:9px;align-items:center;font-size:12px;color:var(--muted)}.check{color:var(--green)}.process{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}.step{padding:17px 12px;border-top:1px solid var(--line);position:relative}.step-num{font-size:10px;letter-spacing:.12em;color:var(--blue)}.step h3{font-size:13px;font-weight:570;margin:15px 0 7px}.step p{font-size:10px;line-height:1.6;color:var(--muted);margin:0}.cta-band{padding:34px 38px;display:flex;justify-content:space-between;align-items:center;gap:28px;position:relative;overflow:hidden}.cta-band:after{content:"";position:absolute;width:300px;height:200px;border-radius:50%;background:var(--blueglow);filter:blur(55px);right:14%;top:-130px;pointer-events:none}.cta-band h2{font-size:26px;font-weight:550;letter-spacing:-.03em;margin:0 0 8px}.cta-band p{font-size:12px;color:var(--muted);margin:0;line-height:1.65}.cta-band>*{position:relative;z-index:1}
-.page-head{padding:68px 0 36px}.page-head h1{font-size:clamp(36px,5vw,56px);font-weight:560;letter-spacing:-.05em;margin:16px 0}.page-head p{font-size:14px;color:var(--muted);max-width:590px;line-height:1.8}.tabs{display:flex;gap:8px;margin:16px 0 28px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:9px 16px;font-size:11px;cursor:pointer}.tab.active{background:var(--blueglow);border-color:rgba(82,150,255,.43);color:var(--text)}.product-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:17px}.product-card{overflow:hidden;transition:transform .25s,border-color .25s}.product-cover{height:174px;position:relative;display:grid;place-items:center;overflow:hidden;background:radial-gradient(circle at 70% 40%,rgba(57,130,255,.32),transparent 48%),linear-gradient(135deg,#111e35,#0c1321)}[data-theme=light] .product-cover{background:radial-gradient(circle at 70% 40%,rgba(57,130,255,.19),transparent 48%),linear-gradient(135deg,#e2edff,#f4f7fc)}.product-cover:after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(120,160,220,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,220,.05) 1px,transparent 1px);background-size:22px 22px;mask-image:linear-gradient(to bottom,black,transparent)}.cover-mark{font-size:46px;color:#80b8ff;filter:drop-shadow(0 0 20px var(--blueglow));z-index:1}.cover-label{position:absolute;left:14px;top:13px;font-size:8px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;z-index:2}.cover-orb{position:absolute;width:150px;height:150px;border:1px solid rgba(142,187,255,.16);border-radius:50%;transform:rotateX(65deg) rotateZ(22deg)}.product-info{padding:19px}.product-top{display:flex;justify-content:space-between;gap:10px;align-items:center}.badge{font-size:9px;border:1px solid var(--line);color:var(--muted);border-radius:99px;padding:5px 8px;white-space:nowrap}.badge-live{color:var(--green)}.product-info h3{font-size:17px;font-weight:580;margin:14px 0 7px}.product-info p{font-size:11px;line-height:1.7;color:var(--muted);min-height:39px;margin:0}.product-price{font-size:10px;color:var(--blue);margin-top:13px}.product-actions{display:flex;gap:8px;margin-top:16px}.product-actions .button{flex:1;padding:10px 8px;font-size:10px}.product-detail{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;padding:44px 0 90px}.detail-visual{height:400px;position:sticky;top:105px;display:grid;place-items:center}.detail-visual .cover-mark{font-size:95px}
+.page-head{padding:68px 0 36px}.page-head h1{font-size:clamp(36px,5vw,56px);font-weight:560;letter-spacing:-.05em;margin:16px 0}.page-head p{font-size:14px;color:var(--muted);max-width:590px;line-height:1.8}.tabs{display:flex;gap:8px;margin:16px 0 28px;flex-wrap:wrap}.tab{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:9px 16px;font-size:11px;cursor:pointer}.tab.active{background:var(--blueglow);border-color:rgba(82,150,255,.43);color:var(--text)}.product-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:17px}.product-card{overflow:hidden;transition:transform .25s,border-color .25s}.product-cover{height:174px;position:relative;display:grid;place-items:center;overflow:hidden;background:radial-gradient(circle at 70% 40%,rgba(57,130,255,.32),transparent 48%),linear-gradient(135deg,#111e35,#0c1321)}[data-theme=light] .product-cover{background:radial-gradient(circle at 70% 40%,rgba(57,130,255,.19),transparent 48%),linear-gradient(135deg,#e2edff,#f4f7fc)}.product-cover:after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(120,160,220,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,220,.05) 1px,transparent 1px);background-size:22px 22px;mask-image:linear-gradient(to bottom,black,transparent)}.cover-mark{font-size:46px;color:#80b8ff;filter:drop-shadow(0 0 20px var(--blueglow));z-index:1}.cover-label{position:absolute;left:14px;top:13px;font-size:8px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;z-index:2}.cover-orb{position:absolute;width:150px;height:150px;border:1px solid rgba(142,187,255,.16);border-radius:50%;transform:rotateX(65deg) rotateZ(22deg)}.product-info{padding:19px}.product-top{display:flex;justify-content:space-between;gap:10px;align-items:center}.badge{font-size:9px;border:1px solid var(--line);color:var(--muted);border-radius:99px;padding:5px 8px;white-space:nowrap}.badge-live{color:var(--green)}.product-info h3{font-size:17px;font-weight:580;margin:14px 0 7px}.product-info p{font-size:11px;line-height:1.7;color:var(--muted);min-height:39px;margin:0}.product-price{font-size:10px;color:var(--blue);margin-top:13px}.product-actions{display:flex;gap:var(--btn-gap);margin-top:16px}.product-actions .button{flex:0 0 auto}.product-detail{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;padding:44px 0 90px}.detail-visual{height:400px;position:sticky;top:105px;display:grid;place-items:center}.detail-visual .cover-mark{font-size:95px}
 /* The detail panel is 400px tall and about half the page wide, so the same
    contained image has more room. It keeps its own proportions rather than being
    stretched to the panel. */
@@ -60,7 +60,7 @@ html[dir="rtl"] .trust-track{animation-name:trustScrollRtl}
 .chat-cites a:hover{color:var(--text);border-bottom-color:var(--text)}
 .chat-disclaimer{font-size:8px;padding:0 14px 10px;color:var(--faint)}.footer{width:min(1120px,89vw);margin:0 auto;padding:28px 0 20px;border-top:1px solid var(--line)}.footer-top{display:flex;align-items:center;gap:24px}.footer-top>p{font-size:10px;color:var(--muted);margin-right:auto}.footer-links{display:flex;gap:18px}.footer-links a{font-size:10px}.footer-bottom{border-top:1px solid var(--line);margin-top:25px;padding-top:17px;display:flex;justify-content:space-between;color:var(--faint);font-size:9px}.blue{color:var(--blue)}.policy-copy{max-width:760px;color:var(--muted);font-size:13px;line-height:1.9}.policy-copy h2{font-size:18px;color:var(--text);margin-top:28px;font-weight:550}.policy-copy ul{padding-left:22px}.policy-copy li{margin:8px 0}.mobile-nav{display:none}
 @media(max-width:900px){.nav-links{margin-left:0;gap:18px}.hero{grid-template-columns:1.1fr .9fr;gap:10px}.hero-art{transform:scale(.88)}.process{grid-template-columns:repeat(3,1fr);row-gap:20px}.product-grid{grid-template-columns:repeat(2,1fr)}.stat-grid{grid-template-columns:repeat(2,1fr)}.package-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:650px){.topbar{height:66px;padding:0 5vw}.nav-links{display:none}.mobile-menu{display:grid}.nav-cta{display:none}.nav-actions{gap:8px}.hero{padding:54px 0 52px;grid-template-columns:1fr;min-height:unset}.hero-copy{order:0}.hero-art{height:280px;transform:scale(.82);margin-top:-10px}.headline{font-size:46px}.hero-copy .subhead{font-size:14px}.hero-note{margin-top:27px}.trust-strip{padding:18px 0}.section{padding:65px 0}.section-heading{align-items:start;flex-direction:column}.section-heading p{font-size:12px}.category-grid{grid-template-columns:1fr}.category-card{min-height:175px}.two-col{grid-template-columns:1fr;gap:25px}.feature-panel{min-height:230px}.feature-list{grid-template-columns:1fr 1fr}.process{grid-template-columns:repeat(2,1fr)}.cta-band{padding:24px;align-items:start;flex-direction:column}.product-grid{grid-template-columns:1fr}.product-cover{height:195px}.page-head{padding:47px 0 23px}.page-head h1{font-size:39px}.product-detail{grid-template-columns:1fr;gap:28px;padding-top:10px}.detail-visual{position:relative;top:0;height:265px}.detail-visual .cover-mark{font-size:70px}.detail-copy h1{font-size:35px}.aurion-hero{grid-template-columns:1fr;padding:45px 0 30px}.aurion-logo{height:235px;order:-1}.aurion-core{width:165px;height:165px;font-size:55px}.aurion-orbit{width:240px;height:105px}.aurion-orbit.two{width:220px;height:95px}.package-grid{gap:9px}.package{padding:16px 10px}.package .package-duration{font-size:19px}.footer-top{flex-wrap:wrap;gap:13px}.footer-top>p{width:100%;order:3}.footer-links{gap:11px;flex-wrap:wrap}.footer-bottom{gap:12px;flex-direction:column}.dashboard-head{align-items:start;flex-direction:column;gap:15px}.stat-grid{gap:8px}.stat-card{padding:14px}.stat-card strong{font-size:22px}.dash-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.modal{padding:21px}.chat-launcher{right:15px;bottom:15px;width:52px;height:52px}.chat-launcher.is-open{padding:0 17px 0 13px}.chat-panel{right:12px;bottom:75px}.order-card{align-items:start;flex-direction:column}.mobile-nav{display:flex;position:fixed;inset:0;z-index:19;flex-direction:column;padding:100px 9vw 30px;background:var(--bg);gap:0}.mobile-nav a{font-size:23px;padding:17px 0;border-bottom:1px solid var(--line)}.mobile-nav.open{display:flex}.mobile-nav .close-mobile{position:absolute;top:20px;right:6vw}.detail-features{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.topbar{height:66px;padding:0 5vw}.nav-links{display:none}.mobile-menu{display:grid}.nav-cta{display:none}.nav-actions{gap:var(--btn-gap)}.hero{padding:54px 0 52px;grid-template-columns:1fr;min-height:unset}.hero-copy{order:0}.hero-art{height:280px;transform:scale(.82);margin-top:-10px}.headline{font-size:46px}.hero-copy .subhead{font-size:14px}.hero-note{margin-top:27px}.trust-strip{padding:18px 0}.section{padding:65px 0}.section-heading{align-items:start;flex-direction:column}.section-heading p{font-size:12px}.category-grid{grid-template-columns:1fr}.category-card{min-height:175px}.two-col{grid-template-columns:1fr;gap:25px}.feature-panel{min-height:230px}.feature-list{grid-template-columns:1fr 1fr}.process{grid-template-columns:repeat(2,1fr)}.cta-band{padding:24px;align-items:start;flex-direction:column}.product-grid{grid-template-columns:1fr}.product-cover{height:195px}.page-head{padding:47px 0 23px}.page-head h1{font-size:39px}.product-detail{grid-template-columns:1fr;gap:28px;padding-top:10px}.detail-visual{position:relative;top:0;height:265px}.detail-visual .cover-mark{font-size:70px}.detail-copy h1{font-size:35px}.aurion-hero{grid-template-columns:1fr;padding:45px 0 30px}.aurion-logo{height:235px;order:-1}.aurion-core{width:165px;height:165px;font-size:55px}.aurion-orbit{width:240px;height:105px}.aurion-orbit.two{width:220px;height:95px}.package-grid{gap:9px}.package{padding:16px 10px}.package .package-duration{font-size:19px}.footer-top{flex-wrap:wrap;gap:13px}.footer-top>p{width:100%;order:3}.footer-links{gap:11px;flex-wrap:wrap}.footer-bottom{gap:12px;flex-direction:column}.dashboard-head{align-items:start;flex-direction:column;gap:15px}.stat-grid{gap:8px}.stat-card{padding:14px}.stat-card strong{font-size:22px}.dash-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.modal{padding:21px}.chat-launcher{right:15px;bottom:15px;width:52px;height:52px}.chat-launcher.is-open{padding:0 17px 0 13px}.chat-panel{right:12px;bottom:75px}.order-card{align-items:start;flex-direction:column}.mobile-nav{display:flex;position:fixed;inset:0;z-index:19;flex-direction:column;padding:100px 9vw 30px;background:var(--bg);gap:0}.mobile-nav a{font-size:23px;padding:17px 0;border-bottom:1px solid var(--line)}.mobile-nav.open{display:flex}.mobile-nav .close-mobile{position:absolute;top:20px;right:6vw}.detail-features{grid-template-columns:1fr 1fr}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 /* Keep the supplied AXIASOFT assets in the original visual system. */
@@ -106,14 +106,13 @@ img{max-width:100%}
  .container,.footer{width:calc(100% - 36px)}
  .topbar{height:64px;padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right));gap:8px}
  .brand{gap:4px;flex-shrink:0}.brand-mark{width:29px;height:29px}.brand-wordmark{width:46px}
- .nav-actions{gap:7px}.nav-actions .button-small{padding:8px 10px}.icon-button{width:36px;height:36px;flex:none}
+ .nav-actions{gap:var(--btn-gap)}
  .mobile-menu{display:grid}
  .mobile-nav{z-index:40;padding-top:max(86px,calc(env(safe-area-inset-top) + 70px));padding-bottom:env(safe-area-inset-bottom)}
  .hero{padding:44px 0 46px;gap:8px;grid-template-columns:1fr}
  .hero-copy .headline{font-size:clamp(36px,10vw,48px);line-height:1.08}
  .hero-copy .subhead{font-size:14px;line-height:1.7}
- .hero-actions{flex-wrap:wrap;gap:9px;margin-top:22px}
- .hero-actions .button{min-height:44px}
+ .hero-actions{flex-wrap:wrap;gap:var(--btn-gap);margin-top:22px}
  .hero-note{margin-top:24px}
  .hero-art{height:280px;transform:none;margin:12px 0 0;overflow:visible}
  .hero-logo{width:190px;height:190px}
@@ -176,21 +175,20 @@ img{max-width:100%}
 @media(max-width:400px){
  .container,.footer{width:calc(100% - 28px)}
  .topbar{padding-left:10px;padding-right:10px}
- .nav-actions{gap:5px}.nav-actions .button-small{padding:7px 8px;font-size:11px}
  .brand-wordmark{width:42px}.brand-mark{width:27px;height:27px}
  .theme-toggle{width:33px;height:33px}.mobile-menu{width:33px;height:33px}
- .hero{padding-top:38px}.hero-actions .button{font-size:12px;padding:11px 13px}
+ .hero{padding-top:38px}.hero-actions .button{align-items:center}
  .hero-art{height:250px}.hero-logo{width:170px;height:170px}.hero-orbit{width:min(225px,54%,50vw)}
  .orbit-tag{max-width:120px;font-size:8px;padding:7px 8px}.orbit-tag b{font-size:9px}
  .category-card{min-height:150px;padding:17px}.feature-list{grid-template-columns:1fr}
- .product-actions{gap:6px}.product-actions .button{padding:9px 6px;font-size:9px}
- .package{padding:14px 8px}.package .button{font-size:10px;padding:9px 7px}
+ .product-actions{gap:var(--btn-gap)}
+ .package{padding:14px 8px}
  .detail-features{grid-template-columns:1fr}.stat-card{padding:12px}
  .footer-links{column-gap:12px}
 }
 @media(max-width:350px){
- .brand-wordmark{width:40px}.nav-actions .button-small{max-width:64px;overflow:hidden}
- .nav-actions{gap:4px}.hero-actions{align-items:stretch}.hero-actions .button{flex:1}
+ .brand-wordmark{width:40px}
+ .nav-actions{gap:var(--btn-gap)}
  .trust-track span{font-size:9px}
  .process{grid-template-columns:1fr 1fr}
 }
@@ -1006,35 +1004,8 @@ body.preview-open .topbar { visibility: hidden; }
    the same .button class is used everywhere else on the site, where the
    natural padding is wanted. */
 .topbar .nav-actions { gap: 8px; }
-.topbar .nav-actions > .button,
-.topbar .nav-actions > .button-small,
-.topbar .nav-actions > .icon-button {
-  height: 38px;
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 11px;
-  font-size: 12.5px;
-  line-height: 1;
-  flex: none;
-  box-sizing: border-box;
-}
-.topbar .nav-actions > .icon-button {
-  width: 38px;
-  min-width: 38px;
-  padding: 0;
-}
 @media (max-width: 650px) {
   .topbar .nav-actions { gap: 6px; }
-  .topbar .nav-actions > .button,
-  .topbar .nav-actions > .button-small,
-  .topbar .nav-actions > .icon-button {
-    height: 34px;
-    min-height: 34px;
-    padding: 0 10px;
-    font-size: 11.5px;
-    border-radius: 10px;
-  }
-  .topbar .nav-actions > .icon-button { width: 34px; min-width: 34px; padding: 0; }
 }
 /* The theme toggle keeps its own glyph, which was a piece of astronomical
    notation (◐ / ☼) that reads as a smudge at 12px and has no meaning in the
@@ -1221,13 +1192,6 @@ body.preview-open .topbar { visibility: hidden; }
   .msg-thread-head{gap:10px}
 }
 
-/* The header's entry into the messenger: quiet, sits beside the account
-   button, and shows the count only when there is something to read. */
-.nav-messages{display:inline-flex;align-items:center;gap:6px;text-decoration:none}
-.nav-messages[hidden]{display:none}
-.nav-count{min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--amber);color:#1b1405;font-size:9px;font-weight:700;display:inline-grid;place-items:center;line-height:1}
-@media(max-width:640px){.nav-messages{padding:0 9px}.nav-messages .nav-count{margin:0}}
-
 /* The Messages card in the customer panel: it is a link, so it has to look
    like one without losing the card's own weight. */
 .stat-link{position:relative;text-decoration:none;color:inherit;transition:border-color .16s ease,transform .16s ease}
@@ -1235,3 +1199,131 @@ body.preview-open .topbar { visibility: hidden; }
 .stat-link small{display:flex;align-items:center;gap:7px}
 .stat-link-go{position:absolute;inset-inline-end:14px;top:13px;font-size:9px;color:var(--blue);letter-spacing:.03em;opacity:0;transition:opacity .16s ease}
 .stat-link:hover .stat-link-go{opacity:1}
+
+/* ---------------------------------------------------------------- buttons
+   The ask was simple: buttons should not touch each other and should be the
+   same size. The sizes had drifted because every section of this stylesheet
+   shrank a button to fit its own box - the product card used 9px type and 6px
+   padding, the plan cards 10px, the header 7px, and .hero-actions stretched one
+   to fill a row. So the "same button" looked like four different buttons.
+
+   Everything now reads from one set of measurements. Height is the dimension
+   people actually compare, so it is fixed; width stays free, because a button
+   says what it does and a fixed width would either clip a Persian label or
+   leave an English one swimming. Hierarchy is carried by colour and weight, not
+   by making one button visibly small.
+
+   --btn-h is the single lever. Change it and every button in the page follows,
+   including the square icon buttons, which are made from the same height so a
+   row of mixed controls sits on one line. */
+:root {
+  --btn-h: 42px;
+  --btn-h-sm: 34px;
+  --btn-radius: 11px;
+  --btn-pad-x: 18px;
+  --btn-pad-x-sm: 13px;
+  --btn-gap: 12px;          /* between sibling buttons, everywhere */
+  --btn-icon: 17px;         /* icon size inside a button */
+}
+
+.button {
+  min-height: var(--btn-h);
+  padding: 0 var(--btn-pad-x);
+  border-radius: var(--btn-radius);
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+  /* The label must not decide the height: a button with a 2-line label next to
+     a 1-line button is how two buttons end up different sizes. */
+  box-sizing: border-box;
+}
+.button-small {
+  min-height: var(--btn-h-sm);
+  padding: 0 var(--btn-pad-x-sm);
+  font-size: 12px;
+  border-radius: 10px;
+}
+.button .icon { width: var(--btn-icon); height: var(--btn-icon); flex: none; }
+
+/* The icon set. One stroke weight, one box, aligned to the text baseline. */
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  flex: none;
+  pointer-events: none;
+}
+/* An icon-only button is square, and exactly the height of the text buttons it
+   stands beside, so the header row has one baseline instead of two. */
+.icon-button {
+  width: var(--btn-h);
+  height: var(--btn-h);
+  min-width: var(--btn-h);
+  min-height: var(--btn-h);
+  padding: 0;
+  box-sizing: border-box;
+}
+.icon-button svg,
+.icon-button .icon { width: 18px; height: 18px; }
+.icon-button .theme-icon { display: grid; place-items: center; }
+
+/* One gap between buttons, wherever they stand in a row. Several containers
+   used to space their own row - 6, 7, 8, 9, 11 and 12px - so two identical
+   buttons could be tight in a card and loose in the header. */
+.hero-actions,
+.product-actions,
+.modal-actions,
+.ticket-reply-actions,
+.nav-actions {
+  gap: var(--btn-gap);
+  flex-wrap: wrap;
+}
+.hero-actions,
+.hero-actions .button { align-items: center; }
+/* Buttons in a row keep their own width; a stretched button next to a natural
+   one reads as a different control, not as the same control with more to say. */
+.hero-actions .button,
+.product-actions .button { flex: 0 0 auto; }
+
+/* The stacked form: a button above or below another one never shares its edge. */
+.button + .button,
+.btn + .btn { margin-inline-start: 0; }
+
+/* The header is dense, so its controls are the small tier - but all of them.
+   The square icon buttons were being cut from the large height while the links
+   beside them used the small one, so one row carried two heights (42 against
+   34) and the theme toggle stood a full 8px taller than the sign-in button.
+   Pinning the tier here makes the row agree with itself. */
+.nav-actions,
+.mobile-nav .close-mobile {
+  --btn-h: var(--btn-h-sm);
+}
+@media (max-width: 650px) {
+  :root { --btn-h-sm: 36px; }
+}
+
+@media (max-width: 650px) {
+  :root { --btn-h: 40px; --btn-h-sm: 34px; --btn-gap: 10px; --btn-pad-x: 15px; --btn-pad-x-sm: 11px; }
+}
+
+/* --------------------------------------------------------------- icon use
+   Where an icon stands on its own line, or leads a short list, it gets its own
+   alignment. These are the places the icon is information rather than
+   decoration, so it must not ride the text baseline. */
+.category-icon .icon { width: 20px; height: 20px; }
+.license-icon .icon { width: 22px; height: 22px; }
+.arrow-link .icon { width: 17px; height: 17px; }
+.stat-link-go .icon { width: 11px; height: 11px; }
+.badge .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; margin-inline-end: 5px; vertical-align: middle; }
+
+/* The "what happens next" list on the contact page: an icon per step, kept on
+   the same line as the first line of its text. */
+.contact-steps li { display: flex; align-items: flex-start; gap: 10px; }
+.contact-steps .step-icon { width: 16px; height: 16px; margin-top: 2px; color: var(--blue); }
+
+/* Direction-aware movement icons. The arrow that means "forward" points right
+   in a left-to-right page and left in a right-to-left one; drawing one fixed
+   glyph means half the visitors see it pointing backwards. */
+[dir="rtl"] .dir-icon { transform: scaleX(-1); }

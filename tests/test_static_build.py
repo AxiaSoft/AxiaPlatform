@@ -2116,19 +2116,27 @@ class HeaderControlTests(unittest.TestCase):
         self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
 
     def test_the_header_pins_a_height(self):
-        self.assertIn('.topbar .nav-actions > .button', self.css)
-        self.assertIn('height: 38px', self.css)
+        # It used to pin 38px, then 34px on a phone, in three hand-written rules
+        # that each named the same three selectors. The height is a variable
+        # now, and the header selects the small tier in one place - which is
+        # what the old block was trying to say.
+        self.assertRegex(self.css, r'\.nav-actions[^{]*\{[^}]*--btn-h:\s*var\(--btn-h-sm\)')
+        self.assertIn('--btn-h-sm:', self.css)
 
     def test_the_icon_button_matches_the_text_buttons(self):
-        self.assertRegex(self.css, r'\.topbar \.nav-actions > \.icon-button \{\s*width: 38px;')
+        # Both take their height from the same variable, in the same tier.
+        block = re.findall(r'\.icon-button\s*\{([^}]*)\}', self.css)
+        self.assertTrue(any('var(--btn-h)' in b for b in block),
+                        'the icon button does not take its size from --btn-h')
+        self.assertRegex(self.css, r'\.button\s*\{[^}]*min-height:\s*var\(--btn-h\)')
 
     def test_the_shrink_at_the_mobile_breakpoint_is_shared(self):
-        # One media query, applied to all three classes, or the row goes ragged
-        # again on a phone.
-        block = self.css[self.css.index('@media (max-width: 650px) {\n  .topbar .nav-actions'):
-                        self.css.index('@media (max-width: 650px) {\n  .topbar .nav-actions') + 900]
-        for selector in ('.button', '.button-small', '.icon-button'):
-            self.assertIn(selector, block)
+        # One breakpoint changes the variable, so every control shrinks together.
+        # The old test looked for three selectors inside a media query; the
+        # invariant is the same, expressed once.
+        block = re.findall(r'@media \(max-width: 650px\) \{([^@]*?)\n\}', self.css)
+        self.assertTrue(any('--btn-h' in b for b in block),
+                        'the phone breakpoint does not adjust the button height')
 
     def test_only_the_header_is_pinned(self):
         # The same .button class is used across the site, where the natural
