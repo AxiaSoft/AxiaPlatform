@@ -317,5 +317,61 @@ class SupportStyleTests(unittest.TestCase):
             self.assertIn(selector, css)
 
 
+class HeadlineTests(unittest.TestCase):
+    """A headline is translated one text node at a time, so a node must be a
+    phrase, not a fragment.
+
+    The Services heading is "From first idea / to ready to grow." and the "to "
+    started life as its own text node. The translator looks each node up on its
+    own, found nothing for a bare "to", and left it alone - so a Persian reader
+    got an English word marooned between two Persian lines:
+
+        از نخستین ایده / to / تا آمادگی برای رشد.
+
+    The fix is to keep "to" where a dictionary entry can cover it: inside the
+    second line, which then translates as one phrase. The English sentence is
+    unchanged, and the text the assistant reads still contains "to".
+
+    The About heading had the fault the other way round - "with" is in the
+    dictionary ('با'), but the first line already ended in "با", so the reader
+    got "نرم‌افزار خوب با / با / پرسش‌های درست آغاز می‌شود."
+    """
+
+    def setUp(self):
+        self.app_js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.i18n = (ROOT / 'public' / 'i18n.js').read_text(encoding='utf-8')
+
+    def test_no_headline_leaves_a_single_english_word_on_its_own(self):
+        import re
+        headings = re.findall(r'<h1>(.*?)</h1>', self.app_js)
+        self.assertTrue(headings)
+        for heading in headings:
+            for node in re.findall(r'>([^<>]+)<', '>' + heading + '<'):
+                text = node.strip()
+                if len(text.split()) != 1 or not text.isascii() or '${' in text:
+                    continue
+                self.assertIn(f"'{text}':", self.i18n,
+                              f'a headline has "{text}" alone in a text node and '
+                              'the dictionary has no entry for it, so it stays '
+                              'English inside the Persian heading')
+
+    def test_the_services_heading_carries_its_to(self):
+        # The word "to" must survive for the English reader and for the
+        # extracted page text the assistant answers from.
+        self.assertIn('<h1>From first idea<br><span class="gradient">to ready to grow.</span></h1>',
+                      self.app_js)
+        self.assertNotIn('From first idea<br>to ', self.app_js)
+
+    def test_the_services_heading_translates_as_two_phrases(self):
+        self.assertIn("'From first idea':'از نخستین ایده'", self.i18n)
+        self.assertIn("'to ready to grow.':'تا آمادگی برای رشد.'", self.i18n)
+
+    def test_a_line_does_not_repeat_the_connective_that_follows_it(self):
+        # 'with ' is its own node and already translates to 'با'.
+        self.assertIn("'with':'با'", self.i18n)
+        self.assertNotIn("'Good software starts':'نرم‌افزار خوب با'", self.i18n)
+        self.assertIn("'Good software starts':'نرم‌افزار خوب'", self.i18n)
+
+
 if __name__ == '__main__':
     unittest.main()
