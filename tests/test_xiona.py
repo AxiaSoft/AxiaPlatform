@@ -419,3 +419,135 @@ class ReplyLanguageTests(unittest.TestCase):
     def test_the_browser_sends_the_interface_language(self):
         js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
         self.assertIn("language:document.documentElement.lang==='fa'?'fa':'en'", js)
+
+
+class PersianPunctuationTests(unittest.TestCase):
+    """A question mark is not a word.
+
+    The Arabic question mark, comma and semicolon sit inside the \u0600-\u06FF
+    block, which is the range a tokenizer accepts as Persian letters. A word
+    followed by one of them was captured WITH it, so 'چیه؟' read as a content
+    word instead of the stopword 'چیه'. The Python engine folded them to spaces;
+    the JavaScript twin did not, so the two engines disagreed about the
+    commonest way a Persian speaker asks a question. Both are checked here.
+    """
+
+    MARKS = ['؟', '،', '؛']
+
+    def test_python_leaves_no_punctuation_on_a_token(self):
+        for mark in self.MARKS:
+            tokens = engine.tokenize('اوریون چیه' + mark)
+            self.assertEqual(tokens, ['اوریون'], 'with %r' % mark)
+
+    def test_python_drops_the_colloquial_copula(self):
+        self.assertEqual(engine.tokenize('محصولات چیه؟'), ['محصولات'])
+        self.assertEqual(engine.tokenize('چیه؟'), [])
+
+    def test_the_javascript_twin_folds_the_same_characters(self):
+        js = (ROOT / 'public' / 'xiona.js').read_text(encoding='utf-8')
+        # The JS fold must replace the same three marks, or the engines drift.
+        self.assertIn('u061F', js)
+        self.assertIn('u060C', js)
+        self.assertIn('u061B', js)
+        self.assertIn('ARABIC_PUNCT', js)
+
+
+class BrowserKnowledgeRouteTests(unittest.TestCase):
+    """The server build must hand the browser the page copy to index.
+
+    The static build ships data/products.js. The server build deliberately does
+    not - the server catalog stays empty - so window.AXIA_STATIC is undefined
+    there and the browser engine was indexed with nothing but the footer. Every
+    question came back as 'this site does not publish anything about that',
+    while /api/agent on the same server answered correctly.
+    """
+
+    def test_the_route_exists_on_the_read_side(self):
+        body = (ROOT / 'server' / 'app.py').read_text(encoding='utf-8')
+        self.assertIn("'/api/xiona/knowledge'", body)
+        # A GET must reach it, so it belongs to api_get, not api_write. The first
+        # attempt at this fix landed in the POST handler and answered 404.
+        start = body.index('def api_get')
+        end = body.index('def api_write')
+        self.assertIn('/api/xiona/knowledge', body[start:end])
+        self.assertNotIn('/api/xiona/knowledge', body[end:])
+
+    def test_the_agent_can_produce_that_copy(self):
+        sys.path.insert(0, str(ROOT / 'server'))
+        import agent
+        pages = agent.site_pages()
+        self.assertGreaterEqual(len(pages), 8)
+        topics = {p['topic'] for p in pages}
+        self.assertIn('aurion', topics)
+        self.assertIn('contact', topics)
+        pairs = agent.site_pairs()
+        self.assertGreater(len(pairs), 500)
+        # Every page must carry real text, not an empty shell.
+        for page in pages:
+            self.assertTrue(page.get('text', '').strip(), page.get('topic'))
+
+    def test_the_browser_fetches_it(self):
+        js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn('/api/xiona/knowledge', js)
+        # It must be requested before the engine is built, or the index is empty.
+        self.assertIn('loadKnowledge', js)
+        self.assertIn('await Promise.all([wantXiona().catch(()=>{}),loadKnowledge().catch(()=>{})])', js)
+
+    def test_a_snapshot_build_does_not_ask(self):
+        js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        start = js.index('function loadKnowledge()')
+        section = js[start:start + 900]
+        # The static build has the pages already; fetching them again would be a
+        # wasted round trip for the demo.
+        self.assertIn('AXIA_STATIC.pages', section)
+        self.assertIn('return Promise.resolve', section)
+
+    def test_the_server_answer_is_not_discarded(self):
+        js = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        start = js.index('async function sendChat')
+        section = js[start:start + 2600]
+        # Accepting only provider==='model' threw away the server's own index,
+        # which is the one that has the catalog, the articles and every page.
+        self.assertNotIn("data.provider==='model'){reply=data.answer", section)
+        self.assertIn('serverAnswered', section)
+
+
+class IdentityQuestionTests(unittest.TestCase):
+    """'Who are you?' must not swallow every question ending in 'چیه'.
+
+    The pattern treated the subject as optional and accepted a bare 'ه', so the
+    'چی' inside 'چیه' plus its final 'ه' matched: 'اوریون چیه؟' and
+    'محصولات چیه؟' were both answered with the assistant's introduction.
+    """
+
+    def test_the_pattern_no_longer_matches_a_bare_copula(self):
+        js = (ROOT / 'public' / 'xiona.js').read_text(encoding='utf-8')
+        import re
+        match = re.search(r'var IDENTITY = (/.*?/i);', js)
+        self.assertIsNotNone(match)
+        pattern = match.group(1)
+        # The subject group must be required, not optional.
+        self.assertIn(r'(?:شما|تو|شخص)\s+', pattern)
+        self.assertNotIn('(?:شما|تو|شخص)?', pattern)
+
+    def test_a_question_about_a_product_is_not_an_identity_question(self):
+        """Checked through the browser engine, which owns that pattern."""
+        import re
+        js = (ROOT / 'public' / 'xiona.js').read_text(encoding='utf-8')
+        pattern = re.search(r'var IDENTITY = (/.*?/i);', js).group(1)
+        cases = {
+            'اوریون چیه؟': False, 'محصولات چیه؟': False,
+            'هزینه بازپرداخت چیه؟': False, 'AURION چیه؟': False,
+            'شما کی هستید؟': True, 'تو کی هستی': True,
+            'who are you': True, 'are you a bot': True,
+        }
+        script = '\n'.join([
+            'const RE = ' + pattern + ';',
+            'const cases = ' + json.dumps(cases, ensure_ascii=False) + ';',
+            'const bad = Object.entries(cases).filter(([q, want]) => RE.test(q) !== want);',
+            'console.log(JSON.stringify(bad));',
+        ])
+        result = subprocess.run(['node', '-e', script],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout.strip() or '[]'), [])

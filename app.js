@@ -382,7 +382,10 @@ function loadVocabulary(){
   if(window.AXIA_STATIC&&Array.isArray(window.AXIA_STATIC.pairs)&&window.AXIA_STATIC.pairs.length)return Promise.resolve(window.AXIA_STATIC.pairs);
   if(vocabularyRequest)return vocabularyRequest;
   const base=document.baseURI||location.href;
-  vocabularyRequest=fetch(new URL('data/vocabulary.js',base).href,{cache:'force-cache'})
+  /* Same guard as loadKnowledge(): a throw here would escape before the promise
+     exists, so the caller's .catch() could never see it. */
+  vocabularyRequest=Promise.resolve()
+    .then(()=>fetch(new URL('data/vocabulary.js',base).href,{cache:'force-cache'}))
     .then(r=>r.ok?r.text():'')
     .then(text=>{
       if(!text)return[];
@@ -394,6 +397,46 @@ function loadVocabulary(){
     })
     .catch(()=>[]);
   return vocabularyRequest;
+}
+/* The page copy the assistant indexes, on a build that ships no snapshot.
+
+   The static build writes data/products.js, and learnSite() reads it from
+   window.AXIA_STATIC. The server build deliberately carries no snapshot (the
+   server catalog stays empty), so that object is undefined there and the
+   assistant was indexed with nothing but the footer and the panel text: two
+   chunks. Every question - 'AURION چیست؟' included - came back as "this site
+   does not publish anything about that", while /api/agent on the same server
+   answered it correctly, because the server has the index and the browser did
+   not.
+
+   The server now serves the same public page copy at /api/xiona/knowledge.
+   Fetching it here is what makes the two builds agree. A build with a snapshot
+   never asks - that is the check at the top - so the demo keeps its one
+   request.
+*/
+let knowledgeRequest=null;
+function loadKnowledge(){
+  if(window.AXIA_STATIC&&Array.isArray(window.AXIA_STATIC.pages)&&window.AXIA_STATIC.pages.length)return Promise.resolve(window.AXIA_STATIC);
+  if(knowledgeRequest)return knowledgeRequest;
+  /* Wrapped so a browser without fetch - and the DOM test harnesses - gets a
+     resolved-null rather than a throw. Every caller chains .catch(), but a
+     throw here happens before the promise exists, so the guard has to be here. */
+  knowledgeRequest=Promise.resolve()
+    .then(()=>fetch('/api/xiona/knowledge',{credentials:'same-origin'}))
+    .then(r=>r.ok?r.json():null)
+    .then(data=>{
+      if(!data)return null;
+      /* learnSite() reads pages and pairs from window.AXIA_STATIC, and the
+         engine reads the same object for the vocabulary, so the answer is
+         parked where both already look rather than threading a new argument
+         through every caller. */
+      window.AXIA_STATIC=window.AXIA_STATIC||{};
+      if(Array.isArray(data.pages)&&data.pages.length)window.AXIA_STATIC.pages=data.pages;
+      if(Array.isArray(data.pairs)&&data.pairs.length)window.AXIA_STATIC.pairs=data.pairs;
+      return window.AXIA_STATIC;
+    })
+    .catch(()=>null);
+  return knowledgeRequest;
 }
 function xionaEngine(){
   if(xiona)return xiona;
@@ -451,7 +494,7 @@ function toggleChat(){
      answer, and the panel draws immediately in the meantime so the click feels
      instant. */
   if(!chatOpen){
-    wantXiona().then(()=>{
+    wantXiona().then(()=>loadKnowledge()).then(()=>{
       if(!(window.AXIA_STATIC&&(window.AXIA_STATIC.pairs||[]).length))return loadVocabulary();
     }).then(()=>{
       /* The engine may have indexed the pages with no dictionary. Rebuilding it
@@ -590,10 +633,10 @@ async function sendChat(text){
  /* A message can arrive before xiona.js has finished loading, if the visitor
     types faster than the script. Wait for it once: the engine is the fallback
     answer, and it should be ready by the time the server has replied anyway. */
- await wantXiona().catch(()=>{});
+ await Promise.all([wantXiona().catch(()=>{}),loadKnowledge().catch(()=>{})]);
  const engine=xionaEngine();
  const answer=engine?engine.answer(text):null;
- let reply=null, usedModel=false;
+ let reply=null, usedModel=false, serverAnswered=false;
  /* The server is asked first now, and always. It is the only side that can
     reach a language model, and a model is the only thing here that can answer
     a question the site never wrote down or reply in the language the visitor
@@ -606,7 +649,13 @@ async function sendChat(text){
      language:document.documentElement.lang==='fa'?'fa':'en'})});
    if(res.ok){
      const data=await res.json();
-     if(data&&data.answer&&data.provider==='model'){reply=data.answer;usedModel=true}
+     /* The server's answer is used whether a model produced it or the server's
+        own index did. Accepting only provider==='model' threw away the better
+        answer: the server indexes products, articles, every page, the FAQ and
+        the dictionary, while the browser engine may have none of it. With no
+        key configured the server still answered correctly and the browser
+        still showed its own empty index's refusal. */
+     if(data&&data.answer){reply=data.answer;usedModel=data.provider==='model';serverAnswered=true}
    }
  }catch(e){ /* static build or offline: the local answer stands */ }
  if(!reply)reply=answer&&answer.source==='knowledge'?answer.text:null;
@@ -615,7 +664,7 @@ async function sendChat(text){
    :'I could not reach my knowledge just now.');
  thinking.remove();
  addChat(reply,'bot');
- if(!usedModel&&answer&&answer.citations)addCitations(answer.citations);
+ if(!serverAnswered&&answer&&answer.citations)addCitations(answer.citations);
  chatHistory.push({role:'bot',text:reply});
  saveChatHistory()}
 // Responsive mobile navigation.
