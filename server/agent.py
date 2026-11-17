@@ -297,8 +297,48 @@ def engine():
         return live if live else committed_articles()
 
     return get_engine(products_fn, articles, stamp_fn(),
-                      pages_provider=site_pages,
+                      pages_provider=_pages_with_assistant,
                       pairs_provider=site_pairs)
+
+
+# What the assistant says about itself, in the words the panel shows.
+#
+# The browser engine learns this from the open panel (app.js reads the panel's
+# own text and adds it as the 'assistant' chunk). The server has no panel to
+# read, so 'شما کی هستید؟' - pronoun and copula only, no content words - found
+# no chunk to answer from and replied with whatever retrieval happened to
+# match, which was a paragraph about AURION plan durations.
+#
+# Same sentences, same source of truth: the Persian is what app.js puts in the
+# panel for a Persian reader, the English what it puts there otherwise.
+ASSISTANT_SELF = {
+    'fa': ('Xiona · دستیار همین سایت. همین سایت را یاد می‌گیرد · خودش پاسخ می‌دهد · '
+           'بدون سرویس بیرونی. Xiona فقط از آنچه این سایت منتشر کرده پاسخ می‌دهد و '
+           'به سفارش‌ها، پرداخت‌ها یا حساب شما دسترسی ندارد.'),
+    'en': ('Xiona · on-site assistant. Learns this site · answers on its own · no '
+           'outside service. Xiona answers only from what this site publishes. It '
+           'cannot see orders, payments or your account.'),
+}
+
+
+def _pages_with_assistant():
+    """The site's pages, plus the assistant describing itself."""
+    pages = list(site_pages())
+
+    # A clause in each language, so a Persian question is answered from Persian
+    # text and an English one from English text.
+    for position, language in enumerate(('fa', 'en')):
+        pages.append({
+            'topic': 'assistant',
+            'route': '#/contact',
+            'title': 'Xiona',
+            'text': ASSISTANT_SELF[language],
+            'language': language,
+            'aliases': ('assistant bot ai robot who xiona دستیار ربات هوش مصنوعی کی ساخت '
+                        'کی هستید شما'),
+            'position': position,
+        })
+    return pages
 
 
 # The prompt is the contract with the model, and it had two faults that showed

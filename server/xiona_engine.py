@@ -42,6 +42,11 @@ STOPWORDS = {
            'ها', 'می', 'شود', 'بود', 'اما', 'اگر', 'چه', 'کی', 'چطور', 'چگونه',
            'کجا', 'چقدر', 'آیا', 'دارید', 'دارم', 'دارد', 'کنم', 'کنید',
            'شما', 'ما', 'من', 'او', 'آنها', 'همه', 'بیشتر', 'خیلی', 'چیست', 'چیه',
+           # Spoken question words: 'قیمت چنده؟' is how the site is actually
+           # asked. They carry no subject, and leaving them in turned a one-word
+           # question into a query about a word the site never says.
+           'چنده', 'چند', 'چطوره', 'کدوم', 'کدومه', 'کدام', 'کجاست', 'کجایید',
+           'کجای', 'چطوری',
            'چرا', 'آیا', 'باید', 'توانم', 'توانید', 'می‌توانم', 'می‌توانید', 'هست',
            'هستند', 'هستم', 'نیست', 'بوده', 'دارند', 'لطفا', 'لطفاً', 'بگو',
            'بگویید', 'بگید', 'میخوام', 'می‌خواهم', 'خواستم',
@@ -68,9 +73,13 @@ STOPWORDS = {
 # the last two letters of ordinary nouns, and stripping it turns 'کامپیوتر'
 # into 'کامپیو'. A stemmer that mangles the word it was given is worse than one
 # that keeps a plural - and the JS engine must agree with this list exactly.
+# Longest first, so 'خدماتتون' loses 'تون' and not 'ن'. 'تون'/'مون'/'شون' are
+# the spoken forms of 'تان'/'مان'/'شان'; without them a question written the way
+# people talk kept a word the site never publishes and was refused. The JS twin
+# carries the same list in the same order.
 _FA_SUFFIXES = ('هایشان', 'هایمان', 'هایتان', 'هایش', 'هایم', 'هایت', 'های',
-                'هایی', 'ها', 'ترین', 'شان', 'مان', 'تان', 'یی', 'یم',
-                'ید', 'ند', 'هاست', 'ای', 'ی')
+                'هایی', 'ها', 'ترین', 'شون', 'تون', 'مون', 'شان', 'مان', 'تان',
+                'یی', 'یم', 'ید', 'ند', 'هاست', 'ای', 'ی')
 
 _PERSIAN_RE = re.compile(r'[\u0600-\u06FF]')
 _TOKEN_RE = re.compile(r'[a-z0-9]+|[\u0600-\u06FF]+')
@@ -113,6 +122,13 @@ def tokenize(text):
         if word in stops:
             continue
         stem = _light_stem(word)
+        # The suffix stripper can turn a function word into one that IS on the
+        # list: 'هستید' stems to 'هست'. The JS twin tests the stem as well, so
+        # without this the two engines disagreed about 'شما کی هستید؟' - the
+        # browser answered it, the server searched for 'هست' and answered
+        # something else entirely.
+        if stem != word and stem in stops:
+            continue
         if len(stem) >= 2:
             out.append(stem)
     return out
@@ -548,11 +564,37 @@ class Engine:
             if label_hits:
                 score *= 1 + 1.8 * (label_hits / len(all_terms))
 
+            # The chunk that opens a page states what the page is about; the
+            # ones after it continue. Asked "what is AURION?", the engine was
+            # answering from a closing legal paragraph - "No live trading,
+            # broker connection..." - which shares the page's keywords, is
+            # shorter, and so scores higher per word. It is a true sentence and
+            # a bad answer to "what is this".
+            #
+            # A page's opening chunk is the one that carries the page's own
+            # keywords (push() gives them to offset 0 only), so this asks a
+            # question the index can already answer, rather than importing a
+            # notion of document position the index does not keep.
+            if doc.get('keywords'):
+                score *= 1.25
+
             hits = sum(1 for term in informative if term in covered)
             ranked.append({'doc': doc, 'score': score, 'matched': matched,
                            'ownMatched': own, 'strongMatched': matched,
                            'coverage': min(1.0, hits / meaningful)})
-        ranked.sort(key=lambda hit: -hit['score'])
+        # A page's opening chunk is the one that says what the page is about;
+        # the rest continue it. 'اوریون چیست؟' was being answered from a closing
+        # legal paragraph - "No live trading, broker connection..." - because
+        # that line is short, so its score per word is high, and because the
+        # AURION and AURION-plans pages carry almost the same vocabulary, so
+        # everything tied and the winner was whichever the sort kept.
+        #
+        # Chunks are added in reading order, so their index in self.docs is that
+        # order; ties are broken by it. (Ids are global counters - 'aurion-15' -
+        # not per-page, so they cannot identify a page's first chunk.)
+        def _rank(hit):
+            return (-hit['score'], self.docs.index(hit['doc']))
+        ranked.sort(key=_rank)
         return ranked[:limit or self.max_results]
 
     def _other_language_hint(self, query, language):
