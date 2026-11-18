@@ -185,16 +185,18 @@ function paintThemeIcon(){
   el.innerHTML=dark?THEME_MOON:THEME_SUN;
   const btn=el.closest('.theme-toggle');
   if(btn){
-    const label=document.documentElement.lang==='fa'
-      ?(dark?'تغییر به حالت روشن':'تغییر به حالت تاریک')
-      :(dark?'Switch to light theme':'Switch to dark theme');
+    /* The English string is the dictionary key, so the Persian comes from the
+       dictionary too. Typing Persian here meant the theme button said one
+       thing and the rest of the header said another, and the two fell out of
+       step again the first time either was edited. */
+    const label=(window.AXIA_T||(v=>v))(dark?'Switch to light theme':'Switch to dark theme');
     btn.setAttribute('aria-label',label);btn.setAttribute('title',label);
   }
 }
 function themeInit(){let t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;paintThemeIcon()}
 /* The administrator can choose what a first-time visitor sees. A visitor's own
    saved choice always wins - this only decides the default. */
-function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=paintThemeIcon()}$('.theme-toggle').onclick=()=>{let t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);paintThemeIcon()};
+function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=paintThemeIcon()}const _tt=$('.theme-toggle');if(_tt)_tt.onclick=()=>{let t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);paintThemeIcon()};
 async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');if(b){const isAdmin=!!me&&me.role==='admin';const label=me?(isAdmin?'Admin panel':'My account'):'Sign in';b.setAttribute('aria-label',label);b.title=label;b.innerHTML='<span class="account-icon">'+ICON(isAdmin?'dashboard':'user')+'</span>';b.classList.toggle('is-signed-in',!!me);}b&&(b.onclick=()=>me?(me.role==='admin'?location.assign('/admin/'):go('/account')):openAuth());}
 
 function sectionOff(name){const label=({about:'About',services:'Services',contact:'Contact',aurion:'AURION',catalog:'Products'})[name]||'This page';return `<div class="container"><section class="page-head"><div class="eyebrow">SECTION HIDDEN</div><h1>${label} is not<br><span class="gradient">published right now.</span></h1><p>An administrator has hidden this section of the site. The rest of AXIASOFT is still available.</p><a class="button button-primary" href="#/">Return home${ICON('arrow','dir-icon')}</a></section></div>`}
@@ -690,6 +692,86 @@ async function loadSite(){try{const r=await api('/api/site');if(r&&r.settings)si
    bar, support assistant) rather than in a rendered route. These are re-applied
    after every route change because the mobile menu and the auth modals rebuild
    their own markup. */
+/* ---- the site header, built once ---------------------------------------
+   The header was written out by hand in three places: index.html for the
+   storefront, and twice in server/blog.py for the blog (once for each
+   language). They drifted, as hand-written copies do: the blog was missing the
+   account button and the language switch, and its theme button carried a
+   different icon from the storefront's.
+
+   It is built here now, from one description, and both pages call it. A page
+   that already contains a <header class="topbar"> in its markup keeps it - the
+   storefront ships one so the first paint has a header before this file loads -
+   and a page that does not (the server-rendered blog) gets one.
+
+   `opts` carries the only three things that legitimately differ per page:
+   the language, the address each nav item points at (the blog is not a single-
+   page app), and whether the blog entry is the current page. */
+/* A server-rendered article page owns its own <title>, its own <html lang> and
+   its own <head>. This file runs there too, for the header, so anything that
+   writes to the document as a whole has to ask first. */
+function isReadingPage(){
+  if(document.body&&document.body.classList)return document.body.classList.contains('blog-body');
+  return !!(document.getElementById&&document.getElementById('blog-header'));
+}
+function headerHTML(opts){
+  const o = opts || {};
+  const lang = o.lang === 'en' ? 'en' : 'fa';
+  const href = o.href || (path => path);
+  const current = o.current || '';
+  /* The labels come from the site dictionary, not from a second list kept
+     here. A private list is how the two headers drifted apart in the first
+     place: this function's first version carried its own Persian, and the
+     word for the About link was spelled one way here and another way in the
+     dictionary - the same word, two spellings, one page apart. */
+  /* AXIA_T reads the page's language from <html lang>. On the English blog the
+     document says so, but a page can also ask for a language explicitly, which
+     is what happens while i18n.js is still settling. A missing translation
+     returns the English source, so an unknown key is never a blank link. */
+  const dict = window.AXIA_T || (v => v);
+  const L = lang === 'en' ? (v => v) : dict;
+  const otherLang = lang === 'en' ? 'fa' : 'en';
+  /* The dictionary key is the English word, so each entry is the route and the
+     word to look up. AURION is a product name, not a word: it is never
+     translated, exactly as AXIASOFT is never translated. */
+  const items = [['products', 'Products'], ['services', 'Services'], ['blog', 'Blog'],
+                 ['aurion', null], ['about', 'About']];
+  const nav = items.map(([key, word]) => {
+    const text = word ? L(word) : 'AURION';
+    const now = current === key ? ' aria-current="page"' : '';
+    return `<a href="${esc(href(key))}"${now}>${esc(text)}</a>`;
+  }).join('');
+  const signIn = L('Sign in');
+  return `<header class="topbar"><a href="${esc(href('home'))}" class="brand" id="brand-link" aria-label="AXIASOFT home"><span class="brand-mark" id="brand-mark"><img src="${assetUrl('brand/axiasoft-original.webp')}" alt="AXIASOFT original symbol"></span><img class="brand-wordmark" id="brand-wordmark" src="${assetUrl('brand/axiasoft-wordmark.webp')}" alt="AXIASOFT wordmark"><span class="brand-name" id="brand-name" hidden></span></a>
+    <nav class="nav-links" aria-label="${esc(L('Main navigation'))}">${nav}</nav>
+    <div class="nav-actions"><button class="icon-button theme-toggle" aria-label="${esc(L('Switch to light theme'))}" title="${esc(L('Switch to light theme'))}"><span class="theme-icon">${ICON('moon')}</span></button><button class="button button-small button-quiet language-toggle" id="languageToggle" data-lang="${otherLang}" aria-label="${esc(L('Switch language to English'))}">${otherLang === 'fa' ? 'فارسی' : 'English'}</button><button class="icon-button account-button" id="accountButton" aria-label="${esc(signIn)}" title="${esc(signIn)}"><span class="account-icon"></span></button><a class="button button-small button-primary nav-cta" href="${esc(href('contact'))}"><span class="button-label">${esc(L('Start a project'))}</span>${ICON('arrow','dir-icon')}</a><button class="mobile-menu icon-button" id="mobileMenuButton" aria-label="${esc(L('Open menu'))}" aria-expanded="false" aria-haspopup="true">${ICON('menu')}</button></div>
+  </header>`;
+}
+function mountHeader(opts){
+  if ($('.topbar')) return;
+  const main = $('main');
+  if (!main) return;
+  main.insertAdjacentHTML('beforebegin', headerHTML(opts));
+}
+/* The blog is server-rendered and its markup is Persian or English depending on
+   the address, so it passes its own language and links in. */
+window.AXIA_MOUNT_HEADER = function(lang, hrefs, current){
+  mountHeader({lang: lang, href: path => (hrefs && hrefs[path]) || path, current: current});
+};
+/* If this page has no header and is not the storefront, build one *now*, before
+   any of the module-level code below reaches for a header control. The blog
+   tag carries the page's language and links as a data attribute; a page that
+   has its own header in the markup (the storefront) skips all of this. */
+(function mountOwnHeaderNow(){
+  if ($('.topbar') || $('#app')) return;
+  /* A JSON block, not an attribute on the <script>: app.js is deferred, and a
+     deferred script has no document.currentScript by the time it runs. */
+  const spec = document.getElementById('blog-header');
+  let opts = null;
+  try { opts = JSON.parse(spec ? spec.textContent : 'null'); } catch (e) { opts = null; }
+  if (!opts) return;
+  mountHeader({lang: opts.lang, href: path => (opts.hrefs || {})[path] || path, current: opts.current});
+})();
 function applyChrome(){
   const navFlags = {'#/products':'show_catalog','#/services':'show_services','#/aurion':'show_aurion','#/aurion/plans':'show_aurion','#/about':'show_about'};
   $$('.nav-links a, .mobile-nav a, .footer-links a').forEach(a => {
@@ -753,7 +835,19 @@ if(path==='/'){productFilter='All';if(localStorage.getItem(BRAND_STORAGE)){local
    hash is kept in step so a shared link lands on the same preview, and the
    route below re-creates the layer when the page loads directly at that hash. */
 if(path.startsWith('/preview/')){let slug=path.split('/')[2];let p=products.find(x=>x.slug===slug);if(!p){app.innerHTML='<div class="container page-head"><h1>Preview not found</h1><a class="back-link" href="#/products">Return to products</a></div>';return}app.innerHTML=catalog();bindFilters();setTimeout(()=>openPreview(slug,false),0);return}app.innerHTML=home()}
-$('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();
+/* The blog loads this file too, and it is not a single-page app: there is no
+   #app to render into and no #year in its footer. Everything from here to the
+   end of this file is the storefront's routing and must not run there. The
+   header, the theme and the account button are wanted on both pages, so those
+   run first and only the routing below is skipped. */
+const YEAR=$('#year');if(YEAR)YEAR.textContent=new Date().getFullYear();themeInit();applyThemePreference();applyChrome();
+/* The blog loads this file for the header, the theme and the account button -
+   it does not want the storefront's router. Everything below is the storefront
+   app; `IS_SHOP` is false on the blog, and only the calls that would render
+   into #app or read storefront-only markup consult it. The helpers stay
+   defined either way, because the header's chrome (applyChrome, applyBrand)
+   needs them on both pages. */
+const IS_SHOP = !!$('#app');
 /* Boot used to be a waterfall: settings, then products, then the session, and
    only then the first paint. The three requests do not depend on each other —
    settings decide which sections exist, products fill the grid, the session
@@ -768,6 +862,16 @@ $('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference
    - a failed settings request still renders (siteDefaults), rather than
      stranding the visitor on the loading state. */
 (function boot(){
+  /* The blog has no #app: it loads this file for the header, the theme and the
+     account button, and its article is already server-rendered. Boot must not
+     try to paint a storefront into a node that is not there. It still loads the
+     site settings, because the header's visibility flags and the brand colours
+     come from them. */
+  if(!IS_SHOP){
+    loadSite().then(()=>{applyChrome();applyThemePreference()}).catch(()=>{});
+    refresh();
+    return;
+  }
   const paint=()=>{render();applyChrome();teachXiona()};
   const siteReady=loadSite().then(()=>{applyChrome();applyThemePreference()});
   const productsReady=loadProducts();
@@ -776,7 +880,7 @@ $('#year').textContent=new Date().getFullYear();themeInit();applyThemePreference
      separately and finishes whenever it finishes. */
   refresh();
   Promise.all([siteReady,productsReady]).then(paint).catch(paint);
-})();window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();teachXiona();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}
+})();if(IS_SHOP)window.addEventListener('hashchange',()=>{if(location.hash.includes('/products?category=')){productFilter=new URLSearchParams(location.hash.split('?')[1]).get('category')||'All'}render();applyChrome();teachXiona();window.scrollTo({top:0,behavior:'smooth'})});document.addEventListener('click',e=>{const pick=e.target.closest('[data-brand-pick]');if(pick){setBrand(pick.dataset.brandPick);return}if(e.target.closest('[data-brand-clear]')){clearBrand();return}
 /* Pressing the header lockup while a product brand is running returns to
    AXIASOFT. The link has always pointed at '#/', but the home route never
    touched the brand, so from the home page the href was already satisfied: the
@@ -802,12 +906,12 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;c
    The knowledge grows as the site grows: every render teaches Xiona the page
    the visitor is looking at, and the snapshot carries the catalog and the
    articles. Nothing here reads orders, accounts or payments. */
-const launcher=$('#chat-launcher');launcher.onclick=toggleChat;
+const launcher=$('#chat-launcher');if(launcher)launcher.onclick=toggleChat;
 /* Start fetching the assistant when a pointer or a finger reaches for it rather
    than when the click lands: the panel still opens on the click, and the script
    is usually already parsed by then. Nothing downloads for a visitor who only
    scrolls past. */
-['pointerenter','focus','touchstart'].forEach(ev=>launcher.addEventListener(ev,wantXiona,{once:true,passive:true}));
+if(launcher)['pointerenter','focus','touchstart'].forEach(ev=>launcher.addEventListener(ev,wantXiona,{once:true,passive:true}));
 /* The launcher changes shape with the panel: a circle invites a question, the
    pill says who the visitor is already talking to. */
 function syncLauncher(){const l=$('#chat-launcher');if(!l)return;l.classList.toggle('is-open',chatOpen);l.setAttribute('aria-expanded',String(chatOpen));l.setAttribute('aria-label',chatOpen?'Close the Xiona assistant':'Open the Xiona assistant')}
@@ -1129,7 +1233,55 @@ async function sendChat(text){
  chatHistory.push({role:'bot',text:reply});
  saveChatHistory()}
 // Responsive mobile navigation.
-const mobileMenuButton=$('.mobile-menu');mobileMenuButton.setAttribute('aria-expanded','false');mobileMenuButton.onclick=()=>{if($('.mobile-nav'))return;const rect=mobileMenuButton.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,w=window.innerWidth,h=window.innerHeight,radius=Math.ceil(Math.max(Math.hypot(x,y),Math.hypot(w-x,y),Math.hypot(x,h-y),Math.hypot(w-x,h-y))*1.08);let nav=document.createElement('nav');nav.className='mobile-nav';nav.setAttribute('aria-label','Mobile navigation');nav.style.setProperty('--menu-x',`${x}px`);nav.style.setProperty('--menu-y',`${y}px`);nav.style.setProperty('--menu-radius',`${radius}px`);nav.innerHTML=`<button class="close-button close-mobile" aria-label="Close menu">${ICON('close')}</button><a href="#/products">Products</a><a href="#/services">Services</a><a href="${assetUrl('blog/')}">Blog</a><a href="#/aurion">AURION</a><a href="#/about">About</a><a href="#/contact">Start a project</a>`;document.body.append(nav);mobileMenuButton.setAttribute('aria-expanded','true');const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:440;let closing=false;const closeMenu=()=>{if(closing)return;closing=true;nav.classList.remove('is-open');mobileMenuButton.setAttribute('aria-expanded','false');window.setTimeout(()=>{nav.remove();mobileMenuButton.focus()},duration)};$('.close-mobile',nav).onclick=closeMenu;$$('a',nav).forEach(a=>a.onclick=closeMenu);nav.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});requestAnimationFrame(()=>{nav.classList.add('is-open');requestAnimationFrame(()=>$('a',nav)?.focus())})};
+/* The phone menu. It drew its own link list - six English anchors, hardcoded
+   here - while the header drew its own from the dictionary and the blog drew a
+   third in Python. The first two disagreed in Persian, and the third was not
+   translated at all. The list now comes from the same description the header
+   uses, in the page's language, so there is one answer to "what is in the
+   navigation".
+   It also only runs where there is a menu button: the blog mounts the same
+   header, so it gets this too, and the guard keeps a page without one from
+   throwing before anything is drawn. */
+const mobileMenuButton=$('.mobile-menu');
+if(mobileMenuButton){
+  /* The same five destinations, read from the dictionary, spelled once. */
+  const NAV_ITEMS=[['products','Products'],['services','Services'],['blog','Blog'],
+                   ['aurion',null],['about','About'],['contact','Start a project']];
+  const navDestination=key=>key==='blog'?assetUrl('blog/'):key==='contact'?'#/contact':'#/'+key;
+  const navText=key=>key==='aurion'?'AURION':(window.AXIA_T||(v=>v))(NAV_ITEMS.find(x=>x[0]===key)?.[1]||'');
+  mobileMenuButton.setAttribute('aria-expanded','false');
+  mobileMenuButton.onclick=()=>{
+    if($('.mobile-nav'))return;
+    const rect=mobileMenuButton.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2,w=window.innerWidth,h=window.innerHeight,radius=Math.ceil(Math.max(Math.hypot(x,y),Math.hypot(w-x,y),Math.hypot(x,h-y),Math.hypot(w-x,h-y))*1.08);
+    let nav=document.createElement('nav');
+    nav.className='mobile-nav';
+    nav.setAttribute('aria-label',(window.AXIA_T||(v=>v))('Main navigation'));
+    nav.style.setProperty('--menu-x',`${x}px`);
+    nav.style.setProperty('--menu-y',`${y}px`);
+    nav.style.setProperty('--menu-radius',`${radius}px`);
+    nav.innerHTML=`<button class="close-button close-mobile" aria-label="${esc((window.AXIA_T||(v=>v))('Close menu'))}">${ICON('close')}</button>`+
+      NAV_ITEMS.map(([key])=>`<a href="${navDestination(key)}">${esc(navText(key))}</a>`).join('');
+    document.body.append(nav);
+    mobileMenuButton.setAttribute('aria-expanded','true');
+    /* The page behind the menu must not scroll under a thumb that is trying to
+       scroll the menu. The blog's old drawer did this; the storefront's did
+       not, so the behaviour is now one thing instead of two. */
+    document.body.style.overflow='hidden';
+    const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:440;
+    let closing=false;
+    const closeMenu=()=>{
+      if(closing)return;
+      closing=true;nav.classList.remove('is-open');
+      document.body.style.overflow='';
+      mobileMenuButton.setAttribute('aria-expanded','false');
+      window.setTimeout(()=>{nav.remove();mobileMenuButton.focus()},duration)
+    };
+    $('.close-mobile',nav).onclick=closeMenu;
+    $$('a',nav).forEach(a=>a.onclick=closeMenu);
+    nav.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
+    requestAnimationFrame(()=>{nav.classList.add('is-open');requestAnimationFrame(()=>$('a',nav)?.focus())})
+  }
+}
 window.openAuth=openAuth;
 
 /* Every card and every in-page button tilts; the header controls do not.
@@ -1169,6 +1321,7 @@ function applyTiltClasses(root){
    MutationObserver on #app costs one callback per render — not per frame — and
    covers every path including the ones added after this was written. */
 function startTiltWatcher(){
+  if(!app)return;   /* the blog has no storefront to watch */
   applyTiltClasses(app);
   if(startTiltWatcher.done)return;
   startTiltWatcher.done=true;
@@ -1268,8 +1421,10 @@ function initPointerEffects(){
    window.addEventListener('scroll',()=>{if(active){reset(active);active=null}},{passive:true,capture:true});
  }
 }
-initPointerEffects();
-startTiltWatcher();
+/* Both of these are about the storefront's cards and the tilt they carry. The
+   blog has no cards, and reaching for them on a page that has none throws
+   before the header is ever drawn. */
+if(app){initPointerEffects();startTiltWatcher();}
 
 /* -------------------------------------------------------------------------
    Product brands
@@ -1394,7 +1549,10 @@ function applyBrand() {
     if (name) { name.hidden = true; name.textContent = ''; }
     const label = $('.brand-eyebrow');
     if (label) label.textContent = 'AXIASOFT';
-    document.title = 'AXIASOFT — ' + AXIA_T('Thoughtful software. Built for what comes next.');
+    /* The storefront's own title. An article page's <title> is the article's,
+       set by the server, and replacing it here would put the slogan where the
+       headline was - in the tab, in the search result, in the share card. */
+    if(!isReadingPage())document.title = 'AXIASOFT — ' + AXIA_T('Thoughtful software. Built for what comes next.');
     return;
   }
   root.setAttribute('data-brand', brand.id);
@@ -1411,7 +1569,7 @@ function applyBrand() {
   if (name) { name.hidden = false; name.textContent = brandName(brand); }
   const label = $('.brand-eyebrow');
   if (label) label.textContent = brandName(brand);
-  document.title = brandName(brand) + ' — ' + AXIA_T('Thoughtful software. Built for what comes next.');
+  if(!isReadingPage())document.title = brandName(brand) + ' — ' + AXIA_T('Thoughtful software. Built for what comes next.');
 }
 
 function setBrand(id) {
@@ -1631,3 +1789,4 @@ function brandStrip() {
     <div class="brand-picker-row">${cards}</div>
   </section>`;
 }
+

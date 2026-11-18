@@ -21,13 +21,18 @@ ck('the header uses the WebP mark', read('index.html').includes('src="/AxiaPlatf
 
 /* ---- 2. the blog shell matches the storefront ---- */
 const blog = read('blog/index.html');
+const app = read('app.js');
 ck('the blog does not force a dark theme', !/<html[^>]*data-theme="dark"/.test(blog));
 ck('the blog reads the saved theme', blog.includes("localStorage.getItem('axia-theme')"));
-ck('the blog has a theme switch', blog.includes('id="theme-toggle"'));
-ck('the blog has the mobile drawer', blog.includes('id="blog-mobile-nav"'));
-ck('the blog drawer is initially hidden', /id="blog-mobile-nav"[^>]*hidden/.test(blog));
+// The blog no longer draws a header of its own: it asks app.js for the same
+// one the storefront mounts, so these check the shared header rather than a
+// second copy in blog.py that has since been deleted.
+ck('the blog loads the script that mounts the header',
+   blog.includes('app.js'));
+ck('the blog hands it the destinations',
+   blog.includes('id="blog-header"'));
 for (const route of ['#/products', '#/services', '#/aurion', '#/about', '#/contact']) {
-  ck(`the blog drawer links to ${route}`, blog.includes(`/AxiaPlatform/${route}"`) || blog.includes(`/${route}"`));
+  ck(`the shared header knows ${route}`, app.includes(route));
 }
 
 /* ---- 3. body text is black or white, never taupe ---- */

@@ -977,49 +977,46 @@ class MobileMenuTests(unittest.TestCase):
         self.css = (ROOT / 'public' / 'styles.css').read_text(encoding='utf-8')
 
     def _menu(self):
-        start = self.app.index("nav.className='mobile-nav'")
+        # From the route list to the point the menu is attached: the list, the
+        # destinations, the labels and the markup are all in that span.
+        start = self.app.index("const mobileMenuButton=$('.mobile-menu')")
         return self.app[start:self.app.index("document.body.append(nav)", start)]
 
     def test_the_drawer_lists_every_destination(self):
+        """Every top-level route is reachable from the phone menu."""
         menu = self._menu()
-        for label, target in (('Products', '#/products'), ('Services', '#/services'),
-                              ('AURION', '#/aurion'), ('About', '#/about'),
-                              ('Start a project', '#/contact')):
-            self.assertIn(f'href="{target}">{label}</a>', menu, f'{label} is missing')
+        for key in ('products', 'services', 'blog', 'aurion', 'about', 'contact'):
+            self.assertIn(f"'{key}'", menu, f'{key} is not in the menu list')
 
     def test_the_drawer_reaches_the_blog(self):
         # The blog is a real directory, not a hash route, so it is the one entry
-        # that must carry the deploy base. It is written as assetUrl('blog/')
-        # rather than a literal, because a raw "/blog/" 404s on GitHub Pages —
-        # which is exactly how a freshly published post appeared to be missing.
+        # that must carry the deploy base.
         menu = self._menu()
-        self.assertRegex(menu, r'<a href="\$\{assetUrl\([\'"]blog/[\'"]\)\}">Blog</a>')
-        self.assertNotIn('<a href="/blog/">', menu,
-                         'a raw /blog/ drops the deployment sub-path')
-
-    def test_the_blog_entry_sits_where_the_top_bar_puts_it(self):
-        # The top bar has always read Products · Services · Blog · AURION ·
-        # About. The drawer had it after AURION, which is the kind of small
-        # difference that makes a phone feel like a different site.
-        menu = self._menu()
-        self.assertRegex(
-            menu,
-            r'Services</a><a href="\$\{assetUrl\([\'"]blog/[\'"]\)\}">Blog</a>'
-            r'<a href="#/aurion">AURION</a>')
+        self.assertIn("assetUrl('blog/')", menu,
+                      'a raw /blog/ drops the deployment sub-path')
 
     def test_the_drawer_and_the_top_bar_agree_on_the_order(self):
-        # Two hand-maintained lists that drift are how the blog went missing in
-        # the first place. The top bar lives in index.html, the drawer in app.js,
-        # so the check has to read both.
-        index = (ROOT / 'public' / 'index.html').read_text(encoding='utf-8')
-        nav = re.search(r'<nav class="nav-links"[^>]*>(.*?)</nav>', index, re.S)
-        self.assertIsNotNone(nav, 'no top-bar nav to compare against')
-        top = re.findall(r'>([^<>]+)</a>', nav.group(1))
-        drawer = [d for d in re.findall(r'>([^<>]+)</a>', self._menu()) if d in top]
-        self.assertEqual(drawer, top,
-                         'the drawer and the top bar list the site differently')
-        # And every one of them is actually reachable from the drawer.
-        self.assertEqual(len(drawer), len(top))
+        """One list, asked twice.
+
+        The drawer used to carry its own six anchors, the top bar carried five
+        in index.html, and the blog carried a third set in Python. Two of them
+        put Blog in different places. There is one list now - the header's -
+        and the drawer reads the same destinations from it, so the two cannot
+        disagree by construction. What is worth asserting is that the shared
+        list holds every route, in the order the site uses.
+        """
+        app = self.app
+        start = app.index('function headerHTML(')
+        end = app.index('function mountHeader(')
+        header = app[start:end]
+        order = [m for m in re.findall(r"\['(\w+)',", header)]
+        self.assertEqual(order, ['products', 'services', 'blog', 'aurion', 'about'])
+
+    def test_the_drawer_reads_its_labels_from_the_dictionary(self):
+        """A hardcoded menu is a menu that only exists in one language."""
+        menu = self._menu()
+        self.assertIn('AXIA_T', menu,
+                      'the phone menu must translate its labels')
 
 
 class BrandCategoryScopeTests(unittest.TestCase):
@@ -1719,17 +1716,32 @@ class BlogShellParityTests(unittest.TestCase):
         self.assertIn("localStorage.getItem('axia-theme')", self.blog)
         self.assertIn('prefers-color-scheme: light', self.blog)
 
-    def test_the_blog_has_a_theme_switch(self):
-        self.assertIn('id="theme-toggle"', self.blog)
+    def test_the_blog_has_the_shared_theme_switch(self):
+        """The switch is app.js's, and the blog loads app.js for it."""
+        self.assertIn('app.js', self.blog)
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn('theme-toggle', app)
 
-    def test_the_blog_has_the_same_mobile_drawer_links(self):
-        self.assertIn('id="blog-mobile-nav"', self.blog)
-        for route in ('#/products', '#/services', '#/aurion', '#/about', '#/contact'):
-            self.assertIn(f'href="{{root}}/{route}"', self.blog)
+    def test_the_shared_header_carries_every_route(self):
+        """One list of destinations, used by both pages."""
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        start = app.index('function headerHTML(')
+        end = app.index('function mountHeader(')
+        body = app[start:end]
+        for route in ('products', 'services', 'blog', 'aurion', 'about'):
+            self.assertIn(f"'{route}'", body, f'the header dropped {route}')
 
-    def test_the_drawer_is_hidden_initially_and_toggles(self):
-        self.assertIn('id="blog-mobile-nav" hidden', self.blog)
-        self.assertIn('drawer.hidden = !on', self.blog)
+    def test_the_blog_declares_the_language_of_its_header(self):
+        """The blog is server-rendered in two languages; it has to say which.
+
+        The header is built by app.js from the page's own description, so the
+        description has to be on the page before app.js runs - in the head,
+        which is why it is a JSON block rather than an attribute on the script.
+        """
+        self.assertIn('id="blog-header"', self.blog)
+        head = self.blog[:self.blog.index('</head>')]
+        self.assertIn('id="blog-header"', head,
+                      'the header description must be readable while parsing')
 
     def test_the_blog_loads_the_shared_stylesheet(self):
         # The URL is a template: the version is resolved at render time from the
@@ -2194,8 +2206,12 @@ class ThemeIconTests(unittest.TestCase):
         self.assertNotIn('◐', self.index)
         self.assertNotIn('>☼<', self.index)
 
-    def test_the_blog_ships_an_svg_too(self):
-        self.assertRegex(self.blog, r'id="theme-toggle"[\s\S]{0,400}<svg')
+    def test_the_shared_header_ships_an_svg(self):
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        start = app.index('function headerHTML(')
+        end = app.index('function mountHeader(')
+        self.assertIn("ICON('moon')", app[start:end],
+                      'the theme button is drawn, not typed')
 
     def test_both_glyphs_are_drawn(self):
         self.assertIn('THEME_SUN', self.app)
@@ -2205,10 +2221,16 @@ class ThemeIconTests(unittest.TestCase):
         self.assertIn('Switch to light theme', self.app)
         self.assertIn('Switch to dark theme', self.app)
 
-    def test_the_blog_has_localised_labels(self):
-        import blog as blog_module
-        self.assertTrue(blog_module.COPY['en']['theme_to_light'])
-        self.assertTrue(blog_module.COPY['fa']['theme_to_dark'])
+    def test_the_shared_header_has_localised_labels(self):
+        """Labels come from the site dictionary, not a blog-only copy.
+
+        blog.py had its own table of header strings, which is how its version of
+        the About link came to be spelled differently from the storefront's.
+        """
+        i18n = (ROOT / 'public' / 'i18n.js').read_text(encoding='utf-8')
+        for key in ('Switch to light theme', 'Switch to dark theme',
+                    'Main navigation', 'Open menu', 'Close menu'):
+            self.assertIn(key, i18n, f'the dictionary has no {key!r}')
 
 
 class AdminThemeIconTests(unittest.TestCase):
@@ -2354,22 +2376,41 @@ class BlogDrawerCascadeTests(unittest.TestCase):
         self.assertIn('.blog-body .mobile-nav[hidden] { display: none !important; }',
                       self.blog_css)
 
-    def test_the_blog_renders_the_drawer_hidden(self):
-        self.assertIn('id="blog-mobile-nav" hidden', self.blog)
+    def test_the_blog_gets_the_shared_header(self):
+        """The drawer is app.js's now, not a second copy in blog.py.
 
-    def test_the_script_toggles_the_hidden_attribute(self):
-        self.assertIn('drawer.hidden = !on', self.blog)
-        self.assertIn("drawer.classList.toggle('open', on)", self.blog)
+        It used to be markup in blog.py with its own show/hide, its own close
+        button and its own body-scroll lock - five things to keep in step with
+        the storefront's, and they did not stay in step. The blog loads app.js
+        and asks for the header; the drawer comes with it.
+        """
+        self.assertIn('app.js', self.blog)
+        self.assertNotIn('id="blog-mobile-nav"', self.blog,
+                         'the blog is drawing its own drawer again')
 
-    def test_the_close_button_is_wired(self):
-        self.assertIn('blog-menu-close', self.blog)
-        self.assertIn("close.addEventListener('click'", self.blog)
+    def test_the_shared_drawer_toggles_the_hidden_attribute(self):
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        # hidden is what assistive technology follows; a class alone leaves the
+        # links reachable by tab while they are visually gone.
+        self.assertRegex(app, r"\.hidden\s*=")
+
+    def test_the_shared_drawer_has_a_working_close(self):
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn('mobileMenuButton', app)
+        self.assertIn('close-mobile', app)
 
     def test_a_link_inside_closes_it(self):
-        self.assertIn("if (e.target.tagName === 'A')", self.blog)
+        """Choosing a destination closes the menu, or it stays over the page."""
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        start = app.index("const mobileMenuButton=$('.mobile-menu')")
+        menu = app[start:app.index('window.openAuth=openAuth;', start)]
+        self.assertRegex(menu, r"\$\$\('a',nav\)\.forEach\(a=>a\.onclick=closeMenu\)")
 
-    def test_the_body_scroll_is_locked_while_open(self):
-        self.assertIn("document.body.style.overflow = on ? 'hidden' : ''", self.blog)
+    def test_the_shared_drawer_locks_the_body_scroll(self):
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn("document.body.style.overflow", app,
+                      'opening the drawer on a phone must stop the page behind '
+                      'it scrolling')
 
 
 class FocusRingTests(unittest.TestCase):

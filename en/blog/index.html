@@ -26,24 +26,15 @@
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Blog", "name": "وبلاگ AXIASOFT", "inLanguage": "fa-IR", "url": "https://axiasoft.github.io/AxiaPlatform/en/blog/", "publisher": {"@type": "Organization", "name": "AXIASOFT"}, "blogPost": [{"@type": "BlogPosting", "headline": "How to build a fast website", "url": "https://axiasoft.github.io/AxiaPlatform/blog/fast-website/", "datePublished": "2026-11-08 22:22:45", "description": "Speed is not a feature you add at the end; it is the result of three decisions made on day one."}, {"@type": "BlogPosting", "headline": "WordPress or hand-coded: which is right for your project?", "url": "https://axiasoft.github.io/AxiaPlatform/blog/wordpress-vs-code/", "datePublished": "2026-11-20 10:15:00", "description": "WordPress ships a working site in days and hand-coding buys full control. The real difference is not launch speed; it is the five-year cost and the wall you eventually hit."}]}</script>
   <link rel="alternate" type="application/rss+xml" title="AXIASOFT · وبلاگ" href="https://axiasoft.github.io/AxiaPlatform/blog/feed.xml">
   <script>
-  /* The article pages are server-rendered, so they cannot wait for app.js to
-     pick a theme: doing that would flash dark on a light visitor. The same
-     key and the same system fallback the storefront uses are read here, in
-     the head, before anything is painted. */
+  /* Before the first paint, or a returning light-mode visitor sees a dark page
+     flash. Same key, same three inputs and same order as the storefront's
+     themeInit(): the visitor's saved choice, then the administrator's default,
+     then the operating system. */
   (function(){
-    /* Three inputs, in priority order, and they are the storefront's three.
-       (1) The visitor's own saved choice. (2) The administrator's default from
-       site settings — 'dark', 'light', or 'system'. (3) The operating system.
-
-       Only (1) and (3) were here, so a site configured to open in light mode
-       opened dark on the blog and light on the storefront: the same visitor,
-       the same session, two different themes, and no setting that could make
-       them agree. The build and the server now pass the default through. */
     var fallback = "dark";
     var system = function(){ return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; };
     try {
-      var saved = localStorage.getItem('axia-theme');
-      var t = saved || (fallback === 'system' || !fallback ? system() : fallback);
+      var t = localStorage.getItem('axia-theme') || (fallback === 'system' || !fallback ? system() : fallback);
       if (t !== 'light' && t !== 'dark') t = system();
       document.documentElement.dataset.theme = t;
     } catch (e) {
@@ -51,6 +42,7 @@
     }
   })();
   </script>
+  <script type="application/json" id="blog-header">{"lang": "en", "hrefs": {"home": "/AxiaPlatform/", "products": "/AxiaPlatform/#/products", "services": "/AxiaPlatform/#/services", "blog": "/AxiaPlatform/blog/", "aurion": "/AxiaPlatform/#/aurion", "about": "/AxiaPlatform/#/about", "contact": "/AxiaPlatform/#/contact"}, "current": "blog"}</script>
   <link rel="preload" href="/AxiaPlatform/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/AxiaPlatform/styles.css?v=site-29fd139a">
   <link rel="stylesheet" href="/AxiaPlatform/effects.css?v=site-9d3b272a">
@@ -59,15 +51,6 @@
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="topbar">
-  <a href="/AxiaPlatform/" class="brand" aria-label="AXIASOFT home"><span class="brand-mark"><img src="/AxiaPlatform/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="/AxiaPlatform/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
-  <nav class="nav-links" aria-label="Products"><a href="/AxiaPlatform/#/products">Products</a><a href="/AxiaPlatform/#/services">Services</a><a href="/AxiaPlatform/blog/" aria-current="page">Blog</a><a href="/AxiaPlatform/#/aurion">AURION</a><a href="/AxiaPlatform/#/about">About</a></nav>
-  <div class="nav-actions"><a class="blog-lang" href="/AxiaPlatform/blog/" hreflang="fa" lang="fa" rel="alternate">فارسی</a><button class="icon-button theme-toggle" id="theme-toggle" aria-label="Toggle color theme" title="Toggle color theme" data-to-light="Switch to light theme" data-to-dark="Switch to dark theme"><span class="theme-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span></button><a class="button button-small button-primary nav-cta" href="/AxiaPlatform/#/contact"><span class="button-label">Start a project</span><svg class="icon dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a><button class="mobile-menu icon-button" id="blog-menu" aria-label="Open menu" aria-expanded="false" aria-haspopup="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
-</header>
-<nav class="mobile-nav" id="blog-mobile-nav" hidden aria-label="Products">
-  <button class="icon-button close-mobile" id="blog-menu-close" aria-label="Close menu"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-  <a href="/AxiaPlatform/#/products">Products</a><a href="/AxiaPlatform/#/services">Services</a><a href="/AxiaPlatform/blog/" aria-current="page">Blog</a><a href="/AxiaPlatform/#/aurion">AURION</a><a href="/AxiaPlatform/#/about">About</a><a href="/AxiaPlatform/#/contact">Start a project</a>
-</nav>
 <main class="blog-main" id="main"><div class="container">
 <section class="blog-hero">
   <div class="eyebrow">AXIASOFT Blog</div>
@@ -97,49 +80,8 @@
   <div class="footer-bottom"><span>© AXIASOFT</span><span>Engineered with intent <span class="blue">✦</span></span></div>
 </footer>
 <script src="/AxiaPlatform/effects.js?v=site-9d3b272a" defer></script>
-<script>
-/* The article pages are static HTML, so the two header controls the
-   storefront gets from app.js are wired here instead. Small on purpose: a
-   theme switch that writes the same key, and a drawer that matches the one
-   the storefront opens, because a visitor on a phone should not lose the
-   navigation when they follow a link into the blog. */
-(function () {
-  var root = document.documentElement;
-  var toggle = document.getElementById('theme-toggle');
-  if (toggle) {
-    /* Same two glyphs as the storefront (public/app.js), inline because this
-       page is server-rendered and does not load app.js. */
-    var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>';
-    var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
-    var paint = function () {
-      var dark = root.dataset.theme === 'dark';
-      toggle.querySelector('.theme-icon').innerHTML = dark ? MOON : SUN;
-      var label = dark ? toggle.dataset.toLight : toggle.dataset.toDark;
-      if (label) { toggle.setAttribute('aria-label', label); toggle.setAttribute('title', label); }
-    };
-    paint();
-    toggle.addEventListener('click', function () {
-      var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
-      root.dataset.theme = next;
-      try { localStorage.setItem('axia-theme', next); } catch (e) {}
-      paint();
-    });
-  }
-  var open = document.getElementById('blog-menu');
-  var close = document.getElementById('blog-menu-close');
-  var drawer = document.getElementById('blog-mobile-nav');
-  if (open && drawer) {
-    var show = function (on) {
-      drawer.hidden = !on;
-      drawer.classList.toggle('open', on);
-      open.setAttribute('aria-expanded', String(on));
-      document.body.style.overflow = on ? 'hidden' : '';
-    };
-    show(false);
-    open.addEventListener('click', function () { show(true); });
-    if (close) { close.addEventListener('click', function () { show(false); }); }
-    drawer.addEventListener('click', function (e) { if (e.target.tagName === 'A') { show(false); } });
-  }
-})();
-</script>
+<script src="/AxiaPlatform/i18n.js" defer></script>
+<script src="/AxiaPlatform/icons.js" defer></script>
+<script src="/AxiaPlatform/brands.js" defer></script>
+<script src="/AxiaPlatform/static-adapter.js?v=static-2" defer></script><script src="/AxiaPlatform/app.js" defer></script>
 </body></html>
