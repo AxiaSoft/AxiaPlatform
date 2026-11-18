@@ -1,4 +1,18 @@
-const app=document.querySelector('#app'),modalRoot=document.querySelector('#modal-root');let products=[],me=null,csrf=null,adminTab='Orders',productFilter='All',chatOpen=false;
+const app=document.querySelector('#app');
+/* Every dialog on this site - sign in, the account, a project request, a
+   confirmation - is drawn into #modal-root. The storefront declares that
+   element in its markup; a server-rendered page such as the blog does not, and
+   there the whole thing failed silently: pressing Sign in ran the handler,
+   found nowhere to put the dialog, and nothing happened. The fix belongs here,
+   not in each page's template, because the next page added would have had the
+   same hole. A page may still declare its own modal root; this only supplies
+   one when it did not. */
+const modalRoot=document.querySelector('#modal-root')||(()=>{
+  const node=document.createElement('div');
+  node.id='modal-root';
+  (document.body||document.documentElement).appendChild(node);
+  return node;
+})();let products=[],me=null,csrf=null,adminTab='Orders',productFilter='All',chatOpen=false;
 /* Storefront settings come from the admin console (GET /api/site), or from the
    static build's snapshot. The defaults below mirror the shipped design, so a
    site that has never been configured renders exactly as before. */
@@ -196,7 +210,21 @@ function paintThemeIcon(){
 function themeInit(){let t=localStorage.getItem('axia-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;paintThemeIcon()}
 /* The administrator can choose what a first-time visitor sees. A visitor's own
    saved choice always wins - this only decides the default. */
-function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=paintThemeIcon()}const _tt=$('.theme-toggle');if(_tt)_tt.onclick=()=>{let t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);paintThemeIcon()};
+function applyThemePreference(){if(!site.default_theme||localStorage.getItem('axia-theme'))return;const sys=site.default_theme==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):site.default_theme;document.documentElement.dataset.theme=sys;const icon=paintThemeIcon()}/* The theme switch listens on the document, not on the button.
+   It used to be bound to whatever .theme-toggle existed when this line ran.
+   That worked on the storefront, whose header is in index.html, and failed on
+   every page whose header is built later - the blog, where app.js runs before
+   the header it is meant to control exists. The button was drawn, looked
+   right, and did nothing; the theme never changed and nothing was stored.
+   A delegated listener covers a button that is added at any time, by any
+   page, including one added twice. */
+document.addEventListener('click', event => {
+  if (!event.target.closest || !event.target.closest('.theme-toggle')) return;
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('axia-theme', next);
+  paintThemeIcon();
+});
 async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');if(b){const isAdmin=!!me&&me.role==='admin';const label=me?(isAdmin?'Admin panel':'My account'):'Sign in';b.setAttribute('aria-label',label);b.title=label;b.innerHTML='<span class="account-icon">'+ICON(isAdmin?'dashboard':'user')+'</span>';b.classList.toggle('is-signed-in',!!me);}b&&(b.onclick=()=>me?(me.role==='admin'?location.assign('/admin/'):go('/account')):openAuth());}
 
 function sectionOff(name){const label=({about:'About',services:'Services',contact:'Contact',aurion:'AURION',catalog:'Products'})[name]||'This page';return `<div class="container"><section class="page-head"><div class="eyebrow">SECTION HIDDEN</div><h1>${label} is not<br><span class="gradient">published right now.</span></h1><p>An administrator has hidden this section of the site. The rest of AXIASOFT is still available.</p><a class="button button-primary" href="#/">Return home${ICON('arrow','dir-icon')}</a></section></div>`}
@@ -773,9 +801,20 @@ window.AXIA_MOUNT_HEADER = function(lang, hrefs, current){
   mountHeader({lang: opts.lang, href: path => (opts.hrefs || {})[path] || path, current: opts.current});
 })();
 function applyChrome(){
-  const navFlags = {'#/products':'show_catalog','#/services':'show_services','#/aurion':'show_aurion','#/aurion/plans':'show_aurion','#/about':'show_about'};
+  /* Which sections are switched on, by route.
+     The lookup used to be by exact href, which only worked on the storefront,
+     where a link is written "#/products". The blog's header is built with the
+     deployment path in front of it - "/#/products", or "/AxiaPlatform/#/products"
+     when published under a sub-path - so every one of those links matched
+     nothing and stayed visible even after an administrator hid the section.
+     That is the nav list disagreeing between the two pages: same words, but
+     only one of them obeying the settings. The route is the part after the
+     '#', so it survives any base path. */
+  const navFlags = {'/products':'show_catalog','/services':'show_services','/aurion':'show_aurion','/aurion/plans':'show_aurion','/about':'show_about'};
   $$('.nav-links a, .mobile-nav a, .footer-links a').forEach(a => {
-    const flag = navFlags[a.getAttribute('href')];
+    const href = a.getAttribute('href') || '';
+    const route = href.slice(href.indexOf('#/') + 1);
+    const flag = navFlags[route];
     if (flag) a.hidden = !visible(flag);
   });
   applyBrand();

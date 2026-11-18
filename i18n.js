@@ -721,6 +721,16 @@ const declared=lang;
 if(!declared)lang=localStorage.getItem('axia-lang');
 try{const q=new URLSearchParams(location.search).get('lang');if(q==='en'||q==='fa'){lang=q;localStorage.setItem('axia-lang',q)}}catch(e){}
 if(!lang)lang='fa';setLanguage(lang);
-const toggle=document.querySelector('#languageToggle');if(toggle)toggle.addEventListener('click',()=>{const next=lang==='fa'?'en':'fa';localStorage.setItem('axia-lang',next);location.reload()});
+/* The language switch listens on the document, not on the button.
+   This file runs before the header is drawn on a server-rendered page, so
+   querying #languageToggle here found nothing and the click was never bound -
+   the button was there, said "English", and did nothing. Delegation means the
+   button works whether it existed at this point or was added afterwards. */
+document.addEventListener('click', event => {
+  if (!event.target.closest || !event.target.closest('#languageToggle')) return;
+  const next = lang === 'fa' ? 'en' : 'fa';
+  localStorage.setItem('axia-lang', next);
+  location.reload();
+});
 const observer=new MutationObserver(records=>{if(lang!=='fa'||observer.muted)return;observer.muted=true;try{for(const r of records){if(r.type==='characterData')translateNode(r.target);for(const added of r.addedNodes){if(added.nodeType===Node.TEXT_NODE)translateNode(added);else if(added.nodeType===Node.ELEMENT_NODE)apply(added)}}}finally{observer.muted=false}});observer.observe(document.body,{subtree:true,childList:true,characterData:true});
 })();

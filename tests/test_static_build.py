@@ -1800,7 +1800,20 @@ class AurionPlanLandingTests(unittest.TestCase):
         self.assertIn("path==='/aurion/plans'", self.app_js)
 
     def test_the_plan_route_respects_the_visibility_setting(self):
-        self.assertIn("'#/aurion/plans':'show_aurion'", self.app_js)
+        """The plans page is gated by the same switch as the AURION section.
+
+        The route is looked up after the '#', not as a whole href. Keying the
+        table by the exact string only worked on the storefront, where a link
+        is written "#/aurion"; the blog's header carries the deployment path
+        in front of it ("/#/aurion", or "/AxiaPlatform/#/aurion" when
+        published under a sub-path), so its copies of the same links matched
+        nothing and never obeyed the setting. Same words, different behaviour
+        - which is what "the nav list is not in sync" looks like.
+        """
+        self.assertIn("'/aurion/plans':'show_aurion'", self.app_js)
+        self.assertIn("'/aurion':'show_aurion'", self.app_js)
+        # And the lookup strips the base path instead of matching it literally.
+        self.assertIn("href.slice(href.indexOf('#/') + 1)", self.app_js)
 
     def test_one_renderer_feeds_both_pages(self):
         self.assertIn('AURION_PLANS', self.app_js)
