@@ -2441,7 +2441,9 @@ class BlogDrawerCascadeTests(unittest.TestCase):
         app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
         start = app.index("const mobileMenuButton=$('.mobile-menu')")
         menu = app[start:app.index('window.openAuth=openAuth;', start)]
-        self.assertRegex(menu, r"\$\$\('a',nav\)\.forEach\(a=>a\.onclick=closeMenu\)")
+        # The handler is wrapped so the click event is not passed as closeMenu's
+        # `refocus` argument; the shape is a matter for the round-43 tests.
+        self.assertRegex(menu, r"\$\$\('a',nav\)\.forEach\(a=>a\.onclick=\(\)=>closeMenu\(\)\)")
 
     def test_the_shared_drawer_locks_the_body_scroll(self):
         app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
