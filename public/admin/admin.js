@@ -240,7 +240,7 @@ function productActions(p){
    were; the only structural change is that Category now prints the operator's
    label instead of the raw value, and flags an orphan. */
 function productsTable(data,allShownSelected){
- return `<div class="table-wrap product-table-wrap"><table class="data-table product-table"><thead><tr><th class="check-col"><input type="checkbox" data-select-all aria-label="${T('Select all shown products')}" ${allShownSelected?'checked':''}></th><th>${T('Product')}</th><th>${T('Category')}</th><th>${T('Price label')}</th><th>${T('Availability')}</th><th>${T('Preview link')}</th><th>${T('Visibility')}</th><th>${T('Order')}</th><th>${T('Actions')}</th></tr></thead><tbody>${data.map(p=>`<tr class="${p.published?'':'is-hidden'}"><td class="check-col"><input type="checkbox" data-select-product="${p.id}" aria-label="${T('Select')} ${esc(p.title)}" ${state.selected.has(Number(p.id))?'checked':''}></td><td><span class="cell-main">${p.featured?'★ ':''}${esc(p.title)}</span><span class="cell-sub">/${esc(p.slug)}</span></td><td>${orphanCategory(p)?`<span class="cell-main cat-orphan">${esc(categoryLabel(p.category))}</span><span class="cell-sub">${T('category removed')}</span>`:esc(categoryLabel(p.category))}</td><td>${esc(p.price_label)}</td><td>${pill(p.status)}</td><td>${safeHttp(p.github_url)?`<a class="cell-sub link-cell" href="${esc(p.github_url)}" target="_blank" rel="noopener noreferrer">${esc(String(p.github_url).replace(/^https:\/\//,'').slice(0,42))}</a>`:`<span class="cell-sub">${T('Built-in preview')}</span>`}</td><td>${pill(p.published?T('Published'):T('Hidden'))}</td><td><div class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">↑</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></div></td><td>${productActions(p)}</td></tr>`).join('')}</tbody></table></div>`;
+ return `<div class="table-wrap product-table-wrap"><table class="data-table product-table"><thead><tr><th class="check-col"><input type="checkbox" data-select-all aria-label="${T('Select all shown products')}" ${allShownSelected?'checked':''}></th><th>${T('Product')}</th><th>${T('Category')}</th><th>${T('Price label')}</th><th>${T('Availability')}</th><th>${T('Preview link')}</th><th>${T('Visibility')}</th><th>${T('Order')}</th><th>${T('Actions')}</th></tr></thead><tbody>${data.map(p=>`<tr class="${p.published?'':'is-hidden'}"><td class="check-col"><input type="checkbox" data-select-product="${p.id}" aria-label="${T('Select')} ${esc(p.title)}" ${state.selected.has(Number(p.id))?'checked':''}></td><td><span class="cell-main">${p.featured?'★ ':''}${esc(p.title)}</span><span class="cell-sub">/${esc(p.slug)}</span></td><td>${orphanCategory(p)?`<span class="cell-main cat-orphan">${esc(categoryLabel(p.category))}</span><span class="cell-sub">${T('category removed')}</span>`:esc(categoryLabel(p.category))}</td><td>${esc(p.price_label)}</td><td>${pill(p.status)}</td><td>${safeHttp(p.github_url)?`<a class="cell-sub link-cell" href="${esc(p.github_url)}" target="_blank" rel="noopener noreferrer">${esc(String(p.github_url).replace(/^https:\/\//,'').slice(0,42))}</a>`:`<span class="cell-sub">${T('Built-in preview')}</span>`}</td><td>${pill(p.published?T('Published'):T('Hidden'))}</td><td><div class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">${ICON('up')}</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">${ICON('down')}</button></div></td><td>${productActions(p)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 /* The phone card. Everything the table shows that a person actually decides
@@ -263,7 +263,7 @@ function productCards(data,allShownSelected){
    <div class="pca-facts">
     <div><small>${T('Category')}</small><span class="${orphanCategory(p)?'cat-orphan':''}">${esc(categoryLabel(p.category))}${orphanCategory(p)?' ⚠':''}</span></div>
     <div><small>${T('Price label')}</small><span>${esc(p.price_label||'—')}</span></div>
-    <div><small>${T('Order')}</small><span class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">↑</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></span></div>
+    <div><small>${T('Order')}</small><span class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">${ICON('up')}</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></span></div>
    </div>
    ${productActions(p)}
   </article>`).join('')}
@@ -324,7 +324,7 @@ function categoryRow(c,i,count){
   </div>
   <label class="cat-field"><span>${T('Category name')}</span><input class="cat-input" data-cat-name="${esc(c.id)}" value="${esc(c.name)}" maxlength="40" aria-label="${T('Category name')}"></label>
   <label class="cat-field"><span>${T('Persian name')}</span><input class="cat-input cat-input-fa" data-cat-name-fa="${esc(c.id)}" value="${esc(c.nameFa)}" maxlength="40" placeholder="${T('optional')}" aria-label="${T('Persian name')}" dir="rtl"></label>
-  <div class="order-ctl"><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="-1" aria-label="${T('Move up')}" ${i===0?'disabled':''}>↑</button><span class="order-num">${fmtNum(i+1)}</span><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="1" aria-label="${T('Move down')}" ${i===count-1?'disabled':''}>↓</button></div>
+  <div class="order-ctl"><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="-1" aria-label="${T('Move up')}" ${i===0?'disabled':''}>${ICON('up')}</button><span class="order-num">${fmtNum(i+1)}</span><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="1" aria-label="${T('Move down')}" ${i===count-1?'disabled':''}>↓</button></div>
   <button class="btn btn-sm ${used?'btn-quiet':'btn-danger'}" data-act="delete-category" data-cat="${esc(c.id)}" data-used="${used}" ${used?'disabled title="'+T('Move its products to another category first')+'"':''}>${T('Remove')}</button>
  </div>`;
 }
@@ -420,8 +420,8 @@ function brandRowHTML(b,i){
    <span class="brand-swatch" style="--swatch:${esc(b.accent||'#1f5fa8')}">${brandSwatch(b)}</span>
    <div><strong>${esc(b.name||T('New brand'))}</strong><span class="muted">${esc(b.nameFa||'')}</span></div>
    <div class="brand-edit-actions">
-    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">↑</button>
-    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-down" data-i="${i}" ${i===brandDraft().length-1?'disabled':''} title="${T('Move down')}">↓</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">${ICON('up')}</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-down" data-i="${i}" ${i===brandDraft().length-1?'disabled':''} title="${T('Move down')}">${ICON('down')}</button>
     <button class="btn btn-sm btn-quiet danger" type="button" data-act="brand-remove" data-i="${i}" title="${T('Remove this brand')}">${T('Remove')}</button>
    </div>
   </div>
@@ -473,8 +473,8 @@ function faqRowHTML(x,i){
    <span class="brand-swatch" style="--swatch:#2f6fd0"><span class="brand-swatch-glyph" aria-hidden="true">?</span></span>
    <div><strong>${esc(x.q||T('New question'))}</strong><span class="muted">${esc(x.qFa||'')}</span></div>
    <div class="brand-edit-actions">
-    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">↑</button>
-    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-down" data-i="${i}" ${i===faqDraft().length-1?'disabled':''} title="${T('Move down')}">↓</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">${ICON('up')}</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-down" data-i="${i}" ${i===faqDraft().length-1?'disabled':''} title="${T('Move down')}">${ICON('down')}</button>
     <button class="btn btn-sm btn-quiet danger" type="button" data-act="faq-remove" data-i="${i}">${T('Remove')}</button>
    </div>
   </div>
@@ -510,6 +510,7 @@ function brandsTabHTML(){
 }
 function siteTabHTML(){
  const t=state.siteTab;
+ window.__tSeen=String(t);
  if(t==='hero'){
   return `<div class="panel form-panel"><div class="panel-head"><div><h2>Home hero</h2><p>The first three lines a visitor reads.</p></div><button class="btn btn-sm btn-quiet" data-act="preview-site" data-target="#/">Preview ${ICON('external')}</button></div>
    <form data-form="settings"><div class="setting-grid">${fieldText('hero_title','Headline',siteVal('hero_title'),'Shown in white. Keep it under about 45 characters so it does not wrap awkwardly.','maxlength="90" required')}${fieldText('hero_accent','Highlighted line',siteVal('hero_accent'),'Shown in the gradient, directly under the headline.','maxlength="90"')}
@@ -556,6 +557,13 @@ function siteTabHTML(){
     <div class="danger-card"><strong>Export settings</strong><p>Downloads the current settings as JSON, ready to commit as <code>data/settings.json</code>.</p><button class="btn btn-quiet" data-act="export-settings">Export JSON</button></div>
    </div><div class="notice">Deleting an account or a request is deliberately not possible here; those records stay for audit. Products are hidden rather than deleted so old requests keep their references.</div></div>`;
  }
+/* These two had their markup written and no branch here: the tab buttons
+   set state.siteTab, this switch had no case for it, and the page fell through
+   to the identity form below - so choosing "Questions" or "Site brands" showed
+   the identity tab and looked broken. The branch has to sit above the
+   fallthrough, which returns unconditionally. */
+ if(t==='brands')return brandsTabHTML();
+ if(t==='faq')return faqTabHTML();
  const s=state.settings||{};
  return `<div class="panel form-panel"><div class="panel-head"><div><h2>Site identity</h2><p>The first-visit theme for visitors who have never chosen one.</p></div></div>
   <form data-form="settings"><div class="setting-grid"><div class="field"><label for="s-default_theme">Default theme</label>${picker('default_theme', [['dark','Dark'],['light','Light'],['system','Match the device']].map(([v,l])=>({value:v,label:T(l)})), s.default_theme||'dark', {id:'s-default_theme', label:T('Default theme'), onPick:'pickerMarkDirty'})}<span class="field-hint">A visitor's own saved choice always wins.</span></div>
