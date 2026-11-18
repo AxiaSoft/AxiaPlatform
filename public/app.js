@@ -19,6 +19,18 @@ const modalRoot=document.querySelector('#modal-root')||(()=>{
 const siteDefaults={announcement_enabled:false,announcement_text:'',announcement_link:'',announcement_tone:'info',hero_title:'Building digital experiences.',hero_accent:"Engineering what's next.",hero_subtitle:'AXIASOFT creates thoughtful websites, mobile applications and custom software that help ambitious teams move forward.',contact_email:'',contact_phone:'',github_url:'',footer_note:'Thoughtful software. Built for what comes next.',show_catalog:true,show_services:true,show_aurion:true,show_about:true,show_contact:true,show_assistant:true,show_prices:true,default_theme:'dark'};
 let site={...siteDefaults};
 const visible=k=>site[k]!==false;
+/* One list of destinations, used by the header, the drawer and the footer.
+   `null` means the word is a product name and is never translated. */
+const NAV_WORDS={products:'Products',services:'Services',blog:'Blog',aurion:null,about:'About',contact:'Start a project'};
+const NAV_ORDER=['products','services','blog','aurion','about'];
+const NAV_ORDER_MENU=['products','services','blog','aurion','about','contact'];
+/* Which section of the site each route belongs to, and therefore which switch
+   in the console hides it. Declared once: the header, the drawer and the
+   section router all read it, so a route cannot be switched off in one place
+   and stay live in another. `blog` has no switch - publishing the blog is the
+   switch - and `contact` is the CTA, which applyChrome hides by class. */
+const NAV_FLAGS={'/products':'show_catalog','/services':'show_services',
+                 '/aurion':'show_aurion','/aurion/plans':'show_aurion','/about':'show_about'};
 /* Preview links come from the admin console and therefore from data, not from
    source code. Only a plain https URL is ever written into an href: anything
    else (javascript:, data:, a bare string) falls back to the built-in preview. */
@@ -762,8 +774,16 @@ function headerHTML(opts){
   /* The dictionary key is the English word, so each entry is the route and the
      word to look up. AURION is a product name, not a word: it is never
      translated, exactly as AXIASOFT is never translated. */
-  const items = [['products', 'Products'], ['services', 'Services'], ['blog', 'Blog'],
-                 ['aurion', null], ['about', 'About']];
+  const items = NAV_ORDER.map(key => [key, NAV_WORDS[key]]);
+  /* Publish the resolved destinations and the visibility flags for the other
+     things that draw navigation - the phone menu, and anything added later.
+     This is the only place that knows how a route is spelled on this page:
+     the storefront writes "#/products", the blog "/#/products", and under a
+     published sub-path "/AxiaPlatform/#/products". Building those strings a
+     second time is how the drawer's links ended up pointing at
+     /blog/#/products. */
+  window.AXIA_NAV = {};
+  for (const key of NAV_ORDER_MENU) window.AXIA_NAV[key] = href(key);
   const nav = items.map(([key, word]) => {
     const text = word ? L(word) : 'AURION';
     const now = current === key ? ' aria-current="page"' : '';
@@ -772,7 +792,7 @@ function headerHTML(opts){
   const signIn = L('Sign in');
   return `<header class="topbar"><a href="${esc(href('home'))}" class="brand" id="brand-link" aria-label="AXIASOFT home"><span class="brand-mark" id="brand-mark"><img src="${assetUrl('brand/axiasoft-original.webp')}" alt="AXIASOFT original symbol"></span><img class="brand-wordmark" id="brand-wordmark" src="${assetUrl('brand/axiasoft-wordmark.webp')}" alt="AXIASOFT wordmark"><span class="brand-name" id="brand-name" hidden></span></a>
     <nav class="nav-links" aria-label="${esc(L('Main navigation'))}">${nav}</nav>
-    <div class="nav-actions"><button class="icon-button theme-toggle" aria-label="${esc(L('Switch to light theme'))}" title="${esc(L('Switch to light theme'))}"><span class="theme-icon">${ICON('moon')}</span></button><button class="button button-small button-quiet language-toggle" id="languageToggle" data-lang="${otherLang}" aria-label="${esc(L('Switch language to English'))}">${otherLang === 'fa' ? 'فارسی' : 'English'}</button><button class="icon-button account-button" id="accountButton" aria-label="${esc(signIn)}" title="${esc(signIn)}"><span class="account-icon"></span></button><a class="button button-small button-primary nav-cta" href="${esc(href('contact'))}"><span class="button-label">${esc(L('Start a project'))}</span>${ICON('arrow','dir-icon')}</a><button class="mobile-menu icon-button" id="mobileMenuButton" aria-label="${esc(L('Open menu'))}" aria-expanded="false" aria-haspopup="true">${ICON('menu')}</button></div>
+    <div class="nav-actions"><button class="icon-button theme-toggle" aria-label="${esc(L('Switch to light theme'))}" title="${esc(L('Switch to light theme'))}"><span class="theme-icon">${ICON('moon')}</span></button><button class="button button-small button-quiet language-toggle" id="languageToggle" data-lang="${otherLang}" aria-label="${esc(L('Switch language to English'))}" title="${esc(L('Switch to English'))}">${otherLang === 'fa' ? 'فارسی' : 'EN'}</button><button class="icon-button account-button" id="accountButton" aria-label="${esc(signIn)}" title="${esc(signIn)}"><span class="account-icon"></span></button><a class="button button-small button-primary nav-cta" href="${esc(href('contact'))}"><span class="button-label">${esc(L('Start a project'))}</span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 17 17 7M9 7h8v8"/></svg></a><button class="mobile-menu icon-button" id="mobileMenuButton" aria-label="${esc(L('Open menu'))}" aria-expanded="false" aria-haspopup="true">${ICON('menu')}</button></div>
   </header>`;
 }
 function mountHeader(opts){
@@ -843,11 +863,10 @@ function applyChrome(){
      That is the nav list disagreeing between the two pages: same words, but
      only one of them obeying the settings. The route is the part after the
      '#', so it survives any base path. */
-  const navFlags = {'/products':'show_catalog','/services':'show_services','/aurion':'show_aurion','/aurion/plans':'show_aurion','/about':'show_about'};
   $$('.nav-links a, .mobile-nav a, .footer-links a').forEach(a => {
     const href = a.getAttribute('href') || '';
     const route = href.slice(href.indexOf('#/') + 1);
-    const flag = navFlags[route];
+    const flag = NAV_FLAGS[route];
     if (flag) a.hidden = !visible(flag);
   });
   applyBrand();
@@ -1314,13 +1333,24 @@ async function sendChat(text){
    It also only runs where there is a menu button: the blog mounts the same
    header, so it gets this too, and the guard keeps a page without one from
    throwing before anything is drawn. */
+
 const mobileMenuButton=$('.mobile-menu');
 if(mobileMenuButton){
-  /* The same five destinations, read from the dictionary, spelled once. */
-  const NAV_ITEMS=[['products','Products'],['services','Services'],['blog','Blog'],
-                   ['aurion',null],['about','About'],['contact','Start a project']];
-  const navDestination=key=>key==='blog'?assetUrl('blog/'):key==='contact'?'#/contact':'#/'+key;
-  const navText=key=>key==='aurion'?'AURION':(window.AXIA_T||(v=>v))(NAV_ITEMS.find(x=>x[0]===key)?.[1]||'');
+  /* The same list the header draws, from the same place, so the two cannot
+     disagree about where a destination lives. The destinations are read from
+     the page's own header spec (window.AXIA_NAV, set by headerHTML) rather
+     than built here: on the blog a link is "/#/products" - the site root plus
+     a hash - and "#/products" as written from here resolved to
+     "/blog/#/products", which is not a page. That is why the drawer's links
+     did nothing on an article. */
+  const navText=key=>key==='aurion'?'AURION':(window.AXIA_T||(v=>v))(NAV_WORDS[key]||'');
+  /* On the storefront there is no header spec to read, so the fallback builds
+     the addresses. The blog is a real directory, not a hash route, so it is
+     the one entry that must carry the deploy base: a raw "/blog/" 404s on
+     GitHub Pages, which is how a freshly published post once appeared to be
+     missing. That is what assetUrl is for. */
+  const navDestination=key=>(window.AXIA_NAV && window.AXIA_NAV[key])
+    || (key==='blog'?assetUrl('blog/'):'#/'+key);
   mobileMenuButton.setAttribute('aria-expanded','false');
   mobileMenuButton.onclick=()=>{
     if($('.mobile-nav'))return;
@@ -1331,8 +1361,15 @@ if(mobileMenuButton){
     nav.style.setProperty('--menu-x',`${x}px`);
     nav.style.setProperty('--menu-y',`${y}px`);
     nav.style.setProperty('--menu-radius',`${radius}px`);
+    /* A destination the administrator has switched off is not drawn here
+       either. The drawer used to list every route and let applyChrome hide the
+       ones it knew about by href - and it did not know about these, because the
+       drawer's hrefs are built rather than written. The result was a phone menu
+       offering Services on a site that has no Services page. The flags are the
+       same ones the header uses, read the same way. */
+    const menuItems=NAV_ORDER_MENU.filter(key=>visible(NAV_FLAGS['/'+key]||'')!==false);
     nav.innerHTML=`<button class="close-button close-mobile" aria-label="${esc((window.AXIA_T||(v=>v))('Close menu'))}">${ICON('close')}</button>`+
-      NAV_ITEMS.map(([key])=>`<a href="${navDestination(key)}">${esc(navText(key))}</a>`).join('');
+      menuItems.map(key=>`<a href="${navDestination(key)}">${esc(navText(key))}</a>`).join('');
     document.body.append(nav);
     mobileMenuButton.setAttribute('aria-expanded','true');
     /* The page behind the menu must not scroll under a thumb that is trying to
