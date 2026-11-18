@@ -519,7 +519,7 @@ BUSTER_PREFIXES = {
     'app.js': 'site', 'styles.css': 'site', 'i18n.js': 'site',
     'admin/admin.js': 'console', 'admin/admin.css': 'console',
     'effects.js': 'fx', 'effects.css': 'fx', 'brands.js': 'brands',
-    'xiona.js': 'xiona', 'icons.js': 'icons',
+    'xiona.js': 'xiona', 'icons.js': 'icons', 'blog.css': 'blog',
 }
 
 

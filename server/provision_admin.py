@@ -48,6 +48,13 @@ def main():
     name=input('Administrator display name: ').strip()[:120]
     if len(name)<2:
         raise SystemExit('Display name must contain at least two characters.')
+    # The account that can create every other administrator. It is the owner,
+    # and there is only one, so the role is not something this script asks
+    # about - it assigns it. Recovery lives here for the same reason: the only
+    # way back into a console whose owner password is lost is a command run by
+    # somebody with access to the server, which is exactly the trust boundary
+    # that should govern it.
+    role = 'owner'
     password=getpass.getpass('New password (at least 16 characters): ')
     confirm=getpass.getpass('Confirm password: ')
     if len(password)<16:
@@ -55,28 +62,32 @@ def main():
     if password!=confirm:
         raise SystemExit('Passwords did not match.')
     conn=connect()
-    existing=conn.execute('SELECT id,role FROM users WHERE email=?',(email,)).fetchone()
+    existing=conn.execute('SELECT id,role,admin_role FROM users WHERE email=?',(email,)).fetchone()
     if existing and existing['role']!='admin':
         answer=input('This email belongs to a customer. Type PROMOTE to grant administrator access: ').strip()
         if answer!='PROMOTE':
             conn.close()
             raise SystemExit('No account changes made.')
-        conn.execute("UPDATE users SET name=?,password_hash=?,role='admin',active=1 WHERE id=?",
-                     (name,hash_password(password),existing['id']))
+        conn.execute("UPDATE users SET name=?,password_hash=?,role='admin',admin_role=?,"  # noqa: E501
+                     "active=1 WHERE id=?",
+                     (name, hash_password(password), role, existing['id']))
         conn.execute('DELETE FROM sessions WHERE user_id=?',(existing['id'],))
         verb='Promoted account to administrator and revoked prior sessions.'
     elif existing:
-        conn.execute("UPDATE users SET name=?,password_hash=?,active=1 WHERE id=?",
-                     (name,hash_password(password),existing['id']))
+        conn.execute("UPDATE users SET name=?,password_hash=?,admin_role=?,active=1 WHERE id=?",
+                     (name, hash_password(password), role, existing['id']))
         conn.execute('DELETE FROM sessions WHERE user_id=?',(existing['id'],))
         verb='Updated administrator credentials and revoked prior sessions.'
     else:
-        conn.execute("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'admin')",
-                     (name,email,hash_password(password)))
+        conn.execute("INSERT INTO users(name,email,password_hash,role,admin_role) "
+                     "VALUES(?,?,?,'admin',?)",
+                     (name, email, hash_password(password), role))
         verb='Created administrator account.'
     conn.commit()
     conn.close()
     print(verb)
+    print(f'This account is the {role}. Only the owner can create other administrators')
+    print('or reset their passwords, from the Administrators screen in the console.')
     print('Open /admin/ and sign in. The password was not stored in source code or printed.')
 
 

@@ -13,7 +13,7 @@ const dom=new JSDOM(fs.readFileSync(R+'admin/index.html','utf8'),{
     w.IntersectionObserver=class{constructor(cb){this.cb=cb}observe(el){this.cb([{isIntersecting:true,target:el}],this)}unobserve(){}disconnect(){}};
     w.requestAnimationFrame=fn=>setTimeout(()=>fn(performance.now()),0);
     w.fetch=async(u)=>{ const s=String(u);
-      if(s.startsWith('/api/me')) return {ok:true,json:async()=>({user:{id:1,name:'Test Admin',email:'a@b.test',role:'admin'},csrf:'tok'}),headers:{get:()=>null}};
+      if(s.startsWith('/api/me')) return {ok:true,json:async()=>({user:{id:1,name:'Test Admin',email:'a@b.test',role:'admin',admin_role:'owner',permissions:['support','customers','sales','catalog','content','activity','admins']},csrf:'tok'}),headers:{get:()=>null}};
       if(s.includes('/audit')) return {ok:true,json:async()=>[],headers:{get:()=>null}};
       if(s.includes('/settings')) return {ok:true,json:async()=>({settings:{hero_title:'T',hero_accent:'A',show_catalog:true}}),headers:{get:()=>null}};
       if(s.includes('/overview')||s.includes('/customers')) return {ok:true,json:async()=>({

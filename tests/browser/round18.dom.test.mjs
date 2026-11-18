@@ -148,9 +148,15 @@ ck('the AURION page renders the console questions',
    aurion.doc.querySelectorAll('.faq').length === (settings.faq || []).length &&
    aurion.doc.querySelectorAll('.faq').length > 0,
    `${aurion.doc.querySelectorAll('.faq').length} vs ${(settings.faq || []).length}`);
+/* The question is a button now, not a <details><summary>. A summary's marker
+   is drawn by the browser in the browser's own style, which is the thing this
+   round removed; the site draws its own. Same text, same toggle, own control. */
 ck('the first question is the one the console ships',
-   (aurion.doc.querySelector('.faq summary')?.textContent || '').includes('Does AURION place trades?'),
-   aurion.doc.querySelector('.faq summary')?.textContent.trim() || '(no question rendered)');
+   (aurion.doc.querySelector('.faq-q')?.textContent || '').includes('Does AURION place trades?'),
+   aurion.doc.querySelector('.faq-q')?.textContent.trim() || '(no question rendered)');
+ck('the question opens its own answer',
+   aurion.doc.querySelector('.faq-q')?.getAttribute('aria-expanded') === 'false' &&
+   !!aurion.doc.querySelector('.faq-a[hidden]'));
 ck('the plan page renders the same questions',
    plans.doc.querySelectorAll('.faq').length === aurion.doc.querySelectorAll('.faq').length);
 

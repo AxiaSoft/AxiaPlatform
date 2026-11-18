@@ -38,7 +38,7 @@ async function renderMaintenanceCard(agentDoc) {
       w.fetch = async (u) => {
         const s = String(u);
         const ok = (body) => ({ ok: true, json: async () => body, headers: { get: () => null } });
-        if (s.startsWith('/api/me')) return ok({ user: { id: 1, name: 'Admin', email: 'a@b.test', role: 'admin' }, csrf: 'tok' });
+        if (s.startsWith('/api/me')) return ok({ user: { id: 1, name: 'Admin', email: 'a@b.test', role: 'admin', admin_role: 'owner', permissions: ['support','customers','sales','catalog','content','activity','admins'] }, csrf: 'tok' });
         if (s.includes('/agent')) return ok(agentDoc);
         if (s.includes('/audit')) return ok([]);
         if (s.includes('/settings')) return ok({ settings: { hero_title: 'T', hero_accent: 'A', show_catalog: true } });

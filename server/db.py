@@ -78,6 +78,14 @@ def migrate(db):
     if 'position' not in cols:
         db.execute('ALTER TABLE products ADD COLUMN position INTEGER NOT NULL DEFAULT 0')
 
+    # What kind of administrator this account is. `role` stays the two-value
+    # column it always was ('customer' | 'admin') so no existing database needs
+    # its CHECK constraint rebuilt; the kind of admin lives here, and a NULL
+    # reads as 'owner' - which is what every pre-existing admin was.
+    user_cols = {row[1] for row in db.execute('PRAGMA table_info(users)').fetchall()}
+    if 'admin_role' not in user_cols:
+        db.execute("ALTER TABLE users ADD COLUMN admin_role TEXT DEFAULT NULL")
+
     # When the visitor last opened each conversation. Without it there is no way
     # to answer "has the team replied?" - every reply looked the same as no
     # reply, which is the report that started this.

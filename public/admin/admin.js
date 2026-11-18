@@ -6,8 +6,40 @@ const T=v=>window.AXIA_T?window.AXIA_T(v):v;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const moneyFreeDate=v=>{if(!v)return'—';const d=new Date(String(v).replace(' ','T')+'Z');return Number.isNaN(+d)?esc(v):new Intl.DateTimeFormat(document.documentElement.lang==='fa'?'fa-IR':'en-GB',{dateStyle:'medium',timeStyle:'short'}).format(d)};
 const ordersStatus=['Submitted','Under Review','Requirements Analysis','Quotation Sent','Awaiting Confirmation','In Development','Testing','Ready for Delivery','Delivered','Cancelled'];
-const PAGES=['dashboard','site','products','articles','orders','customers','support','refunds','activity'];
-const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],articles:[],articleDraft:null,agent:null,settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null,customerId:null,customer:null};
+/* Which permission opens each console page.
+
+   The sidebar used to list every page to every administrator, because there
+   was only one kind. Now a support agent who opens Refunds gets a 403 from the
+   server, so the link is not drawn either - the list below is the single place
+   that decides, and the server decides the same way with the same group names.
+
+   Anything missing from this map is treated as 'activity' (read-only), which is
+   why adding a page without a decision does not silently open it to everyone. */
+const PAGE_PERMISSION = {
+  dashboard: 'activity',      // the overview reads counts only
+  site: 'content',
+  products: 'catalog',
+  articles: 'content',
+  orders: 'sales',
+  customers: 'customers',
+  support: 'support',
+  refunds: 'sales',
+  activity: 'activity',
+  admins: 'admins',
+};
+const ALL_PAGES = Object.keys(PAGE_PERMISSION);
+function myPermissions(){
+  return Array.isArray(state.me?.permissions) ? state.me.permissions : [];
+}
+function can(permission){
+  // A console that has not heard from the server yet shows nothing rather than
+  // everything: the safe direction when the answer is unknown.
+  return myPermissions().includes(permission);
+}
+function allowedPage(page){ return can(PAGE_PERMISSION[page] || 'activity'); }
+function allowedPages(){ return ALL_PAGES.filter(allowedPage); }
+const PAGES=ALL_PAGES;
+const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],articles:[],articleDraft:null,agent:null,admins:null,adminForm:null,settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null,customerId:null,customer:null,foldCategories:false,productDraft:null};
 async function api(path,{method='GET',body,headers={}}={}){
  const h={'Content-Type':'application/json',...headers};
  if(method!=='GET'&&path!=='/api/login'){if(!state.csrf){const session=await fetch('/api/me',{credentials:'same-origin'}).then(r=>r.json()).catch(()=>({}));state.csrf=session.csrf||null}if(state.csrf)h['X-CSRF-Token']=state.csrf}
@@ -35,7 +67,8 @@ function loginView(error=''){
 }
 function deniedView(){root.innerHTML=`<main class="login-wrap"><section class="login-card"><div class="login-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.webp" alt="" width="37" height="37" decoding="async"></span><div><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></div></div><div class="eyebrow">Access restricted</div><h1>Administrator access required</h1><p class="muted">This account does not have the required administrator role. The server has denied protected data access.</p><div class="head-actions"><button class="btn btn-quiet" data-act="logout">Sign out</button><a class="btn btn-primary" href="/#/">Return to website</a></div></section></main>`}
 function shell(){
- const nav=[['dashboard','Overview'],['site','Website'],['products','Products'],['articles','Blog articles'],['orders','Project requests'],['customers','Customers'],['support','Support'],['refunds','Refunds'],['activity','Activity log']];
+ const navAll=[['dashboard','Overview'],['site','Website'],['products','Products'],['articles','Blog articles'],['orders','Project requests'],['customers','Customers'],['support','Support'],['refunds','Refunds'],['activity','Activity log'],['admins','Administrators']];
+ const nav=navAll.filter(([id])=>allowedPage(id));
  root.innerHTML=`<div class="admin-shell"><div class="side-scrim" data-act="close-nav"></div><aside class="sidebar" id="sidebar"><a href="/" class="side-brand"><span class="logo-mark"><img src="/brand/axiasoft-original.webp" alt="" width="37" height="37" decoding="async"></span><span><strong>AXIASOFT</strong><small>ADMIN CONSOLE</small></span></a><div class="side-label">Workspace</div><nav class="nav-list">${nav.map(([id,label])=>`<button class="side-link ${state.page===id?'active':''}" data-page="${id}"><span class="nav-glyph">${iconFor(id)}</span><span>${T(label)}</span>${id==='refunds'&&state.overview?.counts?.refunds?`<span class="nav-count">${fmtNum(state.overview.counts.refunds)}</span>`:''}${id==='orders'&&state.overview?.counts?.pending?`<span class="nav-count">${fmtNum(state.overview.counts.pending)}</span>`:''}</button>`).join('')}</nav><div class="side-label" style="margin-top:23px">Website</div><a class="side-link" href="/"><span class="nav-glyph">${ICON('external')}</span><span>Open public website</span></a><div class="sidebar-bottom"><div class="sidebar-foot"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min"><strong>${esc(state.me?.name||'Administrator')}</strong><small>${esc(state.me?.email||'')}</small></div><button class="icon-btn" data-act="logout" title="Sign out" aria-label="Sign out">${ICON('logout')}</button></div></div></aside><section class="workspace"><header class="topbar"><div class="top-left"><button class="icon-btn mobile-toggle" data-act="toggle-nav" aria-label="Open navigation">${ICON('menu')}</button><div class="crumb">AXIASOFT <span style="color:var(--faint)">/</span> <strong>${nav.find(x=>x[0]===state.page)?.[1]||'Overview'}</strong></div></div><div class="top-right"><button class="language-btn" id="languageToggle" aria-label="Switch language">${document.documentElement.lang==='fa'?'EN':'فارسی'}</button><button class="icon-btn" data-act="theme" title="Toggle color theme" aria-label="Toggle color theme">${themeGlyph()}</button><button class="icon-btn" data-act="refresh" title="Refresh data" aria-label="Refresh data">${ICON('refresh')}</button><div class="top-user"><span class="avatar">${esc((state.me?.name||'A').slice(0,1).toUpperCase())}</span><div class="user-min-top"><strong>${esc(state.me?.name||'Administrator')}</strong><small>Administrator</small></div></div></div></header><main class="content" id="pageContent"><div class="panel" style="height:190px"><div class="skeleton" style="width:170px;margin:14px 0"></div><div class="skeleton" style="width:78%;height:50px;margin:14px 0"></div><div class="skeleton" style="width:55%"></div></div></main></section></div>`;
 }
 function chartSvg(rows){
@@ -76,7 +109,7 @@ function healthRows(){
  const c=state.overview?.counts||{},s=state.settings||{};
  const rows=[
   [T('Server session'), state.overview?.demo?T('Demo (browser storage)'):T('Live Python API'), state.overview?.demo?'warn':'ok'],
-  [T('Storefront status'), (s.show_catalog===false?T('Catalog hidden'):T('Catalog visible'))+' · '+(s.announcement_enabled&&s.announcement_text?T('banner on'):T('banner off')),'ok'],
+  [T('Storefront status'), (s.show_catalog===false?T('Catalog hidden'):T('Catalog visible')),'ok'],
   [T('Pending reviews'), c.pending?`${fmtNum(c.pending)} ${T('requests waiting')}`:T('Nothing waiting'), c.pending?'warn':'ok'],
   [T('Open support'), c.tickets?`${fmtNum(c.tickets)} ${T('tickets')}`:T('No open tickets'), c.tickets?'warn':'ok'],
   [T('Suspended accounts'), c.customers_suspended?`${fmtNum(c.customers_suspended)} ${T('accounts')}`:T('None'), c.customers_suspended?'warn':'ok'],
@@ -117,9 +150,40 @@ function overviewHTML(){
  <div class="stack"><article class="panel"><div class="panel-head"><div><h2>Site health</h2><p>What needs attention</p></div></div><div class="health-list">${healthRows()}</div></article><article class="panel"><div class="panel-head"><div><h2>Activity</h2><p>Latest audited events</p></div><button class="btn btn-sm btn-quiet" data-page="activity">Log ${ICON('arrow','dir-icon')}</button></div><div class="activity-list">${activityFeed(6)}</div></article></div></section>
  <section class="grid quick-section"><article class="panel"><div class="panel-head"><div><h2>Quick actions</h2><p>Common administrative tasks</p></div></div><div class="quick-grid"><button class="quick-card" data-page="site"><span>${ICON('settings')}</span><strong>Website settings</strong><small>Banner, hero copy, features</small></button><button class="quick-card" data-act="new-product"><span>${ICON('plus')}</span><strong>Add product</strong><small>Publish with a preview link</small></button><button class="quick-card" data-page="orders"><span>${ICON('order')}</span><strong>Review requests</strong><small>Update status and notes</small></button><button class="quick-card" data-page="support"><span>${ICON('inbox')}</span><strong>Open support</strong><small>Reply to customers</small></button></div><div class="notice">Payments and refunds are not processed here. An approval records an administrative decision only.</div></article></section>`;
 }
+/* A list of choices the console draws itself.
+
+   <select> was the last browser-native control in the console: on Android it
+   opens a sheet in the operating system's own font, in the operating system's
+   language, and on desktop it opens a menu the page cannot style at all. This
+   is a button and a listbox, so the console looks the same everywhere.
+
+   It keeps the contract a <select> had: a hidden input carries the value for
+   the form that contains it, so `new FormData(form)` still reads it. The
+   options are {value, label}; `value` is never translated.
+
+   `onPick` receives the new value. Events the console already listens for are
+   dispatched on the hidden input, so existing handlers keep working. */
+function picker(name, options, current, {id='', label='', placeholder='', onPick='', dataId=''}={}){
+  const chosen = options.find(o => String(o.value) === String(current));
+  return `<div class="picker" data-picker ${onPick ? `data-picker-act="${esc(onPick)}"` : ''}${dataId ? ` data-id="${esc(dataId)}"` : ''}>
+    <button type="button" class="picker-btn" data-picker-btn ${id ? `id="${esc(id)}"` : ''}
+      aria-haspopup="listbox" aria-expanded="false" ${label ? `aria-label="${esc(label)}"` : ''}>
+      <span class="picker-value${chosen ? '' : ' is-empty'}">${esc(chosen ? chosen.label : (placeholder || label))}</span>
+      <span class="picker-chev">${ICON('down')}</span>
+    </button>
+    <div class="picker-list" role="listbox" hidden>
+      ${options.map(o => `<button type="button" role="option" class="picker-option${chosen && String(o.value) === String(chosen.value) ? ' is-on' : ''}"
+        data-picker-option data-value="${esc(o.value)}" aria-selected="${chosen && String(o.value) === String(chosen.value) ? 'true' : 'false'}">
+        <span>${esc(o.label)}</span>${chosen && String(o.value) === String(chosen.value) ? ICON('check') : ''}
+      </button>`).join('')}
+    </div>
+    <input type="hidden" name="${esc(name)}" value="${esc(current)}" data-picker-input>
+  </div>`;
+}
+
 function pageHead(kicker,title,desc,action=''){return`<div class="page-head"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1><p>${desc}</p></div><div class="head-actions">${action}</div></div>`}
-function toolbar(searchPlaceholder,filterOptions=[],action=''){return`<div class="toolbar"><div class="toolbar-left"><label class="search"><input data-search placeholder="${searchPlaceholder}" value="${esc(state.search)}" autocomplete="off"></label>${filterOptions.length?`<select class="filter-select" data-status-filter>${filterOptions.map(x=>`<option ${state.statusFilter===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}</div><div class="toolbar-right">${action}</div></div>`}
-function ordersHTML(){const data=state.orders.filter(o=>{const q=state.search.toLowerCase();const hay=[o.number,o.name,o.email,o.product_title,o.status].join(' ').toLowerCase();return(!q||hay.includes(q))&&(state.statusFilter==='All'||o.status===state.statusFilter)});return`${pageHead('Work queue','Project requests','Review customer submissions, update progress and keep a clear status history.',`<button class="btn btn-quiet" data-act="export" data-kind="orders">${ICON('download')} Export CSV</button>`)}${toolbar('Search by reference, customer or product…',['All',...ordersStatus])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>All requests</h2><p>${fmtNum(data.length)} shown · customer/project records</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer</th><th>Product</th><th>Received</th><th>Last update</th><th>Status</th><th></th></tr></thead><tbody>${data.map(o=>`<tr><td><span class="cell-main">${esc(o.number)}</span></td><td><span class="cell-main">${esc(o.name)}</span><span class="cell-sub">${esc(o.email)} · ${esc(o.phone)}</span></td><td>${esc(o.product_title)}</td><td>${moneyFreeDate(o.created_at)}</td><td>${moneyFreeDate(o.updated_at)}</td><td>${pill(o.status)}</td><td><button class="btn btn-sm btn-quiet" data-act="view-order" data-id="${o.id}">Details</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">⌕</div>No matching requests.</div>`}</div>`}
+function toolbar(searchPlaceholder,filterOptions=[],action=''){return`<div class="toolbar"><div class="toolbar-left"><label class="search"><input data-search placeholder="${searchPlaceholder}" value="${esc(state.search)}" autocomplete="off"></label>${filterOptions.length?`${picker('status', filterOptions.map(x=>({value:x,label:T(x)})), state.statusFilter, {label:T('Filter by status'), onPick:'pickerStatusFilter'})}`:''}</div><div class="toolbar-right">${action}</div></div>`}
+function ordersHTML(){const data=state.orders.filter(o=>{const q=state.search.toLowerCase();const hay=[o.number,o.name,o.email,o.product_title,o.status].join(' ').toLowerCase();return(!q||hay.includes(q))&&(state.statusFilter==='All'||o.status===state.statusFilter)});return`${pageHead('Work queue','Project requests',T('Review customer submissions, update progress and keep a clear status history.'),`<button class="btn btn-quiet" data-act="export" data-kind="orders">${ICON('download')} Export CSV</button>`)}${toolbar('Search by reference, customer or product…',['All',...ordersStatus])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>All requests</h2><p>${fmtNum(data.length)} shown · customer/project records</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer</th><th>Product</th><th>Received</th><th>Last update</th><th>Status</th><th></th></tr></thead><tbody>${data.map(o=>`<tr><td><span class="cell-main">${esc(o.number)}</span></td><td><span class="cell-main">${esc(o.name)}</span><span class="cell-sub">${esc(o.email)} · ${esc(o.phone)}</span></td><td>${esc(o.product_title)}</td><td>${moneyFreeDate(o.created_at)}</td><td>${moneyFreeDate(o.updated_at)}</td><td>${pill(o.status)}</td><td><button class="btn btn-sm btn-quiet" data-act="view-order" data-id="${o.id}">Details</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">⌕</div>No matching requests.</div>`}</div>`}
 function productSortValue(p){
  return state.productSort==='title'?String(p.title).toLowerCase()
   :state.productSort==='category'?String(p.category).toLowerCase()
@@ -176,7 +240,7 @@ function productActions(p){
    were; the only structural change is that Category now prints the operator's
    label instead of the raw value, and flags an orphan. */
 function productsTable(data,allShownSelected){
- return `<div class="table-wrap product-table-wrap"><table class="data-table product-table"><thead><tr><th class="check-col"><input type="checkbox" data-select-all aria-label="${T('Select all shown products')}" ${allShownSelected?'checked':''}></th><th>${T('Product')}</th><th>${T('Category')}</th><th>${T('Price label')}</th><th>${T('Availability')}</th><th>${T('Preview link')}</th><th>${T('Visibility')}</th><th>${T('Order')}</th><th>${T('Actions')}</th></tr></thead><tbody>${data.map(p=>`<tr class="${p.published?'':'is-hidden'}"><td class="check-col"><input type="checkbox" data-select-product="${p.id}" aria-label="${T('Select')} ${esc(p.title)}" ${state.selected.has(Number(p.id))?'checked':''}></td><td><span class="cell-main">${p.featured?'★ ':''}${esc(p.title)}</span><span class="cell-sub">/${esc(p.slug)}</span></td><td>${orphanCategory(p)?`<span class="cell-main cat-orphan">${esc(categoryLabel(p.category))}</span><span class="cell-sub">${T('category removed')}</span>`:esc(categoryLabel(p.category))}</td><td>${esc(p.price_label)}</td><td>${pill(p.status)}</td><td>${safeHttp(p.github_url)?`<a class="cell-sub link-cell" href="${esc(p.github_url)}" target="_blank" rel="noopener noreferrer">${esc(String(p.github_url).replace(/^https:\/\//,'').slice(0,42))}</a>`:`<span class="cell-sub">${T('Built-in preview')}</span>`}</td><td>${pill(p.published?T('Published'):T('Hidden'))}</td><td><div class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">↑</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></div></td><td>${productActions(p)}</td></tr>`).join('')}</tbody></table></div>`;
+ return `<div class="table-wrap product-table-wrap"><table class="data-table product-table"><thead><tr><th class="check-col"><input type="checkbox" data-select-all aria-label="${T('Select all shown products')}" ${allShownSelected?'checked':''}></th><th>${T('Product')}</th><th>${T('Category')}</th><th>${T('Price label')}</th><th>${T('Availability')}</th><th>${T('Preview link')}</th><th>${T('Visibility')}</th><th>${T('Order')}</th><th>${T('Actions')}</th></tr></thead><tbody>${data.map(p=>`<tr class="${p.published?'':'is-hidden'}"><td class="check-col"><input type="checkbox" data-select-product="${p.id}" aria-label="${T('Select')} ${esc(p.title)}" ${state.selected.has(Number(p.id))?'checked':''}></td><td><span class="cell-main">${p.featured?'★ ':''}${esc(p.title)}</span><span class="cell-sub">/${esc(p.slug)}</span></td><td>${orphanCategory(p)?`<span class="cell-main cat-orphan">${esc(categoryLabel(p.category))}</span><span class="cell-sub">${T('category removed')}</span>`:esc(categoryLabel(p.category))}</td><td>${esc(p.price_label)}</td><td>${pill(p.status)}</td><td>${safeHttp(p.github_url)?`<a class="cell-sub link-cell" href="${esc(p.github_url)}" target="_blank" rel="noopener noreferrer">${esc(String(p.github_url).replace(/^https:\/\//,'').slice(0,42))}</a>`:`<span class="cell-sub">${T('Built-in preview')}</span>`}</td><td>${pill(p.published?T('Published'):T('Hidden'))}</td><td><div class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">${ICON('up')}</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">${ICON('down')}</button></div></td><td>${productActions(p)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 /* The phone card. Everything the table shows that a person actually decides
@@ -199,7 +263,7 @@ function productCards(data,allShownSelected){
    <div class="pca-facts">
     <div><small>${T('Category')}</small><span class="${orphanCategory(p)?'cat-orphan':''}">${esc(categoryLabel(p.category))}${orphanCategory(p)?' ⚠':''}</span></div>
     <div><small>${T('Price label')}</small><span>${esc(p.price_label||'—')}</span></div>
-    <div><small>${T('Order')}</small><span class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">↑</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></span></div>
+    <div><small>${T('Order')}</small><span class="order-ctl"><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="-1" aria-label="${T('Move up')}">${ICON('up')}</button><span class="order-num">${fmtNum(Number(p.position)||0)}</span><button class="chip-btn" data-act="move-product" data-id="${p.id}" data-dir="1" aria-label="${T('Move down')}">↓</button></span></div>
    </div>
    ${productActions(p)}
   </article>`).join('')}
@@ -223,16 +287,23 @@ function productsHTML(){
  const sel=[...state.selected].filter(id=>state.products.some(p=>Number(p.id)===Number(id)));
  const allShownSelected=data.length>0&&data.every(p=>state.selected.has(Number(p.id)));
  const cats=siteCategories();
- return `${pageHead('Catalog management','Products','Create, order, feature and publish the products shown by the AXIASOFT site.',`<button class="btn btn-quiet" data-act="export" data-kind="products">⇩ ${T('Export CSV')}</button><button class="btn btn-primary" data-act="new-product">${ICON('plus')} ${T('Add product')}</button>`)}
+ return `${pageHead('Catalog management','Products',T('Create, order, feature and publish the products shown by the AXIASOFT site.'),`<button class="btn btn-quiet" data-act="export" data-kind="products">⇩ ${T('Export CSV')}</button><button class="btn btn-primary" data-act="new-product">${ICON('plus')} ${T('Add product')}</button>`)}
  ${productStats(counts)}
  <div class="toolbar products-toolbar"><div class="toolbar-left"><label class="search"><input data-search placeholder="${T('Search title, slug or category…')}" value="${esc(state.search)}" autocomplete="off"></label>
- <select class="filter-select" data-product-filter>${['All','Published','Hidden','Featured'].map(x=>`<option ${state.productFilter===x?'selected':''}>${T(x)}</option>`).join('')}</select>
- <select class="filter-select" data-category-filter><option value="All" ${state.categoryFilter==='All'?'selected':''}>${T('All categories')}</option>${cats.map(c=>`<option value="${esc(c.id)}" ${state.categoryFilter===c.id?'selected':''}>${esc(categoryLabel(c.id))}</option>`).join('')}${state.products.some(orphanCategory)?`<option value="__orphan" ${state.categoryFilter==='__orphan'?'selected':''}>${T('No category')}</option>`:''}</select>
- <select class="filter-select" data-product-sort>${[['manual','Manual order'],['newest','Newest first'],['title','Title A–Z'],['category','Category']].map(([v,l])=>`<option value="${v}" ${state.productSort===v?'selected':''}>${T(l)}</option>`).join('')}</select></div>
+ ${picker('product_filter', ['All','Published','Hidden','Featured'].map(x=>({value:x,label:T(x)})), state.productFilter, {label:T('Filter by visibility'), onPick:'pickerProductFilter'})}
+ ${picker('category_filter',
+   [{value:'All',label:T('All categories')},
+    ...cats.map(c=>({value:String(c.id),label:categoryLabel(c.id)})),
+    ...(state.products.some(orphanCategory)?[{value:'__orphan',label:T('No category')}]:[])],
+   state.categoryFilter, {label:T('Filter by category'), onPick:'pickerCategoryFilter'})}
+ ${picker('product_sort', [['manual','Manual order'],['newest','Newest first'],['title','Title A–Z'],['category','Category']].map(([v,l])=>({value:v,label:T(l)})), state.productSort, {label:T('Sort products'), onPick:'pickerProductSort'})}</div>
  <div class="toolbar-right"><span class="muted" style="font-size:10px">${fmtNum(data.length)} ${T('of')} ${fmtNum(counts.all)} ${T('products')}</span>${sel.length?`<button class="btn btn-sm btn-quiet" data-act="bulk-publish">${T('Publish')} ${fmtNum(sel.length)}</button><button class="btn btn-sm btn-danger" data-act="bulk-unpublish">${T('Hide')} ${fmtNum(sel.length)}</button>`:''}</div></div>
  <div class="panel product-panel" style="padding:14px">${data.length?`${compact()?productCards(data,allShownSelected):productsTable(data,allShownSelected)}`:`<div class="empty"><div class="empty-icon">${ICON('package')}</div>${counts.all?T('No products match these filters. Clear the filters, or add a product.'):T('The catalog is empty — add the first product.')}</div>`}
  <div class="notice">${T('Removing a product unpublishes it. Featured products lead the catalog.')}</div></div>
- ${categoriesPanel(cats)}
+ <details class="fold" data-fold="categories" ${state.foldCategories?'open':''}>
+   <summary class="fold-head"><span class="fold-title">${T('Catalog categories')}</span><span class="fold-meta">${fmtNum(cats.length)} ${T('categories')}</span><span class="fold-chev">${ICON('down')}</span></summary>
+   ${categoriesPanel(cats, true)}
+ </details>
  `;
 }
 
@@ -253,14 +324,16 @@ function categoryRow(c,i,count){
   </div>
   <label class="cat-field"><span>${T('Category name')}</span><input class="cat-input" data-cat-name="${esc(c.id)}" value="${esc(c.name)}" maxlength="40" aria-label="${T('Category name')}"></label>
   <label class="cat-field"><span>${T('Persian name')}</span><input class="cat-input cat-input-fa" data-cat-name-fa="${esc(c.id)}" value="${esc(c.nameFa)}" maxlength="40" placeholder="${T('optional')}" aria-label="${T('Persian name')}" dir="rtl"></label>
-  <div class="order-ctl"><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="-1" aria-label="${T('Move up')}" ${i===0?'disabled':''}>↑</button><span class="order-num">${fmtNum(i+1)}</span><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="1" aria-label="${T('Move down')}" ${i===count-1?'disabled':''}>↓</button></div>
+  <div class="order-ctl"><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="-1" aria-label="${T('Move up')}" ${i===0?'disabled':''}>${ICON('up')}</button><span class="order-num">${fmtNum(i+1)}</span><button class="chip-btn" data-act="move-category" data-cat="${esc(c.id)}" data-dir="1" aria-label="${T('Move down')}" ${i===count-1?'disabled':''}>↓</button></div>
   <button class="btn btn-sm ${used?'btn-quiet':'btn-danger'}" data-act="delete-category" data-cat="${esc(c.id)}" data-used="${used}" ${used?'disabled title="'+T('Move its products to another category first')+'"':''}>${T('Remove')}</button>
  </div>`;
 }
-function categoriesPanel(cats){
+function categoriesPanel(cats, bare){
  const orphaned=state.products.filter(orphanCategory);
- return `<section class="panel cat-panel" id="categoriesPanel">
-  <div class="panel-head"><div><h2>${T('Catalog categories')}</h2><p>${T('The tabs the public catalog offers. The site ships none; the demo carries its own.')}</p></div><span class="muted" style="font-size:10px">${fmtNum(cats.length)} ${T('categories')}</span></div>
+ // `bare` means the fold above already names this panel, so it does not draw a
+ // second heading of its own.
+ return `<section class="panel cat-panel${bare?' cat-panel-bare':''}" id="categoriesPanel">
+  ${bare?'':`<div class="panel-head"><div><h2>${T('Catalog categories')}</h2><p>${T('The tabs the public catalog offers. The site ships none; the demo carries its own.')}</p></div><span class="muted" style="font-size:10px">${fmtNum(cats.length)} ${T('categories')}</span></div>`}
   ${cats.length?`<div class="cat-list">${cats.map((c,i)=>categoryRow(c,i,cats.length)).join('')}</div>`:`<div class="empty" style="padding:18px"><div class="empty-icon">${ICON('package')}</div>${T('No categories yet. The catalog shows one grid and no tab row until you add one.')}</div>`}
   <form class="cat-add" data-form="category-add"><div class="field"><label>${T('Category name')}</label><input name="name" maxlength="40" required placeholder="${T('e.g. Websites')}"></div><div class="field"><label>${T('Persian name')}</label><input name="nameFa" maxlength="40" dir="rtl" placeholder="${T('optional')}"></div><div class="field"><label>${T('Category id')}</label><input name="id" maxlength="40" pattern="[a-z0-9-]{2,40}" required placeholder="websites"><span class="field-hint">${T('Lowercase letters, digits and hyphens. Products store this id, so it cannot change later.')}</span></div><button class="btn btn-primary">${T('Add category')}</button></form>
   ${orphaned.length?`<div class="notice">${fmtNum(orphaned.length)} ${T('products point at a category that no longer exists. Edit each one and pick a new category.')}</div>`:''}
@@ -271,11 +344,11 @@ function categoriesPanel(cats){
    safePreview() and the server's clean_github_url(). */
 function safeHttp(u){const v=String(u||'').trim();return /^https:\/\/[^\s<>"']+$/i.test(v)?v:''}
 /* ------------------------------------------------------------------ website */
-/* Everything the storefront shows can be driven from here: the announcement
-   bar, the hero copy, contact details, which sections are published, and the
+/* Everything the storefront shows can be driven from here: the identity,
+   the hero copy, contact details, which sections are published, and the
    first-visit theme. Fields write into the same JSON document the server and
    the static build both understand. */
-const SITE_TABS=[['identity','Identity'],['brands','Site brands'],['announcement','Announcement'],['hero','Home hero'],['sections','Visibility'],['contact','Contact & links'],['faq','Questions'],['danger','Maintenance']];
+const SITE_TABS=[['identity','Identity'],['brands','Site brands'],['hero','Home hero'],['sections','Visibility'],['contact','Contact & links'],['faq','Questions'],['danger','Maintenance']];
 const SECTION_FIELDS=[['show_catalog','Product catalog','The products grid and product pages'],['show_services','Services page','Website, mobile and custom software services'],['show_aurion','AURION showcase','The AURION concept page and its links'],['show_about','About page','The studio story and values'],['show_contact','Contact entry points','Contact links, the header CTA and request buttons'],['show_assistant','Support assistant','The floating AXIA chat guide on the storefront'],['show_prices','Price labels','Indicative price labels on product cards and detail pages']];
 /* The same sun/moon the storefront draws. The console had the old ◐/☼ pair,
    which is illegible at this size and says nothing in the light theme. */
@@ -347,8 +420,8 @@ function brandRowHTML(b,i){
    <span class="brand-swatch" style="--swatch:${esc(b.accent||'#1f5fa8')}">${brandSwatch(b)}</span>
    <div><strong>${esc(b.name||T('New brand'))}</strong><span class="muted">${esc(b.nameFa||'')}</span></div>
    <div class="brand-edit-actions">
-    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">↑</button>
-    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-down" data-i="${i}" ${i===brandDraft().length-1?'disabled':''} title="${T('Move down')}">↓</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">${ICON('up')}</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="brand-down" data-i="${i}" ${i===brandDraft().length-1?'disabled':''} title="${T('Move down')}">${ICON('down')}</button>
     <button class="btn btn-sm btn-quiet danger" type="button" data-act="brand-remove" data-i="${i}" title="${T('Remove this brand')}">${T('Remove')}</button>
    </div>
   </div>
@@ -400,8 +473,8 @@ function faqRowHTML(x,i){
    <span class="brand-swatch" style="--swatch:#2f6fd0"><span class="brand-swatch-glyph" aria-hidden="true">?</span></span>
    <div><strong>${esc(x.q||T('New question'))}</strong><span class="muted">${esc(x.qFa||'')}</span></div>
    <div class="brand-edit-actions">
-    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">↑</button>
-    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-down" data-i="${i}" ${i===faqDraft().length-1?'disabled':''} title="${T('Move down')}">↓</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-up" data-i="${i}" ${i===0?'disabled':''} title="${T('Move up')}">${ICON('up')}</button>
+    <button class="btn btn-sm btn-quiet" type="button" data-act="faq-down" data-i="${i}" ${i===faqDraft().length-1?'disabled':''} title="${T('Move down')}">${ICON('down')}</button>
     <button class="btn btn-sm btn-quiet danger" type="button" data-act="faq-remove" data-i="${i}">${T('Remove')}</button>
    </div>
   </div>
@@ -437,17 +510,7 @@ function brandsTabHTML(){
 }
 function siteTabHTML(){
  const t=state.siteTab;
- if(t==='announcement'){
-  const tone=siteVal('announcement_tone')||'info';
-  return `<div class="panel form-panel"><div class="panel-head"><div><h2>Announcement bar</h2><p>A single line above the header, for launches, holidays or service notices.</p></div><span class="pill ${siteVal('announcement_enabled')?'green':'blue'}">${T(siteVal('announcement_enabled')?'Visible':'Hidden')}</span></div>
-   <form data-form="settings"><div class="setting-grid">${switchField('announcement_enabled','Show the announcement bar','Visitors see it on every page until they dismiss it',!!siteVal('announcement_enabled'))}
-   <div class="field full"><label for="s-announcement_text">Message</label><input id="s-announcement_text" name="announcement_text" maxlength="180" value="${esc(siteVal('announcement_text'))}" placeholder="New: the Northstar catalog is live"><span class="field-hint">Up to 180 characters. Plain text; links go in the field below.</span></div>
-   ${fieldText('announcement_link','Link',siteVal('announcement_link'),'An https:// address, or an in-site link like #/products. Leave empty for a plain message.','maxlength="300"')}
-   <div class="field"><label for="s-announcement_tone">Colour</label><select id="s-announcement_tone" name="announcement_tone">${[['info','Blue — general news'],['promo','Green — launch or offer'],['warning','Amber — service notice']].map(([v,l])=>`<option value="${v}" ${tone===v?'selected':''}>${l}</option>`).join('')}</select><span class="field-hint">Sets the bar's accent colour only.</span></div></div>
-   <div class="form-actions"><button class="btn btn-primary" type="submit">Save announcement</button><button class="btn btn-quiet" type="button" data-act="settings-reset">Discard changes</button></div></form></div>`;
- }
- if(t==='brands'){return brandsTabHTML()}
- if(t==='faq'){return faqTabHTML()}
+ window.__tSeen=String(t);
  if(t==='hero'){
   return `<div class="panel form-panel"><div class="panel-head"><div><h2>Home hero</h2><p>The first three lines a visitor reads.</p></div><button class="btn btn-sm btn-quiet" data-act="preview-site" data-target="#/">Preview ${ICON('external')}</button></div>
    <form data-form="settings"><div class="setting-grid">${fieldText('hero_title','Headline',siteVal('hero_title'),'Shown in white. Keep it under about 45 characters so it does not wrap awkwardly.','maxlength="90" required')}${fieldText('hero_accent','Highlighted line',siteVal('hero_accent'),'Shown in the gradient, directly under the headline.','maxlength="90"')}
@@ -494,9 +557,16 @@ function siteTabHTML(){
     <div class="danger-card"><strong>Export settings</strong><p>Downloads the current settings as JSON, ready to commit as <code>data/settings.json</code>.</p><button class="btn btn-quiet" data-act="export-settings">Export JSON</button></div>
    </div><div class="notice">Deleting an account or a request is deliberately not possible here; those records stay for audit. Products are hidden rather than deleted so old requests keep their references.</div></div>`;
  }
+/* These two had their markup written and no branch here: the tab buttons
+   set state.siteTab, this switch had no case for it, and the page fell through
+   to the identity form below - so choosing "Questions" or "Site brands" showed
+   the identity tab and looked broken. The branch has to sit above the
+   fallthrough, which returns unconditionally. */
+ if(t==='brands')return brandsTabHTML();
+ if(t==='faq')return faqTabHTML();
  const s=state.settings||{};
  return `<div class="panel form-panel"><div class="panel-head"><div><h2>Site identity</h2><p>The first-visit theme for visitors who have never chosen one.</p></div></div>
-  <form data-form="settings"><div class="setting-grid"><div class="field"><label for="s-default_theme">Default theme</label><select id="s-default_theme" name="default_theme">${[['dark','Dark'],['light','Light'],['system','Match the device']].map(([v,l])=>`<option value="${v}" ${s.default_theme===v?'selected':''}>${l}</option>`).join('')}</select><span class="field-hint">A visitor's own saved choice always wins.</span></div>
+  <form data-form="settings"><div class="setting-grid"><div class="field"><label for="s-default_theme">Default theme</label>${picker('default_theme', [['dark','Dark'],['light','Light'],['system','Match the device']].map(([v,l])=>({value:v,label:T(l)})), s.default_theme||'dark', {id:'s-default_theme', label:T('Default theme'), onPick:'pickerMarkDirty'})}<span class="field-hint">A visitor's own saved choice always wins.</span></div>
   <div class="field"><label>Site address</label><input value="${esc(location.origin)}" readonly><span class="field-hint">The host this console publishes to.</span></div>
   <div class="field full"><label>Administrator</label><input value="${esc(state.me?.name||'')} · ${esc(state.me?.email||'')}" readonly><span class="field-hint">Roles are enforced by the server, not by this screen.</span></div></div>
   <div class="form-actions"><button class="btn btn-primary" type="submit">Save identity</button></div></form></div>`;
@@ -504,7 +574,7 @@ function siteTabHTML(){
 function visibleSetting(name){return state.settings?state.settings[name]!==false:true}
 function siteHTML(){
  const dirty=state.dirty;
- return `${pageHead('Storefront control','Website','Control the announcement bar, the home hero, contact details and which sections the public site shows.',`<button class="btn btn-quiet" data-act="settings-refresh">${ICON('refresh')} Reload</button><button class="btn btn-quiet" data-act="preview-site" data-target="/">Open site ${ICON('external')}</button>`)}
+ return `${pageHead('Storefront control','Website',T('Control the home hero, contact details and which sections the public site shows.'),`<button class="btn btn-quiet" data-act="settings-refresh">${ICON('refresh')} Reload</button><button class="btn btn-quiet" data-act="preview-site" data-target="/">Open site ${ICON('external')}</button>`)}
  <div class="tabs">${SITE_TABS.map(([id,label])=>`<button class="tab ${state.siteTab===id?'active':''}" data-site-tab="${id}">${T(label)}</button>`).join('')}</div>
  ${dirty?`<div class="dirty-note" role="status"><span>●</span> Unsaved changes on this page — press <strong>Save</strong> to publish them to the site.</div>`:''}
  <div class="site-tab-body">${siteTabHTML()}</div>`;
@@ -549,7 +619,7 @@ function customerHTML() {
   const open = r.tickets.filter(t => t.status !== 'Closed').length;
   const appr = r.refunds.filter(x => x.status === 'Approved').length;
   const ticketRows = r.tickets.length ? r.tickets.map(t => `<div class="cust-row"><div class="cust-row-main"><b>${esc(t.subject)}</b><span class="cell-sub">${esc(t.ref)} · ${esc(moneyFreeDate(t.created_at))}${t.priority && t.priority !== 'Normal' ? ` · <span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>` : ''}</span></div><div class="cust-row-side">${pill(T(t.status))}<button class="btn btn-sm btn-quiet" data-act="customer-ticket" data-id="${t.id}">Open thread</button></div></div>`).join('') : '<p class="empty-note">No support conversations.</p>';
-  const orderRows = r.orders.length ? r.orders.map(o => `<div class="cust-row"><div class="cust-row-main"><b>${esc(o.number)} · ${esc(o.product_title || 'Project request')}</b><span class="cell-sub">${esc(moneyFreeDate(o.created_at))}</span></div><div class="cust-row-side"><span class="status-pill">${esc(T(o.status))}</span><select class="cust-status" data-order-status="${o.id}">${['Submitted', 'Under Review', 'Requirements Analysis', 'Quotation Sent', 'Awaiting Confirmation', 'In Development', 'Testing', 'Ready for Delivery', 'Delivered', 'Cancelled'].map(s => `<option value="${s}"${o.status === s ? ' selected' : ''}>${esc(T(s))}</option>`).join('')}</select></div></div>`).join('') : '<p class="empty-note">No project requests.</p>';
+  const orderRows = r.orders.length ? r.orders.map(o => `<div class="cust-row"><div class="cust-row-main"><b>${esc(o.number)} · ${esc(o.product_title || 'Project request')}</b><span class="cell-sub">${esc(moneyFreeDate(o.created_at))}</span></div><div class="cust-row-side"><span class="status-pill">${esc(T(o.status))}</span>${picker('status', ['Submitted','Under Review','Requirements Analysis','Quotation Sent','Awaiting Confirmation','In Development','Testing','Ready for Delivery','Delivered','Cancelled'].map(x=>({value:x,label:T(x)})), o.status, {className:'cust-status', label:T('Status'), onPick:'pickerCustomerOrderStatus', dataId:o.id})}</div></div>`).join('') : '<p class="empty-note">No project requests.</p>';
   const refundRows = r.refunds.length ? r.refunds.map(x => `<div class="cust-row"><div class="cust-row-main"><b>${esc(x.order_number || '')} · ${esc(x.ref)}</b><span class="cell-sub">${esc(x.reason)}</span></div><div class="cust-row-side">${pill(T(x.status))}${x.status === 'Under review' ? `<button class="btn btn-sm btn-quiet" data-act="customer-refund" data-id="${x.id}" data-decision="Approved">${esc(T('Approve'))}</button><button class="btn btn-sm btn-quiet" data-act="customer-refund" data-id="${x.id}" data-decision="Rejected">${esc(T('Reject'))}</button>` : ''}</div></div>`).join('') : '<p class="empty-note">No refund requests.</p>';
   const eventRows = r.events.length ? r.events.slice(0, 18).map(e => `<div class="cust-event"><span>${esc(moneyFreeDate(e.created_at))}</span><b>${esc(T(e.action))}</b><span class="cell-sub">${esc(e.entity)}${e.entity_id ? ' · ' + esc(e.entity_id) : ''}${e.actor_name ? ' · ' + esc(e.actor_name) : ''}</span></div>`).join('') : '<p class="empty-note">No recorded activity.</p>';
   return `${pageHead(esc(c.name), 'Customer profile', 'Everything recorded about this account, and the controls the server allows over it.', `<button class="btn btn-quiet" data-act="customer-back">← All customers</button>`)}
@@ -580,20 +650,25 @@ function customerHTML() {
   <div class="panel" style="padding:18px"><div class="panel-head"><div><h2>${esc(T('Activity'))}</h2><p>${esc(T('Sign-ins, changes and decisions recorded against this account.'))}</p></div></div>${eventRows}</div>`;
 }
 
+/* From a customer's profile into one of their conversations.
+   The profile already has the ticket, so it is handed straight to openTicket()
+   rather than being looked up in an inbox this page never fetched. */
+function openCustomerTicket(id){
+  const t=(state.customer?.tickets||[]).find(x=>Number(x.id)===Number(id));
+  if(!t){toast(T('That conversation is no longer available.'),true);return}
+  openTicket(id, t);
+}
+
 /* Order status and refund decisions are re-issued from here, reusing the same
    endpoints the Orders and Refunds tabs use, then the profile is redrawn so the
    operator sees the new state in place. */
-async function customerOrderStatus(sel) {
-  try {
-    await api('/api/admin/orders/status', { method: 'PUT', body: { id: Number(sel.dataset.orderStatus), status: sel.value } });
-    toast(T('Order status updated.'));
-    await openCustomer(state.customerId);
-  } catch (e) { toast(e.message, true); }
-}
+
 
 async function customerRefund(btn) {
   const decision = btn.dataset.decision;
-  if (!confirm(`${decision} this refund? The decision is recorded; no money moves.`)) return;
+  if (!await confirmDialog({title:`${decision} this refund?`,
+    body:'The decision is recorded in the audit log. No money moves: this build has no payment provider connected.',
+    confirmLabel:decision, cancelLabel:'Back'})) return;
   try {
     await api('/api/admin/refunds/decision', { method: 'PUT', body: { id: Number(btn.dataset.id), status: decision, note: '' } });
     toast(T('Refund decision recorded.'));
@@ -601,9 +676,9 @@ async function customerRefund(btn) {
   } catch (e) { toast(e.message, true); }
 }
 
-function customersHTML(){const data=state.customers.filter(c=>{const q=state.search.toLowerCase();return !q||[c.name,c.email,c.phone].join(' ').toLowerCase().includes(q)});return`${pageHead('Customer records','Customers','View customer accounts and their support/request counts. Account access changes revoke active sessions.',`<button class="btn btn-quiet" data-act="export" data-kind="customers">${ICON('download')} Export CSV</button>`)}${toolbar('Search name, email or phone…')}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Customer directory</h2><p>${fmtNum(data.length)} ${T('records · customer accounts only')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Contact</th><th>Joined</th><th>Requests</th><th>Tickets</th><th>Access</th><th>Action</th></tr></thead><tbody>${data.map(c=>`<tr><td><span class="cell-main"><a href="#" data-act="customer-open" data-id="${c.id}" style="color:inherit;text-decoration:none;border-bottom:1px solid var(--line)">${esc(c.name)}</a></span><span class="cell-sub">Customer ID ${c.id}</span></td><td>${esc(c.email)}<span class="cell-sub">${esc(c.phone||'No phone on file')}</span></td><td>${moneyFreeDate(c.created_at)}</td><td>${fmtNum(c.order_count)}</td><td>${fmtNum(c.ticket_count)}</td><td>${pill(T(c.active?'Active':'Suspended'))}</td><td style="white-space:nowrap"><button class="btn btn-sm btn-quiet" data-act="customer-open" data-id="${c.id}">${T('Open profile')}</button> <button class="btn btn-sm ${c.active?'btn-danger':'btn-quiet'}" data-act="customer-status" data-id="${c.id}" data-active="${c.active?1:0}">${T(c.active?'Suspend':'Reactivate')}</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No customers found.</div>`}<div class="notice">Suspending an account blocks future sign-in and invalidates its active sessions. Admin accounts cannot be changed from this screen.</div></div>`}
-function supportHTML(){const data=state.tickets.filter(t=>{const q=state.search.toLowerCase();return(!q||[t.ref,t.email,t.subject,t.message].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||t.status===state.statusFilter)});return`${pageHead('Customer care','Support tickets','Review conversations and reply through the website support channel.',`<button class="btn btn-quiet" data-act="export" data-kind="tickets">${ICON('download')} Export CSV</button>`)}${toolbar('Search reference, email or subject…',['All','Open','In progress','Closed'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Support inbox</h2><p>${fmtNum(data.length)} ${T('matching tickets')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer email</th><th>Subject / first message</th><th>Priority</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${data.map(t=>`<tr><td><span class="cell-main">${esc(t.ref)}</span></td><td>${esc(t.email)}</td><td><span class="cell-main">${esc(t.subject)}</span><span class="cell-sub">${esc(t.message)}</span></td><td>${t.priority&&t.priority!=='Normal'?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:`<span class="cell-sub">${esc(T('Normal'))}</span>`}</td><td>${moneyFreeDate(t.created_at)}</td><td>${pill(t.status)}</td><td style="white-space:nowrap">${t.unread_for_team?`<span class="pill amber">${t.unread_for_team} new</span> `:''}<button class="btn btn-sm btn-quiet" data-act="view-ticket" data-id="${t.id}">Open thread</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">${ICON('inbox')}</div>No tickets found.</div>`}</div>`}
-function refundsHTML(){const data=state.refunds.filter(r=>{const q=state.search.toLowerCase();return(!q||[r.ref,r.order_number,r.reason,r.status].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||r.status===state.statusFilter)});return`${pageHead('Policy review','Refund requests','Review requests against the published policy. This panel does not issue payments or move funds.',`<button class="btn btn-quiet" data-act="export" data-kind="refunds">${ICON('download')} Export CSV</button>`)}${toolbar('Search request, order or reason…',['All','Under review','Approved','Rejected'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Refund queue</h2><p>${fmtNum(data.filter(x=>x.status==='Under review').length)} ${T('awaiting a decision')} · ${fmtNum(data.length)} ${T('total shown')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Order</th><th>Reason</th><th>Submitted</th><th>Status</th><th>Decision</th></tr></thead><tbody>${data.map(r=>`<tr><td><span class="cell-main">${esc(r.ref)}</span></td><td>${esc(r.order_number)}</td><td><span class="cell-sub reason-cell">${esc(r.reason)}</span></td><td>${moneyFreeDate(r.created_at)}</td><td>${pill(r.status)}</td><td>${r.status==='Under review'?`<div class="row-actions"><button class="btn btn-sm btn-primary" data-act="refund-decision" data-id="${r.id}" data-decision="Approved">Approve</button><button class="btn btn-sm btn-danger" data-act="refund-decision" data-id="${r.id}" data-decision="Rejected">Reject</button></div>`:`<span class="cell-sub">${esc(r.admin_note||'Decision recorded')}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No refund requests found.</div>`}<div class="notice">Approval records a review decision only. No payment is processed or guaranteed. Requests are subject to applicable law and the published policy.</div></div>`}
+function customersHTML(){const data=state.customers.filter(c=>{const q=state.search.toLowerCase();return !q||[c.name,c.email,c.phone].join(' ').toLowerCase().includes(q)});return`${pageHead('Customer records','Customers',T('Customer accounts and their request counts. An access change ends the session.'),`<button class="btn btn-quiet" data-act="export" data-kind="customers">${ICON('download')} Export CSV</button>`)}${toolbar('Search name, email or phone…')}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Customer directory</h2><p>${fmtNum(data.length)} ${T('records · customer accounts only')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Customer</th><th>Contact</th><th>Joined</th><th>Requests</th><th>Tickets</th><th>Access</th><th>Action</th></tr></thead><tbody>${data.map(c=>`<tr><td><span class="cell-main"><a href="#" data-act="customer-open" data-id="${c.id}" style="color:inherit;text-decoration:none;border-bottom:1px solid var(--line)">${esc(c.name)}</a></span><span class="cell-sub">Customer ID ${c.id}</span></td><td>${esc(c.email)}<span class="cell-sub">${esc(c.phone||'No phone on file')}</span></td><td>${moneyFreeDate(c.created_at)}</td><td>${fmtNum(c.order_count)}</td><td>${fmtNum(c.ticket_count)}</td><td>${pill(T(c.active?'Active':'Suspended'))}</td><td style="white-space:nowrap"><button class="btn btn-sm btn-quiet" data-act="customer-open" data-id="${c.id}">${T('Open profile')}</button> <button class="btn btn-sm ${c.active?'btn-danger':'btn-quiet'}" data-act="customer-status" data-id="${c.id}" data-active="${c.active?1:0}">${T(c.active?'Suspend':'Reactivate')}</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No customers found.</div>`}<div class="notice">Suspending an account blocks future sign-in and invalidates its active sessions. Admin accounts cannot be changed from this screen.</div></div>`}
+function supportHTML(){const data=state.tickets.filter(t=>{const q=state.search.toLowerCase();return(!q||[t.ref,t.email,t.subject,t.message].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||t.status===state.statusFilter)});return`${pageHead('Customer care','Support tickets',T('Review conversations and reply through the website support channel.'),`<button class="btn btn-quiet" data-act="export" data-kind="tickets">${ICON('download')} Export CSV</button>`)}${toolbar('Search reference, email or subject…',['All','Open','In progress','Closed'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Support inbox</h2><p>${fmtNum(data.length)} ${T('matching tickets')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer email</th><th>Subject / first message</th><th>Priority</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>${data.map(t=>`<tr><td><span class="cell-main">${esc(t.ref)}</span></td><td>${esc(t.email)}</td><td><span class="cell-main">${esc(t.subject)}</span><span class="cell-sub">${esc(t.message)}</span></td><td>${t.priority&&t.priority!=='Normal'?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:`<span class="cell-sub">${esc(T('Normal'))}</span>`}</td><td>${moneyFreeDate(t.created_at)}</td><td>${pill(t.status)}</td><td style="white-space:nowrap">${t.unread_for_team?`<span class="pill amber">${t.unread_for_team} new</span> `:''}<button class="btn btn-sm btn-quiet" data-act="view-ticket" data-id="${t.id}">Open thread</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><div class="empty-icon">${ICON('inbox')}</div>No tickets found.</div>`}</div>`}
+function refundsHTML(){const data=state.refunds.filter(r=>{const q=state.search.toLowerCase();return(!q||[r.ref,r.order_number,r.reason,r.status].join(' ').toLowerCase().includes(q))&&(state.statusFilter==='All'||r.status===state.statusFilter)});return`${pageHead('Policy review','Refund requests',T('Review requests against the published policy. No payment is issued here.'),`<button class="btn btn-quiet" data-act="export" data-kind="refunds">${ICON('download')} Export CSV</button>`)}${toolbar('Search request, order or reason…',['All','Under review','Approved','Rejected'])}<div class="panel" style="padding:14px"><div class="panel-head"><div><h2>Refund queue</h2><p>${fmtNum(data.filter(x=>x.status==='Under review').length)} ${T('awaiting a decision')} · ${fmtNum(data.length)} ${T('total shown')}</p></div></div>${data.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Request</th><th>Order</th><th>Reason</th><th>Submitted</th><th>Status</th><th>Decision</th></tr></thead><tbody>${data.map(r=>`<tr><td><span class="cell-main">${esc(r.ref)}</span></td><td>${esc(r.order_number)}</td><td><span class="cell-sub reason-cell">${esc(r.reason)}</span></td><td>${moneyFreeDate(r.created_at)}</td><td>${pill(r.status)}</td><td>${r.status==='Under review'?`<div class="row-actions"><button class="btn btn-sm btn-primary" data-act="refund-decision" data-id="${r.id}" data-decision="Approved">Approve</button><button class="btn btn-sm btn-danger" data-act="refund-decision" data-id="${r.id}" data-decision="Rejected">Reject</button></div>`:`<span class="cell-sub">${esc(r.admin_note||'Decision recorded')}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">No refund requests found.</div>`}<div class="notice">Approval records a review decision only. No payment is processed or guaranteed. Requests are subject to applicable law and the published policy.</div></div>`}
 /* ---------------------------------------------------------------------------
    Blog articles
    ---------------------------------------------------------------------------
@@ -620,58 +695,79 @@ function articlesHTML(){
  const published=rows.filter(a=>a.status==='published').length;
  const cards=rows.length?rows.map(a=>`<article class="article-row">
    <div class="article-row-main">
-     <div class="article-row-meta"><span class="pill ${a.status==='published'?'green':'blue'}">${a.status==='published'?'Published':'Draft'}</span>
-       <time>${moneyFreeDate(a.published_at||a.updated_at)}</time><span>${fmtNum(a.reading_minutes||1)} min read</span></div>
+     <div class="article-row-meta"><span class="pill ${a.status==='published'?'green':'blue'}">${esc(T(a.status==='published'?'Published':'Draft'))}</span>
+       <time>${moneyFreeDate(a.published_at||a.updated_at)}</time><span>${fmtNum(a.reading_minutes||1)} ${esc(T('min read'))}</span></div>
      <h3>${esc(a.title)}</h3>
      <p>${esc(a.summary||'')}</p>
      <small>/${esc(a.slug)}</small>
    </div>
    <div class="article-row-actions">
-     <a class="btn btn-sm btn-quiet" href="${baseUrl(`blog/${esc(a.slug)}/`)}" target="_blank" rel="noopener">View ${ICON('external')}</a>
-     <button class="btn btn-sm btn-quiet" data-act="edit-article" data-id="${a.id}">Edit</button>
-     <button class="btn btn-sm btn-danger" data-act="delete-article" data-id="${a.id}">Delete</button>
+     <a class="btn btn-sm btn-quiet" href="${baseUrl(`blog/${esc(a.slug)}/`)}" target="_blank" rel="noopener">${esc(T('View'))} ${ICON('external')}</a>
+     <button class="btn btn-sm btn-quiet" data-act="edit-article" data-id="${a.id}">${esc(T('Edit'))}</button>
+     <button class="btn btn-sm btn-danger" data-act="delete-article" data-id="${a.id}">${esc(T('Delete'))}</button>
    </div>
- </article>`).join(''):`<div class="empty-state">No articles yet. Write the first one — it publishes to /blog/ with its own page, sitemap entry and RSS item.</div>`;
- return `<div class="panel-head"><div><h2>Blog articles</h2><p>${fmtNum(rows.length)} total · ${fmtNum(published)} published · ${fmtNum(rows.length-published)} draft</p></div>
-   <button class="btn btn-sm btn-primary" data-act="new-article">✎ New article</button></div>
+ </article>`).join(''):`<div class="empty-state">${esc(T('No articles yet. The first one publishes to /blog/ with its own page and RSS item.'))}</div>`;
+ return `<div class="panel-head"><div><h2>${esc(T('Blog articles'))}</h2><p>${fmtNum(rows.length)} ${esc(T('total'))} · ${fmtNum(published)} ${esc(T('published'))} · ${fmtNum(rows.length-published)} ${esc(T('draft'))}</p></div>
+   <button class="btn btn-sm btn-primary" data-act="new-article">${ICON('plus')} ${esc(T('New article'))}</button></div>
  <div class="article-list">${cards}</div>
- <div class="panel-foot"><h3>How publishing works</h3>
-   <p>Articles are rendered on the server at <code>/blog/&lt;slug&gt;/</code> with a canonical URL, Open Graph tags,
-   <code>BlogPosting</code> structured data and an entry in <code>/sitemap.xml</code> and <code>/blog/feed.xml</code>.
-   That is what lets a search engine index them without running JavaScript. Publish, then submit the sitemap once in
-   Google Search Console.</p></div>`}
+ <div class="panel-foot"><h3>${esc(T('How publishing works'))}</h3>
+   <p>${esc(T('Each article gets its own page at /blog/<slug>/, with sharing tags and a sitemap entry.'))}</p></div>`}
+
+/* The editor's toolbar.
+   It used to draw letters and symbols - H, B, I, •, 1., ❝, </>, and a colour
+   emoji for the link - which were a different font at a different weight from
+   the icon set beside them, and looked unlike anything else in the console.
+   Each button is an icon now, with the name kept as its label. */
+/* The few marks the editor toolbar needs that the shared set does not carry.
+   Same viewBox, stroke width and line caps as AXIA_ICON, so they line up. */
+const EDITOR_GLYPHS={
+ heading:'<path d="M6 5v14M18 5v14M6 12h12"/>',
+ subheading:'<path d="M7 8v10M17 8v10M7 13h10"/>',
+ bold:'<path d="M8 5h5.5a3.5 3.5 0 0 1 0 7H8zM8 12h6.5a3.5 3.5 0 0 1 0 7H8z"/>',
+ italic:'<path d="M15 5h-5M14 19H9M13 5 11 19"/>',
+ ul:'<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>',
+ ol:'<path d="M10 6h10M10 12h10M10 18h10M4 5h1v4M3.5 18h2"/>',
+ quote:'<path d="M7 7h4v4a4 4 0 0 1-4 4M15 7h4v4a4 4 0 0 1-4 4"/>',
+ code:'<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
+ link:'<path d="M10 14a4 4 0 0 0 5.6 0l3-3A4 4 0 0 0 13 5.4L11.5 7M14 10a4 4 0 0 0-5.6 0l-3 3A4 4 0 0 0 11 18.6L12.5 17"/>',
+ divider:'<path d="M4 12h16"/>'
+};
+function editorGlyph(name){
+  const path=EDITOR_GLYPHS[name]||'';
+  return `<svg class="icon rte-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${path}</svg>`;
+}
 
 const ARTICLE_TOOLS=[
- ['h2','Heading','H'],['h3','Subheading','h'],['bold','Bold','B'],['italic','Italic','I'],
- ['ul','Bullet list','•'],['ol','Numbered list','1.'],['quote','Quote','❝'],
- ['code','Code','</>'],['link','Link','🔗'],['hr','Divider','—']
+ ['h2','Heading','heading'],['h3','Subheading','subheading'],['bold','Bold','bold'],
+ ['italic','Italic','italic'],['ul','Bullet list','ul'],['ol','Numbered list','ol'],
+ ['quote','Quote','quote'],['code','Code','code'],['link','Link','link'],['hr','Divider','divider']
 ];
 
 function editorHTML(a){
  const tags=(a.tags||[]).join(', ');
  const words=(a.body||'').trim().split(/\s+/).filter(Boolean).length;
  return `<div class="editor-bar">
-   <button class="btn btn-sm btn-quiet" data-act="close-article">← Back</button>
-   <div class="editor-bar-mid"><strong>${a.id?'Editing':'New article'}</strong><small>${fmtNum(words)} words · ${fmtNum(Math.max(1,Math.round(words/200)))} min read</small></div>
+   <button class="btn btn-sm btn-quiet" data-act="close-article">${ICON('back','dir-icon')} ${esc(T('Back'))}</button>
+   <div class="editor-bar-mid"><strong>${esc(T(a.id?'Editing':'New article'))}</strong><small>${fmtNum(words)} ${esc(T('words'))} · ${fmtNum(Math.max(1,Math.round(words/200)))} ${esc(T('min read'))}</small></div>
    <div class="editor-bar-right">
-     <button class="btn btn-sm btn-quiet" data-act="article-preview">Preview</button>
-     <button class="btn btn-sm btn-quiet" data-act="save-article" data-status="draft">Save draft</button>
-     <button class="btn btn-sm btn-primary" data-act="save-article" data-status="published">${a.status==='published'?'Update':'Publish'}</button>
+     <button class="btn btn-sm btn-quiet" data-act="article-preview">${esc(T('Preview'))}</button>
+     <button class="btn btn-sm btn-quiet" data-act="save-article" data-status="draft">${esc(T('Save draft'))}</button>
+     <button class="btn btn-sm btn-primary" data-act="save-article" data-status="published">${esc(T(a.status==='published'?'Update':'Publish'))}</button>
    </div>
  </div>
  <form data-form="article" class="editor-form" data-id="${a.id||''}">
   <div class="editor-fields">
-   <label class="field"><span>Title</span><input name="title" value="${esc(a.title||'')}" maxlength="120" placeholder="A clear, specific headline" required></label>
-   <label class="field"><span>URL slug</span><input name="slug" value="${esc(a.slug||'')}" maxlength="90" placeholder="leave empty to generate from the title" dir="ltr"></label>
+   <label class="field"><span>${esc(T('Title'))}</span><input name="title" value="${esc(a.title||'')}" maxlength="120" placeholder="${esc(T('A clear, specific headline'))}" required></label>
+   <label class="field"><span>${esc(T('URL slug'))}</span><input name="slug" value="${esc(a.slug||'')}" maxlength="90" placeholder="${esc(T('leave empty to generate from the title'))}" dir="ltr"></label>
   </div>
-  <label class="field"><span>Summary <small>(shown on the blog card and used as the meta description)</small></span><textarea name="summary" rows="2" maxlength="320" placeholder="One or two sentences that make someone want to read on.">${esc(a.summary||'')}</textarea></label>
-  <label class="field"><span>Tags <small>(comma separated, up to 6)</small></span><input name="tags" value="${esc(tags)}" placeholder="design, engineering, seo"></label>
-  <div class="field"><span>Article</span>
+  <label class="field"><span>${esc(T('Summary'))} <small>${esc(T('(shown on the blog card and used as the meta description)'))}</small></span><textarea name="summary" rows="2" maxlength="320" placeholder="${esc(T('One or two sentences that make someone want to read on.'))}">${esc(a.summary||'')}</textarea></label>
+  <label class="field"><span>${esc(T('Tags'))} <small>${esc(T('(comma separated, up to 6)'))}</small></span><input name="tags" value="${esc(tags)}" placeholder="${esc(T('design, engineering, seo'))}"></label>
+  <div class="field"><span>${esc(T('Article'))}</span>
     <div class="rte">
-      <div class="rte-toolbar">${ARTICLE_TOOLS.map(([cmd,label,glyph])=>`<button type="button" class="rte-btn" data-rte="${cmd}" title="${label}" aria-label="${label}">${glyph}</button>`).join('')}</div>
-      <div class="rte-surface" id="articleBody" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Article body" spellcheck="true">${markdownToEditorHTML(a.body||'')}</div>
+      <div class="rte-toolbar">${ARTICLE_TOOLS.map(([cmd,label,glyph])=>`<button type="button" class="rte-btn" data-rte="${cmd}" title="${esc(T(label))}" aria-label="${esc(T(label))}">${editorGlyph(glyph)}</button>`).join('')}</div>
+      <div class="rte-surface" id="articleBody" contenteditable="true" role="textbox" aria-multiline="true" aria-label="${esc(T('Article body'))}" spellcheck="true">${markdownToEditorHTML(a.body||'')}</div>
     </div>
-    <small class="field-hint">Line breaks create paragraphs. Use the toolbar for headings, lists, quotes, code and links. Everything is escaped before it renders.</small>
+    <small class="field-hint">${esc(T('Line breaks make paragraphs. Use the toolbar for headings, lists, quotes, code and links.'))}</small>
   </div>
  </form>`}
 
@@ -790,9 +886,11 @@ function previewArticle(){
    <p class="form-hint" style="margin-top:16px">The public page adds the headline, date, reading time, tags and structured data around this body.</p>
  </section>`)}
 
-function deleteArticle(id){
+async function deleteArticle(id){
  const row=(state.articles||[]).find(a=>a.id===id);
- if(!confirm('Delete "'+(row?row.title:'this article')+'"? The public page is removed immediately.'))return;
+ if(!await confirmDialog({title:'Delete this article?',
+    body:`\u201c${esc(row?row.title:'this article')}\u201d comes off the site immediately: its page, its sitemap entry and its RSS item all go. This cannot be undone.`,
+    confirmLabel:'Delete article', cancelLabel:'Keep it', danger:true}))return;
  api('/api/admin/articles',{method:'DELETE',body:{id}})
    .then(async()=>{toast('Article deleted.');state.articles=(await api('/api/admin/articles')).articles||[]; $('#pageContent').innerHTML=contentHTML()})
    .catch(err=>toast(err.message))}
@@ -848,9 +946,84 @@ function blogMarkdown(source){
  flush();
  return out.join('\n')}
 
-function activityHTML(){return`${pageHead('Security & operations','Activity log','Recent audited administrative and account events. The log is read-only.',`<button class="btn btn-quiet" data-act="refresh">${ICON('refresh')} Refresh log</button>`)}<div class="panel"><div class="panel-head"><div><h2>Audit events</h2><p>Latest ${fmtNum(state.audit.length)} recorded events</p></div></div>${state.audit.length?`<div class="activity-list">${state.audit.map(a=>`<div class="activity-item"><span class="activity-dot">${iconFor(a.entity)}</span><div><strong>${esc(actionLabel(a.action))} · ${esc(a.entity)}</strong><p>${esc(a.actor_name||'System')} ${a.actor_email?`(${esc(a.actor_email)})`:''} · Record ${esc(a.entity_id)}</p></div><time>${moneyFreeDate(a.created_at)}</time></div>`).join('')}</div>`:`<div class="empty">No audited events recorded yet.</div>`}</div>`}
+function activityHTML(){return`${pageHead('Security & operations','Activity log',T('Recent audited administrative and account events. The log is read-only.'),`<button class="btn btn-quiet" data-act="refresh">${ICON('refresh')} Refresh log</button>`)}<div class="panel activity-panel"><div class="panel-head"><div><h2>Audit events</h2><p>Latest ${fmtNum(state.audit.length)} recorded events</p></div></div>${state.audit.length?`<div class="activity-list" tabindex="0" aria-label="${T('Audit events')}">${state.audit.map(a=>`<div class="activity-item"><span class="activity-dot">${iconFor(a.entity)}</span><div><strong>${esc(actionLabel(a.action))} · ${esc(a.entity)}</strong><p>${esc(a.actor_name||'System')} ${a.actor_email?`(${esc(a.actor_email)})`:''} · Record ${esc(a.entity_id)}</p></div><time>${moneyFreeDate(a.created_at)}</time></div>`).join('')}</div>`:`<div class="empty">No audited events recorded yet.</div>`}</div>`}
+/* ---------------------------------------------------------------- admins
+   Who else can open this console, and what each of them may reach.
+
+   There is exactly one owner: the account that can create, re-role and reset
+   every other administrator. It cannot be demoted or removed from here,
+   because doing so would leave the console with nobody able to hand out a
+   role, and no second owner to undo it. Recovery for a lost owner password is
+   a command on the server (server/reset_owner.py), not a button - the trust
+   boundary for "I control every administrator" should be shell access.
+*/
+function adminsHTML(){
+  const data = state.admins || {admins:[], roles:[], is_owner:false};
+  const roles = data.roles || [];
+  const list = data.admins || [];
+  const isOwner = !!data.is_owner;
+
+  const roleChips = r => `<span class="role-chip role-${esc(r)}">${esc(T((roles.find(x=>x.id===r)||{}).label || r))}</span>`;
+
+  const rows = list.map(a => `
+    <tr>
+      <td><span class="cell-main">${esc(a.name)}</span><span class="cell-sub">${esc(a.email)}</span></td>
+      <td>${roleChips(a.admin_role)}</td>
+      <td>${a.is_me ? `<span class="pill">${esc(T('You'))}</span>` : (a.active ? `<span class="pill green">${esc(T('Active'))}</span>` : `<span class="pill amber">${esc(T('Suspended'))}</span>`)}</td>
+      <td style="white-space:nowrap">
+        ${a.is_owner ? `<span class="cell-sub">${esc(T('Fixed role'))}</span>` : (isOwner ? `
+          ${picker('admin_role', roles.filter(r=>r.id!=='owner').map(r=>({value:r.id,label:T(r.label)})), a.admin_role, {label:T('Role'), onPick:'pickerAdminRole', dataId:a.id})}
+          <button class="btn btn-sm btn-quiet" data-act="admin-password" data-id="${a.id}" data-email="${esc(a.email)}">${ICON('lock')} ${esc(T('Reset password'))}</button>
+          <button class="btn btn-sm btn-danger" data-act="admin-remove" data-id="${a.id}" data-email="${esc(a.email)}">${ICON('trash')} ${esc(T('Remove'))}</button>
+        ` : `<span class="cell-sub">${esc(T('Owner only'))}</span>`)}
+      </td>
+    </tr>`).join('');
+
+  const roleCards = roles.map(r => `
+    <div class="role-card ${r.id==='owner'?'is-owner':''}">
+      <div class="role-card-head">${roleChips(r.id)}<small>${esc(T(r.summary))}</small></div>
+      <div class="role-perms">${(r.permissions||[]).map(p=>`<span class="perm">${esc(T(p))}</span>`).join('')}</div>
+    </div>`).join('');
+
+  const form = state.adminForm;
+  const formHTML = form ? `
+    <form data-form="admin-create" class="panel" style="padding:20px">
+      <div class="panel-head"><div><h2>${esc(T('New administrator'))}</h2><p>${esc(T('They sign in at /admin/ with this email and password.'))}</p></div></div>
+      <div class="form-grid">
+        <div class="field"><label for="adm-name">${esc(T('Name'))}</label><input id="adm-name" name="name" required minlength="2" maxlength="120"></div>
+        <div class="field"><label for="adm-email">${esc(T('Email'))}</label><input id="adm-email" name="email" type="email" required maxlength="254"></div>
+        <div class="field"><label for="adm-role">${esc(T('Role'))}</label>
+          ${picker('admin_role', roles.filter(r=>r.id!=='owner').map(r=>({value:r.id,label:`${T(r.label)} · ${T(r.summary)}`})), 'support', {id:'adm-role', label:T('Role')})}</div>
+        <div class="field"><label for="adm-pass">${esc(T('Initial password'))}</label><input id="adm-pass" name="password" type="password" required minlength="12" autocomplete="new-password"><span class="field-hint">${esc(T('At least 12 characters. Give it to them directly; there is no email in this build.'))}</span></div>
+      </div>
+      <div class="row-actions" style="margin-top:14px">
+        <button class="btn btn-primary" type="submit">${ICON('check')} ${esc(T('Create administrator'))}</button>
+        <button class="btn btn-quiet" type="button" data-act="admin-form-cancel">${esc(T('Cancel'))}</button>
+      </div>
+    </form>` : '';
+
+  return `${pageHead('Access control','Administrators',
+      T('Who opens this console, and what each role reaches. The owner hands out roles.'),
+      isOwner ? `<button class="btn btn-primary" data-act="admin-new">${ICON('plus')} ${esc(T('New administrator'))}</button>` : '')}
+    ${state.adminsError?`<div class="panel" style="padding:16px;border-color:rgba(255,90,110,.35)"><p style="margin:0;color:var(--red)">${esc(state.adminsError)}</p></div>`:''}
+    ${formHTML}
+    <div class="panel" style="padding:14px">
+      <div class="panel-head"><div><h2>${esc(T('Administrators'))}</h2><p>${fmtNum(list.length)} ${esc(T('accounts'))}</p></div></div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>${esc(T('Account'))}</th><th>${esc(T('Role'))}</th><th>${esc(T('Status'))}</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="4"><span class="cell-sub">${esc(T('No administrators yet.'))}</span></td></tr>`}</tbody>
+      </table></div>
+    </div>
+    <div class="panel" style="padding:20px">
+      <div class="panel-head"><div><h2>${esc(T('What each role reaches'))}</h2><p>${esc(T('Chosen when the account is created. Every console route checks it on the server.'))}</p></div></div>
+      <div class="role-grid">${roleCards}</div>
+      <div class="notice" style="margin-top:16px">${ICON('shield')} ${esc(T('Only the owner appoints administrators. A reset ends every session.'))}</div>
+      <p class="form-hint" style="margin-top:12px">${esc(T('Locked out? Run python3 server/reset_owner.py on the server.'))}</p>
+    </div>`;
+}
+
 function actionLabel(s){return({create:'Created',update:'Updated',unpublish:'Unpublished',status_change:'Changed order status',ticket_status:'Changed ticket status',ticket_reply:'Replied to ticket',refund_decision:'Recorded refund decision',customer_access:'Changed customer access',settings:'Updated website settings',login:'Signed in',register:'Registered'})[s]||s}
-function contentHTML(){switch(state.page){case'site':return siteHTML();case'articles':return articlesHTML();case'orders':return ordersHTML();case'products':return productsHTML();case'customers':return customersHTML();case'support':return supportHTML();case'refunds':return refundsHTML();case'activity':return activityHTML();default:return overviewHTML()}}
+function contentHTML(){switch(state.page){case'site':return siteHTML();case'articles':return articlesHTML();case'orders':return ordersHTML();case'products':return state.productDraft ? productDraftHTML() : productsHTML();case'customers':return customersHTML();case'support':return supportHTML();case'refunds':return refundsHTML();case'activity':return activityHTML();case'admins':return adminsHTML();default:return overviewHTML()}}
 async function fetchPageData(){state.loading=true;try{
  if(state.page==='dashboard'){
 state.overview=await api('/api/admin/overview');
@@ -876,6 +1049,7 @@ state.dirty=false}
   if(!state.settings){try{const r=await api('/api/admin/settings');state.settings=r.settings||null}catch(e){state.settings=null}}
  }
  else if(state.page==='customers'){const r=await api('/api/admin/customers');state.customers=r.customers||[]}
+ else if(state.page==='admins'){state.admins=await api('/api/admin/admins')}
  else if(state.page==='support'){try{state.tickets=await api('/api/support')}catch(e){state.tickets=[]}}
  else if(state.page==='refunds'){try{state.refunds=await api('/api/refunds')}catch(e){state.refunds=[]}}
  else if(state.page==='articles')state.articles=(await api('/api/admin/articles')).articles||[]
@@ -890,8 +1064,10 @@ state.dirty=false}
 }
 function updateNav(){ $$('.side-link[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));const title=$('.crumb strong');if(title)title.textContent=({dashboard:'Overview',site:'Website',orders:'Project requests',products:'Products',customers:'Customers',support:'Support',refunds:'Refunds',activity:'Activity log'})[state.page]||'Overview';const side=$('#sidebar');if(side)side.classList.remove('open');$('.side-scrim')?.classList.remove('show') }
 async function loadSession(){try{const s=await api('/api/me');state.me=s.user;state.csrf=s.csrf}catch{state.me=null;state.csrf=null}if(!state.me){loginView();return}if(state.me.role!=='admin'){deniedView();return}if(!root.querySelector('.admin-shell'))shell();await fetchPageData()}
-function nav(page){
-if(state.dirty&&!confirm('Discard the unsaved settings changes?'))return;
+async function nav(page){
+if(state.dirty&&!await confirmDialog({title:'Discard your changes?',
+    body:'The settings on this tab have not been saved. Leaving loses them.',
+    confirmLabel:'Discard', cancelLabel:'Keep editing', danger:true}))return;
 state.dirty=false;
 state.page=page;
 state.search='';
@@ -902,8 +1078,153 @@ state.categoryFilter='All';
 if(location.hash!=='#'+page)history.replaceState(null,'','#'+page);updateNav();fetchPageData()}
 function showModal(html,wide=false){overlays.innerHTML=`<div class="modal-backdrop" data-act="backdrop-close"><section class="modal ${wide?'modal-wide':''}" role="dialog" aria-modal="true">${html}</section></div>`;document.body.style.overflow='hidden';$('.modal input, .modal select, .modal textarea',overlays)?.focus()}
 function closeModal(){overlays.innerHTML='';document.body.style.overflow=''}
+
+/* A question with two buttons, in the console's own clothes.
+
+   window.confirm() is a browser widget: it carries the browser's font, the
+   browser's language and the browser's button order, and on some platforms it
+   says "OK / Cancel" in a language the operator may not read. It is also
+   blocking, so nothing on the page can run while it is open - which is why the
+   console could not show what an action was about to affect.
+
+   This returns a promise that resolves true or false, so callers keep the shape
+   they already had:
+       if (!await confirmDialog({...})) return;
+*/
+function confirmDialog({title, body='', confirmLabel='Confirm', cancelLabel='Cancel',
+                        danger=false, extra=''}={}){
+  return new Promise(resolve=>{
+    const done = value => { closeModal(); resolve(value); };
+    showModal(`${modalHead('Confirm', esc(title))}
+      <div class="modal-body"><p style="margin:0 0 14px;line-height:1.75">${body}</p>${extra}</div>
+      <div class="row-actions" style="margin-top:18px;justify-content:flex-end">
+        <button class="btn btn-quiet" type="button" data-confirm-no>${esc(cancelLabel)}</button>
+        <button class="btn ${danger?'btn-danger':'btn-primary'}" type="button" data-confirm-yes>${esc(confirmLabel)}</button>
+      </div>`);
+    const yes = overlays.querySelector('[data-confirm-yes]');
+    const no = overlays.querySelector('[data-confirm-no]');
+    if (yes) yes.onclick = () => done(true);
+    if (no) no.onclick = () => done(false);
+    // The backdrop and the X are the other way of saying no.
+    overlays.querySelector('.modal-backdrop').addEventListener('click', e => {
+      if (e.target === e.currentTarget) done(false);
+    });
+    overlays.querySelector('[data-act="close-modal"]')?.addEventListener('click', () => done(false));
+    if (yes) yes.focus();
+  });
+}
+
+/* Open one listbox, choose, close. Only one is ever open, and a click anywhere
+   else or Escape closes it - the same two ways a <select> closes. */
+function closePickers(except){
+  document.querySelectorAll('[data-picker].is-open').forEach(p=>{
+    if(p===except)return;
+    p.classList.remove('is-open');
+    const btn=p.querySelector('[data-picker-btn]'), list=p.querySelector('[data-picker-list]');
+    if(btn)btn.setAttribute('aria-expanded','false');
+    if(list)list.hidden=true;
+  });
+}
+function togglePicker(pickerEl, open){
+  const btn=pickerEl.querySelector('[data-picker-btn]'), list=pickerEl.querySelector('[data-picker-list]');
+  if(!btn||!list)return;
+  const next = open===undefined ? list.hidden : open;
+  if(next)closePickers(pickerEl);
+  pickerEl.classList.toggle('is-open',next);
+  btn.setAttribute('aria-expanded',String(next));
+  list.hidden=!next;
+  if(next){
+    const on=list.querySelector('.picker-option.is-on')||list.querySelector('.picker-option');
+    if(on)on.focus();
+  }
+}
+document.addEventListener('toggle', e => {
+  const fold = e.target.closest && e.target.closest('[data-fold="categories"]');
+  if (fold) state.foldCategories = fold.open;
+}, true);
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-picker-btn]');
+  if(btn){togglePicker(btn.closest('[data-picker]'));return}
+  const opt=e.target.closest('[data-picker-option]');
+  if(opt){
+    const host=opt.closest('[data-picker]');
+    const input=host.querySelector('[data-picker-input]');
+    const value=opt.dataset.value;
+    const act=host.dataset.pickerAct;
+    // Close and commit *before* calling anything that might re-render the page.
+    // The callback does exactly that - the filter handlers replace #pageContent
+    // - and a re-render detaches this whole picker, so anything that touched
+    // host after the callback would be working on a node that is no longer in
+    // the document (the list it looks for is already gone).
+    togglePicker(host,false);
+    host.querySelectorAll('[data-picker-option]').forEach(o=>{
+      const on=o===opt;
+      o.classList.toggle('is-on',on);
+      o.setAttribute('aria-selected',on?'true':'false');
+      const tick=o.querySelector('.icon');
+      if(on&&!tick)o.insertAdjacentHTML('beforeend',ICON('check'));
+      if(!on&&tick)tick.remove();
+    });
+    const label=opt.querySelector('span');
+    const shown=host.querySelector('.picker-value');
+    if(shown){shown.textContent=label?label.textContent:'';shown.classList.remove('is-empty')}
+    // The hidden input is what a <select> used to be. It is filled here, before
+    // the callback runs, so a `change` listener sees the new value.
+    if(input)input.value=value;
+    if(act&&typeof window[act]==='function')window[act](value,host);
+    else if(input)input.dispatchEvent(new Event('change',{bubbles:true}));
+    return;
+  }
+  if(!e.target.closest('[data-picker]'))closePickers();
+});
+document.addEventListener('keydown',e=>{
+  const open=document.querySelector('[data-picker].is-open');
+  if(!open)return;
+  if(e.key==='Escape'){e.preventDefault();const b=open.querySelector('[data-picker-btn]');togglePicker(open,false);if(b)b.focus();return}
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+  e.preventDefault();
+  const opts=[...open.querySelectorAll('[data-picker-option]')];
+  const i=opts.indexOf(document.activeElement);
+  const next=e.key==='ArrowDown'?Math.min(opts.length-1,i+1):Math.max(0,i-1);
+  if(opts[next])opts[next].focus();
+});
+
+/* Reset an administrator's password. The owner types the new one and passes it
+   on; there is no mail server in this build, so inventing a "we emailed you" step
+   would be a lie on screen. */
+function openResetModal(id, email){
+  showModal(`${modalHead('Access', esc(T('Reset password')))}
+    <form data-form="admin-password" data-id="${id}">
+      <div class="modal-body">
+        <p style="margin:0 0 14px;color:var(--muted);font-size:12px;line-height:1.7">
+          ${esc(T('Set a new password for'))} <strong>${esc(email)}</strong>.
+          ${esc(T('Every session that account has open ends now.'))}
+        </p>
+        <div class="field"><label for="adm-reset">${esc(T('New password'))}</label>
+          <input id="adm-reset" name="password" type="password" required minlength="12" autocomplete="new-password">
+          <span class="field-hint">${esc(T('At least 12 characters.'))}</span></div>
+      </div>
+      <div class="row-actions" style="margin-top:18px;justify-content:flex-end">
+        <button class="btn btn-quiet" type="button" data-act="close-modal">${esc(T('Cancel'))}</button>
+        <button class="btn btn-primary" type="submit">${ICON('lock')} ${esc(T('Set password'))}</button>
+      </div>
+    </form>`);
+}
+
+/* The console's own way of telling the operator something happened. It sits in
+   the corner for a few seconds; nothing blocks. */
+function toast(message){
+  let box = document.getElementById('admin-toast');
+  if (!box){ box = document.createElement('div'); box.id = 'admin-toast'; box.className = 'admin-toast'; document.body.append(box); }
+  box.textContent = message;
+  box.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => box.classList.remove('show'), 3200);
+}
+
 function modalHead(kicker,title,sub=''){return`<div class="modal-head"><div><div class="eyebrow">${kicker}</div><h2>${title}</h2>${sub?`<p>${sub}</p>`:''}</div><button class="icon-close" type="button" data-act="close-modal" aria-label="Close">${ICON('close')}</button></div>`}
-async function openOrder(id){const o=state.orders.find(x=>x.id===Number(id));if(!o)return;showModal(`${modalHead('Project request',esc(o.number),`${esc(o.product_title)} · submitted ${moneyFreeDate(o.created_at)}`)}<div class="detail-grid"><div class="detail-item"><small>Customer</small><strong>${esc(o.name)}</strong></div><div class="detail-item"><small>Email / phone</small><strong>${esc(o.email)}<br>${esc(o.phone)}</strong></div><div class="detail-item"><small>Contact preference</small><strong>${esc(o.contact_method||'Email')}</strong></div><div class="detail-item"><small>Current status</small><strong>${pill(o.status)}</strong></div><div class="detail-item full"><small>Project details</small><p>${esc(o.description)}</p></div><div class="detail-item full"><small>Additional requirements</small><p>${esc(o.requirements||'No additional requirements supplied.')}</p></div></div><h3 style="font-size:11px;margin:19px 0 9px">Status history</h3><div class="timeline" id="orderTimeline"><div class="skeleton" style="width:70%;margin:8px"></div><div class="skeleton" style="width:50%;margin:8px"></div></div><form data-form="order-update" data-id="${o.id}"><div class="form-grid"><div class="field"><label>Update status</label><select name="status">${ordersStatus.map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Internal status note</label><input name="note" maxlength="1000" placeholder="Optional note for the audit trail"></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Save status update</button></div></form>`,true);
+async function openOrder(id){const o=state.orders.find(x=>x.id===Number(id));if(!o)return;showModal(`${modalHead('Project request',esc(o.number),`${esc(o.product_title)} · submitted ${moneyFreeDate(o.created_at)}`)}<div class="detail-grid"><div class="detail-item"><small>Customer</small><strong>${esc(o.name)}</strong></div><div class="detail-item"><small>Email / phone</small><strong>${esc(o.email)}<br>${esc(o.phone)}</strong></div><div class="detail-item"><small>Contact preference</small><strong>${esc(o.contact_method||'Email')}</strong></div><div class="detail-item"><small>Current status</small><strong>${pill(o.status)}</strong></div><div class="detail-item full"><small>Project details</small><p>${esc(o.description)}</p></div><div class="detail-item full"><small>Additional requirements</small><p>${esc(o.requirements||'No additional requirements supplied.')}</p></div></div><h3 style="font-size:11px;margin:19px 0 9px">Status history</h3><div class="timeline" id="orderTimeline"><div class="skeleton" style="width:70%;margin:8px"></div><div class="skeleton" style="width:50%;margin:8px"></div></div><form data-form="order-update" data-id="${o.id}"><div class="form-grid"><div class="field"><label>Update status</label>${picker('status', ordersStatus.map(x=>({value:x,label:T(x)})), o.status, {label:T('Status')})}</div><div class="field"><label>Internal status note</label><input name="note" maxlength="1000" placeholder="Optional note for the audit trail"></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Save status update</button></div></form>`,true);
  try{const history=await api(`/api/admin/orders/${Number(id)}/history`);const box=$('#orderTimeline');if(box)box.innerHTML=history.length?history.map(h=>`<div class="timeline-item"><strong>${esc(h.status)}</strong><p>${esc(h.note||'Status recorded')}</p><small>${moneyFreeDate(h.created_at)} · ${esc(h.actor_name||'System')}</small></div>`).join(''):'<div class="muted" style="font-size:9px">No history yet.</div>'}catch(e){const box=$('#orderTimeline');if(box)box.innerHTML=`<div class="muted" style="font-size:9px">${esc(e.message)}</div>`}
 }
 /* The product form. It was one flat list of twelve fields in DOM order, which
@@ -918,11 +1239,44 @@ async function openOrder(id){const o=state.orders.find(x=>x.id===Number(id));if(
    Categories come from the settings document (the operator's list), and a
    product whose category has been deleted keeps it available as an option so
    saving the product cannot silently move it somewhere else. */
-async function productForm(p=null){
+/* The product editor's own page header, replacing the modal title it had.
+   A page can say where it goes back to; a modal could only be dismissed. */
+function productFormHead(edit, p){
+  return `<div class="page-head"><div><div class="eyebrow">${T(edit?'Catalog editor':'New catalog product')}</div>
+    <h1>${T(edit?'Edit product':'Add a product concept')}</h1>
+    <p>${T(edit?'Changes affect the public product data, its featured slot and its order.':'Add a product to the database-backed catalog.')}</p></div>
+    <div class="head-actions"><button class="btn btn-quiet" type="button" data-act="product-cancel">${ICON('back')} ${T('Back to products')}</button></div></div>`;
+}
+
+/* Open the product editor as a page of the console.
+
+   It was a modal. A modal cannot be scrolled from the browser's scrollbar,
+   cannot be linked to, cannot survive a refresh, and on a phone the keyboard
+   covers the field you are typing in with no way to move the dialog. The
+   fields are unchanged; only where they are drawn has moved. */
+async function openProductEditor(p){
+  state.productDraft = p ? p.id : 'new';
+  const html = await productForm(p);
+  if (!html) return;                       // the "add a category first" guard
+  if (location.hash !== '#products') history.replaceState(null, '', '#products');
+  state.page = 'products';
+  $('#pageContent').innerHTML = html;
+  updateNav();
+}
+/* contentHTML() draws the draft synchronously on a re-render, so a refresh or a
+   language switch does not throw away what the operator opened. */
+function productDraftHTML(){
+  const p = state.productDraft === 'new'
+    ? null
+    : state.products.find(x => Number(x.id) === Number(state.productDraft));
+  return productForm(p, true) || productsHTML();
+}
+
+async function productForm(p=null, sync=false){
  const edit=!!p;
  /* The categories live in the settings document. Fetch it if this screen has
     not already, so the form is not limited to the one route that preloads it. */
- if(!state.settings){
+ if(!state.settings && !sync){
   try{const r=await api('/api/admin/settings');state.settings=r.settings||null}catch(e){state.settings=null}
  }
  const cats=siteCategories();
@@ -931,16 +1285,18 @@ async function productForm(p=null){
     from the API, the whole action is refused with the reason on screen and a
     button that jumps to the editor below. */
  if(!cats.length){
-  showModal(`${modalHead('Catalog editor',T('Add a category first'),T('Products are filed under a category, and this site has none yet.'))}
+  if(!sync) $('#pageContent').innerHTML = `${modalHead('Catalog editor',T('Add a category first'),T('Products are filed under a category, and this site has none yet.'))}
    <p class="muted" style="font-size:11px;line-height:1.8">${T('Categories are the tabs the public catalog offers.')} ${T('Add one below, then come back and add the product.')}</p>
-   <div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">${T('Cancel')}</button><button class="btn btn-primary" type="button" data-act="goto-categories">${T('Go to categories')}</button></div>`);
-  return;
+   <div class="form-actions"><button class="btn btn-quiet" type="button" data-act="product-cancel">${T('Cancel')}</button><button class="btn btn-primary" type="button" data-act="goto-categories">${T('Go to categories')}</button></div>`;
+  return '';
  }
  const current=p?.category||(cats[0]?.id||'');
- const options=cats.map(c=>`<option value="${esc(c.id)}" ${current===c.id?'selected':''}>${esc(categoryLabel(c.id))}</option>`).join('');
- const missing=current&&!cats.some(c=>c.id===current)
-  ? `<option value="${esc(current)}" selected>${esc(current)} (${T('category removed')})</option>` : '';
- showModal(`${modalHead(edit?'Catalog editor':'New catalog product',edit?T('Edit product'):T('Add a product concept'),edit?T('Changes affect the public product data, its featured slot and its order.'):T('Add a product to the database-backed catalog.'))}
+ // A product whose category was deleted keeps its value, marked, so that saving
+ // the form does not silently move it to whichever category sorts first.
+ const catOptions=cats.map(c=>({value:c.id,label:categoryLabel(c.id)}));
+ if(current&&!cats.some(c=>c.id===current))
+   catOptions.push({value:current,label:`${current} (${T('category removed')})`});
+  return `${productFormHead(edit, p)}
  <form data-form="product" data-id="${p?.id||''}" class="product-form">
   <fieldset class="form-group"><legend>${T('Content')}</legend><div class="form-grid">
    <div class="field full"><label for="pf-title">${T('Product title')}</label><input id="pf-title" name="title" required maxlength="140" value="${esc(p?.title||'')}" placeholder="${T('Arya — Software with wings.')}"></div>
@@ -952,13 +1308,13 @@ async function productForm(p=null){
 
   <fieldset class="form-group"><legend>${T('Presentation')}</legend><div class="form-grid">
    <div class="field full"><label>${T('Cover image')}</label>${coverUploader(p?.cover||'')}<span class="field-hint">${T('PNG, JPEG, WebP or GIF, up to 5 MB.')} ${T('The image is re-encoded on upload, so camera metadata is removed.')}</span></div>
-   <div class="field"><label for="pf-category">${T('Category')}</label><select id="pf-category" name="category">${options}${missing}</select></div>
+   <div class="field"><label for="pf-category">${T('Category')}</label>${picker('category', catOptions, current, {id:'pf-category', label:T('Category')})}</div>
    <div class="field"><label for="pf-price">${T('Price label')}</label><input id="pf-price" name="price_label" maxlength="80" value="${esc(p?.price_label||'Request a quote')}" placeholder="${T('Request a quote')}"></div>
   </div></fieldset>
 
   <fieldset class="form-group"><legend>${T('Links & availability')}</legend><div class="form-grid">
    <div class="field full"><label for="pf-github">${T('GitHub preview link')}</label><input id="pf-github" name="github_url" type="url" inputmode="url" maxlength="300" pattern="https://.+" placeholder="https://github.com/your-org/your-project" value="${esc(p?.github_url||'')}"><span class="field-hint">${T('Preview opens inside the site. Must start with https://.')} ${T('Leave empty to show the built-in concept preview.')}</span></div>
-   <div class="field"><label for="pf-status">${T('Availability label')}</label><select id="pf-status" name="status"><option value="available" ${p?.status==='available'?'selected':''}>${T('Available')}</option><option value="showcase" ${p?.status==='showcase'?'selected':''}>${T('Showcase only')}</option></select></div>
+   <div class="field"><label for="pf-status">${T('Availability label')}</label>${picker('status', [{value:'available',label:T('Available')},{value:'showcase',label:T('Showcase only')}], p?.status||'available', {id:'pf-status', label:T('Availability label')})}</div>
    <div class="field"><label for="pf-slug">${T('URL slug')}</label><input id="pf-slug" name="slug" required pattern="[a-z0-9-]{3,100}" maxlength="100" value="${esc(p?.slug||'')}"><span class="field-hint">${T('Lowercase letters, digits and hyphens.')}</span></div>
   </div></fieldset>
 
@@ -968,21 +1324,28 @@ async function productForm(p=null){
    <div class="field full"><label class="check-line"><input name="published" type="checkbox" ${p&&!p.published?'':'checked'}> ${T('Published in product data')}</label><span class="field-hint">${T('AURION stays a showcase concept; no trading or payment is enabled.')}</span></div>
   </div></fieldset>
 
-  <div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">${T('Cancel')}</button><button class="btn btn-primary">${edit?T('Save product'):T('Create product')}</button></div>
- </form>`,true)}
+  <div class="form-actions"><button class="btn btn-quiet" type="button" data-act="product-cancel">${T('Cancel')}</button><button class="btn btn-primary">${edit?T('Save product'):T('Create product')}</button></div>
+ </form>`;
+}
 
-function openTicket(id){const t=state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div><div class="detail-item"><small>Priority</small><strong>${t.priority?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:'—'}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label><select name="status">${['Open','In progress','Closed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${esc(T(s))}</option>`).join('')}</select></div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
+/* Open a conversation's thread.
+   The ticket is passed in when the caller already has it - the customer
+   profile holds its own copy and never loads the whole support inbox, so
+   looking it up in state.tickets alone left that button doing nothing. */
+function openTicket(id, ticket){const t=ticket||state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div><div class="detail-item"><small>Priority</small><strong>${t.priority?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:'—'}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label>${picker('status', ['Open','In progress','Closed'].map(x=>({value:x,label:T(x)})), t.status, {label:T('Status')})}</div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
 function refundModal(id,decision){const r=state.refunds.find(x=>x.id===Number(id));if(!r)return;showModal(`${modalHead('Refund review',`${decision} request ${esc(r.ref)}`,`Order ${esc(r.order_number)} · submitted ${moneyFreeDate(r.created_at)}`)}<div class="detail-item"><small>Customer's stated reason</small><p>${esc(r.reason)}</p></div><form data-form="refund" data-id="${r.id}" data-decision="${decision}"><div class="field" style="margin-top:12px"><label>Administrative note</label><textarea name="note" maxlength="1000" placeholder="Record the review rationale. This will not trigger a payment."></textarea></div><div class="field" style="margin-top:10px"><label>Transaction reference (optional, record only)</label><input name="transaction_ref" maxlength="120"></div><div class="notice">${decision==='Approved'?'Approval records a decision only.':'Rejection records a decision only.'} The website does not process or confirm payment-provider refunds.</div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn ${decision==='Approved'?'btn-primary':'btn-danger'}">Record ${decision.toLowerCase()}</button></div></form>`)}
 function exportCsv(kind){const data=({orders:state.orders,products:state.products,customers:state.customers,tickets:state.tickets,refunds:state.refunds})[kind]||[];if(!data.length){toast('There are no records to export.');return}const columns=Object.keys(data[0]).filter(k=>!['password_hash','csrf','token_hash'].includes(k));const csv=[columns.map(qcsv).join(','),...data.map(row=>columns.map(k=>qcsv(Array.isArray(row[k])?row[k].join('; '):row[k])).join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`axiasoft-${kind}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('CSV export downloaded.')}
 function qcsv(v){return'"'+String(v??'').replace(/"/g,'""')+'"'}
 async function refreshAll(){state.overview=null;state.orders=[];state.products=[];await fetchPageData();toast('Data refreshed.');state.savedSettings={...state.settings};state.dirty=false}
 function setSearch(value){state.search=value;const c=$('#pageContent');if(c)c.innerHTML=contentHTML()}
-function clickHandler(e){
+async function clickHandler(e){
  const page=e.target.closest('[data-page]');if(page){e.preventDefault();nav(page.dataset.page);return}
  const toggle=e.target.closest('#languageToggle');if(toggle){localStorage.setItem('axia-lang',document.documentElement.lang==='fa'?'en':'fa');location.reload();return}
  const siteTab=e.target.closest('[data-site-tab]');
 if(siteTab){
-if(state.dirty&&!confirm('Discard the unsaved changes on this tab?'))return;
+if(state.dirty&&!await confirmDialog({title:'Discard your changes?',
+    body:'The values on this tab have not been saved. Leaving loses them.',
+    confirmLabel:'Discard', cancelLabel:'Keep editing', danger:true}))return;
 state.siteTab=siteTab.dataset.siteTab;
 state.dirty=false;
 $('#pageContent').innerHTML=contentHTML();
@@ -991,13 +1354,36 @@ return}
  if(rteBtn){applyFormat(rteBtn.dataset.rte);return}
  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
  if(act==='close-modal'||(act==='backdrop-close'&&e.target===b)){closeModal();return}
- if(act==='goto-categories'){closeModal();document.querySelector('#categoriesPanel')?.scrollIntoView({behavior:'smooth',block:'center'});const f=$('[data-form="category-add"] input');if(f)f.focus();return}
+ if(act==='goto-categories'){state.page='products';state.foldCategories=true;if(location.hash!=='#products')history.replaceState(null,'','#products');fetchPageData().then(()=>{document.querySelector('#categoriesPanel')?.scrollIntoView({behavior:'smooth',block:'center'});const f=$('[data-form="category-add"] input');if(f)f.focus();});return}
  if(act==='move-category'){moveCategory(b);return}
  if(act==='delete-category'){deleteCategory(b);return}
  if(act==='toggle-nav'){const s=$('#sidebar');s?.classList.toggle('open');$('.side-scrim')?.classList.toggle('show',s?.classList.contains('open'));return}
  if(act==='close-nav'){$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show');return}
  if(act==='theme'){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.setItem('axia-theme',t);b.innerHTML=themeGlyph();return}
  if(act==='refresh'){refreshAll();return}
+ /* ---- administrators ---- */
+ if(act==='admin-new'){state.adminForm=true;state.adminsError='';$('#pageContent').innerHTML=contentHTML();$('#adm-name')?.focus();return}
+ if(act==='admin-form-cancel'){state.adminForm=false;$('#pageContent').innerHTML=contentHTML();return}
+ if(act==='admin-password'){
+   const id=Number(b.dataset.id), email=b.dataset.email||'';
+   openResetModal(id,email);
+   return;
+ }
+ if(act==='admin-remove'){
+   const id=Number(b.dataset.id), email=b.dataset.email||'';
+   confirmDialog({
+     title:T('Remove this administrator?'),
+     body:`${email} ${T('loses console access now. Their customer account stays.')}`,
+     confirmLabel:T('Remove access'),
+     danger:true,
+   }).then(async ok=>{
+     if(!ok)return;
+     try{await api('/api/admin/admins',{method:'DELETE',body:JSON.stringify({id})});
+       state.admins=await api('/api/admin/admins');$('#pageContent').innerHTML=contentHTML();toast(T('Administrator removed.'))}
+     catch(err){state.adminsError=err.message;$('#pageContent').innerHTML=contentHTML()}
+   });
+   return;
+ }
  /* A brand image is uploaded with the same endpoint the product covers use.
     The reply carries one URL; it goes into both the preview and the hidden
     field, and the path box is filled too so the operator can see what was
@@ -1026,9 +1412,10 @@ return}
  if(act==='save-article'){saveArticle(null,b.dataset.status);return}
  if(act==='edit-article'){openArticle(+b.dataset.id);return}
  if(act==='delete-article'){deleteArticle(+b.dataset.id);return}
+ if(act==='product-cancel'){state.productDraft=null;state.page='products';location.hash='#products';if(!state.products.length)fetchPageData();else $('#pageContent').innerHTML=contentHTML();return}
  if(act==='logout'){logout();return}
- if(act==='new-product'){productForm().catch(e=>toast(e.message,true));return}
- if(act==='edit-product'){const p=state.products.find(x=>x.id===Number(b.dataset.id));if(p)productForm(p).catch(e=>toast(e.message,true));return}
+ if(act==='new-product'){openProductEditor(null);return}
+ if(act==='edit-product'){const p=state.products.find(x=>x.id===Number(b.dataset.id));if(p)openProductEditor(p);return}
  if(act==='view-order'){openOrder(b.dataset.id);return}
  if(act==='view-ticket'){openTicket(b.dataset.id);return}
  if(act==='refund-decision'){refundModal(b.dataset.id,b.dataset.decision);return}
@@ -1056,10 +1443,12 @@ return}
  if(act==='customer-open'){openCustomer(b.dataset.id);return}
  if(act==='customer-back'){backToCustomers();return}
  if(act==='customer-refund'){customerRefund(b);return}
- if(act==='customer-ticket'){state.page='tickets';openTicket(b.dataset.id);return}
+ if(act==='customer-ticket'){openCustomerTicket(b.dataset.id);return}
 }
 async function bulkPublishAll(){
- if(!confirm('Publish every hidden product?'))return;
+ if(!await confirmDialog({title:'Publish every hidden product?',
+    body:'Every product that is currently hidden becomes visible on the storefront, in the catalog and in search.',
+    confirmLabel:'Publish all'}))return;
  try{
   const hidden=state.products.filter(p=>!p.published);
   for(const p of hidden)await api('/api/admin/products',{method:'PUT',body:{id:p.id,published:true}});
@@ -1071,7 +1460,9 @@ async function bulkPublishAll(){
 async function bulkPublish(publish){
  const ids=[...state.selected];
  if(!ids.length)return;
- if(!confirm(`${publish?'Publish':'Hide'} ${ids.length} selected product(s)?`))return;
+ if(!await confirmDialog({title:`${publish?'Publish':'Hide'} ${ids.length} product${ids.length===1?'':'s'}?`,
+    body:publish?'They become visible on the storefront straight away.':'They come off the storefront. Existing order history is preserved.',
+    confirmLabel:publish?'Publish':'Hide'}))return;
  try{
   for(const id of ids){
    if(publish)await api('/api/admin/products',{method:'PUT',body:{id,published:true}});
@@ -1238,14 +1629,35 @@ async function moveProduct(btn){
   await fetchPageData();
  }catch(e){toast(e.message,true)}
 }
-async function toggleProduct(btn){const p=state.products.find(x=>x.id===Number(btn.dataset.id));if(!p)return;const publish=!p.published;if(!confirm(publish?'Publish this product in public product data?':'Unpublish this product? Existing order history is preserved.'))return;try{if(publish){await api('/api/admin/products',{method:'PUT',body:{id:p.id,published:true}})}else{await api('/api/admin/products',{method:'DELETE',body:{id:p.id}})}toast(publish?'Product published.':'Product unpublished; history is preserved.');state.overview=null;await fetchPageData()}catch(e){toast(e.message,true)}}
-async function changeCustomerStatus(btn){const c=state.customers.find(x=>x.id===Number(btn.dataset.id));if(!c)return;const active=!c.active;if(!confirm(active?`Reactivate sign-in for ${c.name}?`:`Suspend ${c.name}? This will revoke active sessions.`))return;try{await api('/api/admin/customers/status',{method:'PUT',body:{id:c.id,active}});toast(active?'Customer reactivated.':'Customer suspended; sessions revoked.');const r=await api('/api/admin/customers');state.customers=r.customers;$('#pageContent').innerHTML=customersHTML()}catch(e){toast(e.message,true)}}
+async function toggleProduct(btn){const p=state.products.find(x=>x.id===Number(btn.dataset.id));if(!p)return;const publish=!p.published;if(!await confirmDialog({title:publish?'Publish this product?':'Unpublish this product?',
+    body:publish?'It becomes visible on the storefront, in the catalog and in search.':'It comes off the storefront. Existing order history is preserved.',
+    confirmLabel:publish?'Publish':'Unpublish'}))return;try{if(publish){await api('/api/admin/products',{method:'PUT',body:{id:p.id,published:true}})}else{await api('/api/admin/products',{method:'DELETE',body:{id:p.id}})}toast(publish?'Product published.':'Product unpublished; history is preserved.');state.overview=null;await fetchPageData()}catch(e){toast(e.message,true)}}
+async function changeCustomerStatus(btn){const c=state.customers.find(x=>x.id===Number(btn.dataset.id));if(!c)return;const active=!c.active;if(!await confirmDialog({title:active?`Reactivate ${c.name}?`:`Suspend ${c.name}?`,
+    body:active?'They can sign in again. Their orders and messages are untouched.':'Every active session for this customer ends now. Their orders and messages are untouched.',
+    confirmLabel:active?'Reactivate':'Suspend', danger:!active}))return;try{await api('/api/admin/customers/status',{method:'PUT',body:{id:c.id,active}});toast(active?'Customer reactivated.':'Customer suspended; sessions revoked.');const r=await api('/api/admin/customers');state.customers=r.customers;$('#pageContent').innerHTML=customersHTML()}catch(e){toast(e.message,true)}}
 async function submitHandler(e){const form=e.target.closest('form[data-form]');if(!form){console.log('no form found');return}e.preventDefault();const submit=$('button[type="submit"]',form)||$('button:not([type="button"])',form);if(submit){submit.disabled=true;submit.dataset.old=submit.textContent;submit.textContent='Saving…'}const values=Object.fromEntries(new FormData(form));try{
  if(form.dataset.form==='login'){const data=await api('/api/login',{method:'POST',body:{email:values.email,password:values.password}});state.me=data.user;if(state.me.role!=='admin'){deniedView();return}const s=await api('/api/me');state.csrf=s.csrf;state.page=location.hash.slice(1)||'dashboard';if(!PAGES.includes(state.page))state.page='dashboard';shell();await fetchPageData();toast('Administrator session established.');return}
  if(form.dataset.form==='settings'){await saveSettings(form);return}
+ if(form.dataset.form==='admin-create'){
+   try{
+     await api('/api/admin/admins',{method:'POST',body:JSON.stringify({
+       name:values.name,email:values.email,password:values.password,admin_role:values.admin_role})});
+     state.admins=await api('/api/admin/admins');state.adminForm=false;state.adminsError='';
+     $('#pageContent').innerHTML=contentHTML();toast(T('Administrator created.'));
+   }catch(err){state.adminsError=err.message;state.adminForm=false;$('#pageContent').innerHTML=contentHTML()}
+   return;
+ }
+ if(form.dataset.form==='admin-password'){
+   try{
+     await api('/api/admin/admins/password',{method:'POST',body:JSON.stringify({
+       id:Number(form.dataset.id),password:values.password})});
+     closeModal();toast(T('Password changed. That account is signed out everywhere.'));
+   }catch(err){toast(err.message)}
+   return;
+ }
  if(form.dataset.form==='faq'){await saveFaq(form);return}
  if(form.dataset.form==='brands'){await saveBrands(form);return}
- if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}closeModal();state.overview=null;await fetchPageData();return}
+ if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}state.overview=null;await fetchPageData();state.page='products';if(location.hash!=='#products')history.replaceState(null,'','#products');return}
  if(form.dataset.form==='category-add'){
   const cats=siteCategories().slice();
   const id=String(values.id||'').trim().toLowerCase();
@@ -1295,8 +1707,60 @@ function brandInput(e){
  }
  if(el.dataset.field==='accent'){const sw=$('.brand-swatch',card);if(sw)sw.style.setProperty('--swatch',row.accent)}
 }
+/* The pickers call back by name: the markup is built as a string, so a closure
+   cannot be attached at render time. These are the four filters plus the two
+   admin controls, and each does exactly what its <select> handler did. */
+window.pickerStatusFilter = value => {
+  state.statusFilter = value;
+  const c = $('#pageContent'); if (c) c.innerHTML = contentHTML();
+};
+window.pickerProductFilter = value => {
+  state.productFilter = value;
+  const c = $('#pageContent'); if (c) c.innerHTML = productsHTML();
+};
+window.pickerCategoryFilter = value => {
+  state.categoryFilter = value;
+  const c = $('#pageContent'); if (c) c.innerHTML = productsHTML();
+};
+window.pickerProductSort = value => {
+  state.productSort = value;
+  const c = $('#pageContent'); if (c) c.innerHTML = productsHTML();
+};
+window.pickerMarkDirty = () => {
+  state.dirty = true;
+  if (!$('.dirty-note')) {
+    $('.site-tab-body')?.insertAdjacentHTML('beforebegin',
+      '<div class="dirty-note" role="status"><span>●</span> Unsaved changes on this page — press <strong>Save</strong> to publish them to the site.</div>');
+  }
+};
+window.pickerCustomerOrderStatus = async (value, host) => {
+  const id = Number(host.dataset.id || 0);
+  if (!id) return;
+  try {
+    await api('/api/admin/orders/status', {method:'PUT', body:{id, status:value}});
+    toast(T('Order status updated.'));
+    await openCustomer(state.customerId);
+  } catch (e) { toast(e.message, true); }
+};
+
+window.pickerAdminRole = async (value, host) => {
+  const id = Number(host.dataset.id || 0);
+  if (!id) return;
+  try {
+    await api('/api/admin/admins', {method:'PUT', body:JSON.stringify({id, admin_role:value})});
+    state.admins = await api('/api/admin/admins');
+    $('#pageContent').innerHTML = contentHTML();
+    toast(T('Role updated.'));
+  } catch (err) {
+    state.adminsError = err.message;
+    state.admins = await api('/api/admin/admins').catch(() => state.admins);
+    $('#pageContent').innerHTML = contentHTML();
+  }
+};
+
 function inputHandler(e){
- brandInput(e);faqInput(e);if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-order-status]')&&state.customerId){customerOrderStatus(e.target);return}
+ brandInput(e);faqInput(e);
+if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
 if(e.target.matches('[data-cat-name],[data-cat-name-fa]')){
  const id=e.target.dataset.catName||e.target.dataset.catNameFa;
  const field=e.target.dataset.catName?'name':'nameFa';
@@ -1306,12 +1770,20 @@ if(e.target.matches('[data-cat-name],[data-cat-name-fa]')){
  // the panel and take the caret with it.
  inputHandler.catTimer=setTimeout(()=>{saveCategories(cats).catch(err=>toast(err.message,true))},700);
 }
-if(e.target.matches('[data-category-filter]')){state.categoryFilter=e.target.value;$('#pageContent').innerHTML=productsHTML()}
-if(e.target.matches('[data-product-sort]')){state.productSort=e.target.value;$('#pageContent').innerHTML=productsHTML()}
 if(e.target.matches('[data-select-product]')){const id=Number(e.target.dataset.selectProduct);e.target.checked?state.selected.add(id):state.selected.delete(id);$('#pageContent').innerHTML=productsHTML()}
 if(e.target.matches('[data-select-all]')){$$('[data-select-product]').forEach(box=>{const id=Number(box.dataset.selectProduct);e.target.checked?state.selected.add(id):state.selected.delete(id)});$('#pageContent').innerHTML=productsHTML()}
 if(e.target.closest('[data-form="settings"]')){state.dirty=true;if(!$('.dirty-note')){$('.site-tab-body')?.insertAdjacentHTML('beforebegin','<div class="dirty-note" role="status"><span>●</span> Unsaved changes on this page — press <strong>Save</strong> to publish them to the site.</div>')}}}
-async function logout(){try{await api('/api/logout',{method:'POST',body:{}})}catch{}state.me=null;state.csrf=null;closeModal();loginView()}
+/* The console's Sign out asks first, in the console's own dialog - window.confirm()
+   would be the browser's furniture in the middle of an AXIASOFT screen, and it
+   cannot be styled, translated or focus-managed. */
+async function logout(){
+  const yes=await confirmDialog({
+    title:T('Sign out of the console?'),
+    body:T('Your session ends on this device. Nothing else changes.'),
+    confirmLabel:T('Sign out'), cancelLabel:T('Stay signed in')});
+  if(!yes)return;
+  try{await api('/api/logout',{method:'POST',body:{}})}catch{}
+  state.me=null;state.csrf=null;closeModal();loginView()}
 root.addEventListener('click',clickHandler);root.addEventListener('submit',submitHandler);root.addEventListener('input',inputHandler);root.addEventListener('change',inputHandler);overlays.addEventListener('click',clickHandler);overlays.addEventListener('submit',submitHandler);overlays.addEventListener('input',inputHandler);overlays.addEventListener('change',inputHandler);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#sidebar')?.classList.remove('open');$('.side-scrim')?.classList.remove('show')}});
 /* One listener for the breakpoint, not one per render. It only fires on the

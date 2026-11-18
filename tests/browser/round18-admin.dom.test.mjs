@@ -25,7 +25,7 @@ w.matchMedia = w.matchMedia || (() => ({
 w.fetch = (url, opts = {}) => {
   const u = String(url);
   let body = {}, status = 200;
-  if (u.includes('/api/me')) body = { user: { id: 1, name: 'Admin', email: 'a@b.c', role: 'admin' }, csrf: 'tok' };
+  if (u.includes('/api/me')) body = { user: { id: 1, name: 'Admin', email: 'a@b.c', role: 'admin', admin_role: 'owner', permissions: ['support','customers','sales','catalog','content','activity','admins'] }, csrf: 'tok' };
   else if (u.includes('/api/admin/settings')) {
     if (opts.method === 'PUT') {
       cart = JSON.parse(opts.body || '{}');

@@ -36,6 +36,7 @@ import uuid
 
 import db as database
 import blog
+import roles
 import agent
 import xiona_engine
 import uploads
@@ -288,7 +289,25 @@ def ticket_priority(value, default='Normal'):
 
 
 def public_user(row):
-    return {'id': row['id'], 'name': row['name'], 'email': row['email'], 'role': row['role'], 'phone': row['phone']}
+    """What the client is told about an account.
+
+    The administrator's role and its permissions travel with the session so the
+    console can draw only the tabs this person can actually open. They are a
+    convenience, never the check: every admin route re-reads the role from the
+    database, so editing the response in a browser unlocks nothing.
+    """
+    data = {'id': row['id'], 'name': row['name'], 'email': row['email'],
+            'role': row['role'], 'phone': row['phone']}
+    if row['role'] == 'admin':
+        try:
+            stored = row['admin_role']
+        except (IndexError, KeyError):
+            stored = None
+        role = roles.normalise_role(stored) if stored else 'owner'
+        data['admin_role'] = role or 'owner'
+        data['admin_role_label'] = roles.ROLE_LABELS.get(role or 'owner', 'Owner')
+        data['permissions'] = roles.permissions_for(role or 'owner')
+    return data
 
 
 # --------------------------------------------------------------------------- #
@@ -392,6 +411,45 @@ def product_out(r):
 
 def ref(prefix):
     return prefix + '-' + uuid.uuid4().hex[:8].upper()
+
+
+# Which permission group each administrator route belongs to. Ordered: the
+# first prefix that matches wins, so the longer, more specific routes are
+# listed before the collection they live under.
+_ADMIN_ROUTES = (
+    ('/api/admin/admins', 'admins'),
+    ('/api/admin/tickets', 'support'),
+    ('/api/admin/support', 'support'),
+    ('/api/admin/customers', 'customers'),
+    ('/api/admin/orders', 'sales'),
+    ('/api/admin/refunds', 'sales'),
+    ('/api/admin/products', 'catalog'),
+    ('/api/admin/categories', 'catalog'),
+    ('/api/admin/brands', 'catalog'),
+    ('/api/admin/uploads', 'catalog'),
+    ('/api/admin/articles', 'content'),
+    ('/api/admin/settings', 'content'),
+    ('/api/admin/site', 'content'),
+    ('/api/admin/audit', 'activity'),
+    ('/api/admin/agent', 'content'),
+    # Everything else under /api/admin is the dashboard: it reads counts from
+    # every area, so a role with no area at all still needs the overview to
+    # land on something. It is read-only and carries no customer records.
+    ('/api/admin/overview', 'activity'),
+)
+
+
+def ADMIN_ROUTE_PERMISSION(path):
+    """The permission group an /api/admin route needs.
+
+    Anything not listed falls back to 'activity' - the read-only group - so a
+    route added without a decision here is closed to everyone except the owner
+    and the analyst, rather than open to all.
+    """
+    for prefix, permission in _ADMIN_ROUTES:
+        if path == prefix or path.startswith(prefix + '/'):
+            return permission
+    return 'activity'
 
 
 def acquire_db():
@@ -1200,6 +1258,14 @@ class Handler(SimpleHTTPRequestHandler):
         if p.startswith('/api/admin/'):
             if not user or user['role'] != 'admin':
                 self._send_json({'error': 'Administrator access required'}, 403); return
+            # Every admin route belongs to one permission group, and a role is
+            # the set of groups it holds. Checked here, once, rather than in
+            # each branch - a branch that forgets its check is the classic way
+            # a new console tab ships open to every administrator.
+            need = ADMIN_ROUTE_PERMISSION(p)
+            if not roles.can_user(user, need):
+                self._send_json({'error': 'Your role does not include this area.',
+                                 'permission': need}, 403); return
 
             if p == '/api/admin/agent':
                 self._send_json(agent.status()); return
@@ -1217,6 +1283,26 @@ class Handler(SimpleHTTPRequestHandler):
                 if not row:
                     self._send_json({'error': 'Article not found'}, 404); return
                 self._send_json(blog.article_out(row, full=True)); return
+
+            if p == '/api/admin/admins':
+                # Reached only by a role holding 'admins', which is the owner. The
+                # gate above this block already answered 403 for everyone else.
+                rows = db.execute("SELECT id,name,email,admin_role,active,created_at FROM users "
+                                  "WHERE role='admin' ORDER BY id").fetchall()
+                out = []
+                for row in rows:
+                    role = roles.normalise_role(row['admin_role']) or 'owner'
+                    out.append({'id': row['id'], 'name': row['name'], 'email': row['email'],
+                                'admin_role': role, 'admin_role_label': roles.ROLE_LABELS[role],
+                                'active': row['active'], 'created_at': row['created_at'],
+                                'is_owner': role == 'owner', 'is_me': row['id'] == user['id']})
+                self._send_json({'admins': out,
+                                 'roles': [{'id': r, 'label': roles.ROLE_LABELS[r],
+                                            'summary': roles.ROLE_SUMMARIES[r],
+                                            'grants': roles.ROLE_GRANTS_TEXT[r],
+                                            'permissions': sorted(roles.GRANTS[r])}
+                                           for r in roles.ADMIN_ROLES],
+                                 'is_owner': roles.role_of(user) == 'owner'}); return
 
             if p == '/api/admin/overview':
                 counts = {
@@ -1869,6 +1955,98 @@ class Handler(SimpleHTTPRequestHandler):
             except sqlite3.OperationalError:
                 self._send_json({'error': 'The service is briefly busy. Please try again.'}, 503); return
             self.audit(user, 'update', 'product', pid)
+            self._send_json({'ok': True}); return
+
+        # ---- administrators ------------------------------------------------ #
+        # Only the owner reaches this block: '/api/admin/admins' maps to the
+        # 'admins' permission, which no other role holds.
+        if p == '/api/admin/admins' and method == 'POST':
+            if roles.role_of(user) != 'owner':
+                self._send_json({'error': 'Only the owner can create administrators.'}, 403); return
+            email = clean(d.get('email'), 254).lower()
+            name = clean(d.get('name'), 120)
+            password = d.get('password') or ''
+            role = roles.normalise_role(d.get('admin_role'))
+            if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+                self._send_json({'error': 'A valid email address is required.'}, 400); return
+            if len(name) < 2:
+                self._send_json({'error': 'A name is required.'}, 400); return
+            if role is None:
+                self._send_json({'error': 'Choose a valid role.'}, 400); return
+            if role == 'owner':
+                self._send_json({'error': 'There is only one owner. Edit the existing one instead.'}, 400); return
+            if len(password) < 12:
+                self._send_json({'error': 'A password of at least 12 characters is required.'}, 400); return
+            if db.execute('SELECT 1 FROM users WHERE email=?', (email,)).fetchone():
+                self._send_json({'error': 'That email address already has an account.'}, 409); return
+            db.execute('INSERT INTO users(name,email,password_hash,role,admin_role) VALUES(?,?,?,?,?)',
+                       (name, email, hash_password(password), 'admin', role))
+            self.audit(user, 'admin_create', 'user', email)
+            self._send_json({'ok': True, 'email': email, 'admin_role': role}, 201); return
+
+        if p == '/api/admin/admins' and method == 'PUT':
+            if roles.role_of(user) != 'owner':
+                self._send_json({'error': 'Only the owner can change administrators.'}, 403); return
+            try:
+                uid = int(d.get('id'))
+            except (TypeError, ValueError):
+                self._send_json({'error': 'A valid administrator id is required.'}, 400); return
+            row = db.execute("SELECT * FROM users WHERE id=? AND role='admin'", (uid,)).fetchone()
+            if not row:
+                self._send_json({'error': 'No such administrator.'}, 404); return
+            current = roles.normalise_role(row['admin_role']) or 'owner'
+            if current == 'owner':
+                # The owner's role is not editable through the API. Demoting the
+                # only account that can manage administrators would lock the
+                # console out of itself, and there is no second owner to undo it.
+                self._send_json({'error': 'The owner role cannot be changed here.'}, 400); return
+            new_role = roles.normalise_role(d.get('admin_role'))
+            if new_role is None:
+                self._send_json({'error': 'Choose a valid role.'}, 400); return
+            if new_role == 'owner':
+                self._send_json({'error': 'There is only one owner.'}, 400); return
+            db.execute('UPDATE users SET admin_role=? WHERE id=?', (new_role, uid))
+            self.audit(user, 'admin_role', 'user', row['email'] or str(uid))
+            self._send_json({'ok': True, 'admin_role': new_role}); return
+
+        if p == '/api/admin/admins/password' and method == 'POST':
+            if roles.role_of(user) != 'owner':
+                self._send_json({'error': 'Only the owner can reset a password.'}, 403); return
+            try:
+                uid = int(d.get('id'))
+            except (TypeError, ValueError):
+                self._send_json({'error': 'A valid administrator id is required.'}, 400); return
+            row = db.execute("SELECT * FROM users WHERE id=? AND role='admin'", (uid,)).fetchone()
+            if not row:
+                self._send_json({'error': 'No such administrator.'}, 404); return
+            password = d.get('password') or ''
+            if len(password) < 12:
+                self._send_json({'error': 'A password of at least 12 characters is required.'}, 400); return
+            db.execute('UPDATE users SET password_hash=? WHERE id=?', (hash_password(password), uid))
+            # Resetting a password has to end the sessions it was protecting,
+            # or the reason for the reset keeps working until the cookie melts.
+            db.execute('DELETE FROM sessions WHERE user_id=?', (uid,))
+            self.audit(user, 'admin_password', 'user', row['email'] or str(uid))
+            self._send_json({'ok': True}); return
+
+        if p == '/api/admin/admins' and method == 'DELETE':
+            if roles.role_of(user) != 'owner':
+                self._send_json({'error': 'Only the owner can remove administrators.'}, 403); return
+            try:
+                uid = int(d.get('id'))
+            except (TypeError, ValueError):
+                self._send_json({'error': 'A valid administrator id is required.'}, 400); return
+            row = db.execute("SELECT * FROM users WHERE id=? AND role='admin'", (uid,)).fetchone()
+            if not row:
+                self._send_json({'error': 'No such administrator.'}, 404); return
+            if uid == user['id']:
+                self._send_json({'error': 'You cannot remove your own account.'}, 400); return
+            role = roles.normalise_role(row['admin_role']) or 'owner'
+            if role == 'owner':
+                self._send_json({'error': 'The owner cannot be removed.'}, 400); return
+            db.execute('DELETE FROM sessions WHERE user_id=?', (uid,))
+            db.execute("UPDATE users SET role='customer', admin_role=NULL WHERE id=?", (uid,))
+            self.audit(user, 'admin_remove', 'user', row['email'] or str(uid))
             self._send_json({'ok': True}); return
 
         if p == '/api/admin/customers/status' and method == 'PUT':
