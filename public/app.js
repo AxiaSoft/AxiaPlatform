@@ -1664,10 +1664,22 @@ function assetUrl(path) {
   const clean = raw.replace(/^\//, '');
   if (base) return base.replace(/\/$/, '') + '/' + clean;
   // Fall back to the deployed sub-path, derived from this page's own address.
-  const marker = '/blog/';
+  // The language directories sit beside the blog: /en/blog/ is the English
+  // blog, and the storefront it belongs to is the site root, not /en/ - a
+  // folder that holds nothing but blog/. Trimming to /blog/ left the /en/ in
+  // front of it, so the account page resolved to /en/#/account, a directory
+  // listing. The prefix is stripped together with the blog it wraps.
   const here = location.pathname;
-  if (here.includes('/admin/')) return here.slice(0, here.indexOf('/admin/') + 1) + clean;
-  if (here.includes(marker)) return here.slice(0, here.indexOf(marker) + 1) + clean;
+  for (const marker of ['/admin/', '/blog/']) {
+    if (!here.includes(marker)) continue;
+    let home = here.slice(0, here.indexOf(marker) + 1);
+    // /en/ is the English *blog*; its storefront is still the site root, so
+    // the language directory is stripped along with the blog it holds. A site
+    // that also publishes /en/ as a storefront reaches this only from a page
+    // outside both directories, below.
+    if (home === '/en/') home = '/';
+    return home + clean;
+  }
   return '/' + clean;
 }
 

@@ -118,6 +118,18 @@ class TheSiteRootIsWhereItSaysItIs(unittest.TestCase):
         self.assertIn("'/admin/'", body, 'the admin sub-path is recognised')
         self.assertIn("'/' + clean", body, 'and the plain root is returned')
 
+    def test_the_english_blog_resolves_to_the_site_root(self):
+        """ /en/blog/ is the English blog; its storefront is still /.
+
+        Trimming the path at /blog/ left the /en/ in front, so the account
+        page on an English article resolved to /en/#/account - a directory
+        listing, because /en/ holds nothing but blog/.
+        """
+        body = APP[APP.index('function assetUrl'):]
+        body = body[:body.index('\n}')]
+        self.assertRegex(body, r"home\s*===\s*'/en/'",
+                         'the /en/ prefix must be dropped with the blog it wraps')
+
 
 class NothingElseInTheHeaderUsesAHуshRoute(unittest.TestCase):
     """The nav links on the blog already spell the root out.
