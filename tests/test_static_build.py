@@ -995,15 +995,20 @@ class MobileMenuTests(unittest.TestCase):
 
     def test_the_drawer_lists_every_destination(self):
         """Every top-level route is reachable from the phone menu."""
-        menu = self._menu()
+        # The order constant is the list; the drawer renders from it.
+        start = self.app.index('const NAV_ORDER_MENU=')
+        order = self.app[start:self.app.index(';', start)]
         for key in ('products', 'services', 'blog', 'aurion', 'about', 'contact'):
-            self.assertIn(f"'{key}'", menu, f'{key} is not in the menu list')
+            self.assertIn(f"'{key}'", order, f'{key} is not in the menu list')
+        menu = self._menu()
+        self.assertIn('NAV_ORDER_MENU', menu,
+                      'the drawer is not rendering the shared list')
 
     def test_the_drawer_reaches_the_blog(self):
         # The blog is a real directory, not a hash route, so it is the one entry
         # that must carry the deploy base.
         menu = self._menu()
-        self.assertIn("assetUrl('blog/')", menu,
+        self.assertIn("assetUrl('blog/'", menu,
                       'a raw /blog/ drops the deployment sub-path')
 
     def test_the_drawer_and_the_top_bar_agree_on_the_order(self):
@@ -1017,11 +1022,14 @@ class MobileMenuTests(unittest.TestCase):
         list holds every route, in the order the site uses.
         """
         app = self.app
-        start = app.index('function headerHTML(')
-        end = app.index('function mountHeader(')
-        header = app[start:end]
-        order = [m for m in re.findall(r"\['(\w+)',", header)]
+        start = app.index('const NAV_ORDER=')
+        order = [m for m in re.findall(r"'(\w+)'", app[start:app.index(';', start)])]
         self.assertEqual(order, ['products', 'services', 'blog', 'aurion', 'about'])
+        # And the drawer's list is the same one plus the CTA.
+        mstart = app.index('const NAV_ORDER_MENU=')
+        menu = [m for m in re.findall(r"'(\w+)'", app[mstart:app.index(';', mstart)])]
+        self.assertEqual(menu, order + ['contact'],
+                         'the drawer and the header list the site differently')
 
     def test_the_drawer_reads_its_labels_from_the_dictionary(self):
         """A hardcoded menu is a menu that only exists in one language."""
@@ -1736,11 +1744,16 @@ class BlogShellParityTests(unittest.TestCase):
     def test_the_shared_header_carries_every_route(self):
         """One list of destinations, used by both pages."""
         app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
-        start = app.index('function headerHTML(')
-        end = app.index('function mountHeader(')
-        body = app[start:end]
+        # The list moved out of the function so the drawer can read the same
+        # one. What matters is that it holds every route and that the header
+        # iterates it rather than spelling the links again.
+        start = app.index('const NAV_ORDER=')
+        order = app[start:app.index(';', start)]
         for route in ('products', 'services', 'blog', 'aurion', 'about'):
-            self.assertIn(f"'{route}'", body, f'the header dropped {route}')
+            self.assertIn(f"'{route}'", order, f'the header dropped {route}')
+        body = app[app.index('function headerHTML('):app.index('function mountHeader(')]
+        self.assertIn('NAV_ORDER.map', body,
+                      'the header is spelling its links out again')
 
     def test_the_blog_declares_the_language_of_its_header(self):
         """The blog is server-rendered in two languages; it has to say which.

@@ -569,7 +569,11 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
     # Everything the shared header needs, on the <script> tag so it is readable
     # from app.js's first line - the header has to exist before any of the
     # storefront's module-level code looks for a header control.
-    header_json = json.dumps({'lang': lang, 'hrefs': nav, 'current': current})
+    # other_lang_url is the same article in the other language. The language
+    # switch needs it: on these pages the language is part of the address, so
+    # storing a preference and reloading cannot change it.
+    header_json = json.dumps({'lang': lang, 'hrefs': nav, 'current': current,
+                              'otherLangUrl': other_lang_url})
     t = copy_for(lang)
     return f'''<!doctype html>
 <html lang="{lang}" dir="{direction}">
