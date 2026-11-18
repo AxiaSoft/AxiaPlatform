@@ -277,39 +277,25 @@ def esc(value):
 # pretending a translation exists.
 COPY = {
     'fa': {
-        'nav_products': 'محصولات', 'nav_services': 'خدمات', 'nav_blog': 'وبلاگ',
-        'nav_about': 'درباره ما', 'nav_cta': 'شروع پروژه', 'skip': 'پرش به محتوا',
-        'nav_aurion': 'AURION', 'theme_toggle': 'تغییر حالت روشن و تاریک',
-        'theme_to_light': 'تغییر به حالت روشن', 'theme_to_dark': 'تغییر به حالت تاریک',
-        'open_menu': 'باز کردن منو', 'close_menu': 'بستن منو',
+        'nav_products': 'محصولات', 'skip': 'پرش به محتوا',
+        'empty': 'هنوز مقاله‌ای منتشر نشده است. نخستین یادداشت‌ها به‌زودی از پنل مدیریت منتشر می‌شوند.',
+        'source_note': 'این مقاله هنوز ترجمه نشده و به زبان اصلی منتشر شده است.',
         'blog_title': 'وبلاگ AXIASOFT', 'blog_h1a': 'یادداشت‌هایی دربارهٔ ساختن',
         'blog_h1b': 'محصول دیجیتال',
         'blog_lede': 'از طراحی و مهندسی تا جزئیاتی که یک وب‌سایت یا اپلیکیشن را قابل‌اعتماد می‌کند.',
-        'empty': 'هنوز مقاله‌ای منتشر نشده است. نخستین یادداشت‌ها به‌زودی از پنل مدیریت منتشر می‌شوند.',
-        'min_read': 'دقیقه مطالعه', 'back': 'بازگشت به همهٔ مقاله‌ها',
-        'source_note': 'این مقاله هنوز ترجمه نشده و به زبان اصلی منتشر شده است.',
-        'all_posts': 'همهٔ مقاله‌ها', 'contact': 'تماس', 'privacy': 'حریم خصوصی',
+        'min_read': 'دقیقه مطالعه', 'back': 'بازگشت به همهٔ مقاله‌ها', 'contact': 'تماس', 'privacy': 'حریم خصوصی',
         'tagline': 'نرم‌افزار سنجیده برای آنچه پیش می‌آید.',
-        'made': 'مهندسی‌شده با هدفمندی', 'feed': 'وبلاگ', 'home': 'خانهٔ AXIASOFT',
-        'published': 'منتشرشده در', 'more': 'خواندن مقاله',
-    },
+        'made': 'مهندسی‌شده با هدفمندی', 'feed': 'وبلاگ', 'home': 'خانهٔ AXIASOFT',    },
     'en': {
-        'nav_products': 'Products', 'nav_services': 'Services', 'nav_blog': 'Blog',
-        'nav_about': 'About', 'nav_cta': 'Start a project', 'skip': 'Skip to content',
-        'nav_aurion': 'AURION', 'theme_toggle': 'Toggle color theme',
-        'theme_to_light': 'Switch to light theme', 'theme_to_dark': 'Switch to dark theme',
-        'open_menu': 'Open menu', 'close_menu': 'Close menu',
+        'nav_products': 'Products', 'skip': 'Skip to content',
+        'empty': 'No articles have been published yet. The first notes will appear here from the console.',
+        'source_note': 'This article has not been translated yet and is shown in the language it was written in.',
         'blog_title': 'AXIASOFT Blog', 'blog_h1a': 'Notes on building',
         'blog_h1b': 'digital products',
         'blog_lede': 'From design and engineering to the details that make a website or application trustworthy.',
-        'empty': 'No articles have been published yet. The first notes will be published from the admin panel.',
-        'min_read': 'min read', 'back': 'Back to all articles',
-        'source_note': 'This article has not been translated yet and is shown in its original language.',
-        'all_posts': 'All articles', 'contact': 'Contact', 'privacy': 'Privacy',
+        'min_read': 'min read', 'back': 'Back to all articles', 'contact': 'Contact', 'privacy': 'Privacy',
         'tagline': 'Considered software for what comes next.',
-        'made': 'Engineered with intent', 'feed': 'Blog', 'home': 'AXIASOFT home',
-        'published': 'Published', 'more': 'Read the article',
-    },
+        'made': 'Engineered with intent', 'feed': 'Blog', 'home': 'AXIASOFT home',    },
 }
 
 
@@ -552,6 +538,35 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
         other_lang, switch_label = 'en', 'English'
     tail = f'{slug}/' if slug else ''
     other_lang_url = (f'{root}/blog/{tail}' if lang == 'en' else f'{root}/en/blog/{tail}')
+    # The blog used to carry its own copy of the header, the drawer, the theme
+    # switch and the icons - about half of this file was a hand-maintained
+    # duplicate of public/app.js, once per language. The copies drifted, as
+    # copies do: the blog grew a language link that the storefront spells
+    # differently, lost the account button entirely, and its theme button drew a
+    # sun and a moon at a different stroke width from the storefront's.
+    #
+    # It loads the storefront's own scripts now and asks app.js for the header.
+    # What is left here is only what is genuinely the blog's: the <head> tags
+    # with the structured data, and the two-line call that tells the shared
+    # header which language this page is in and where its links point. The
+    # theme is read in the head before paint by the same snippet the storefront
+    # uses, because a server-rendered page that waits for app.js flashes dark.
+    nav = {
+        'home': f'{root}/',
+        'products': f'{root}/#/products',
+        'services': f'{root}/#/services',
+        'blog': blog_home,
+        'aurion': f'{root}/#/aurion',
+        'about': f'{root}/#/about',
+        'contact': f'{root}/#/contact',
+    }
+    # Blog or article: the blog entry is the current page on both.
+    current = 'blog'
+    # Everything the shared header needs, on the <script> tag so it is readable
+    # from app.js's first line - the header has to exist before any of the
+    # storefront's module-level code looks for a header control.
+    header_json = json.dumps({'lang': lang, 'hrefs': nav, 'current': current})
+    t = copy_for(lang)
     return f'''<!doctype html>
 <html lang="{lang}" dir="{direction}">
 <head>
@@ -561,24 +576,15 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
   <meta name="theme-color" content="#080d18">
   {head}
   <script>
-  /* The article pages are server-rendered, so they cannot wait for app.js to
-     pick a theme: doing that would flash dark on a light visitor. The same
-     key and the same system fallback the storefront uses are read here, in
-     the head, before anything is painted. */
+  /* Before the first paint, or a returning light-mode visitor sees a dark page
+     flash. Same key, same three inputs and same order as the storefront's
+     themeInit(): the visitor's saved choice, then the administrator's default,
+     then the operating system. */
   (function(){{
-    /* Three inputs, in priority order, and they are the storefront's three.
-       (1) The visitor's own saved choice. (2) The administrator's default from
-       site settings — 'dark', 'light', or 'system'. (3) The operating system.
-
-       Only (1) and (3) were here, so a site configured to open in light mode
-       opened dark on the blog and light on the storefront: the same visitor,
-       the same session, two different themes, and no setting that could make
-       them agree. The build and the server now pass the default through. */
     var fallback = {theme_json};
     var system = function(){{ return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }};
     try {{
-      var saved = localStorage.getItem('axia-theme');
-      var t = saved || (fallback === 'system' || !fallback ? system() : fallback);
+      var t = localStorage.getItem('axia-theme') || (fallback === 'system' || !fallback ? system() : fallback);
       if (t !== 'light' && t !== 'dark') t = system();
       document.documentElement.dataset.theme = t;
     }} catch (e) {{
@@ -586,6 +592,7 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
     }}
   }})();
   </script>
+  <script type="application/json" id="blog-header">{header_json}</script>
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{root}/styles.css?v={css_version}">
   <link rel="stylesheet" href="{root}/effects.css?v={fx_version}">
@@ -594,15 +601,6 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
 <a class="skip-link" href="#main">{t['skip']}</a>
-<header class="topbar">
-  <a href="{root}/" class="brand" aria-label="AXIASOFT home"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
-  <nav class="nav-links" aria-label="{t['nav_products']}"><a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/aurion">{t['nav_aurion']}</a><a href="{root}/#/about">{t['nav_about']}</a></nav>
-  <div class="nav-actions"><a class="blog-lang" href="{other_lang_url}" hreflang="{other_lang}" lang="{other_lang}" rel="alternate">{switch_label}</a><button class="icon-button theme-toggle" id="theme-toggle" aria-label="{t['theme_toggle']}" title="{t['theme_toggle']}" data-to-light="{t['theme_to_light']}" data-to-dark="{t['theme_to_dark']}"><span class="theme-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span></button><a class="button button-small button-primary nav-cta" href="{root}/#/contact"><span class="button-label">{t['nav_cta']}</span><svg class="icon dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a><button class="mobile-menu icon-button" id="blog-menu" aria-label="{t['open_menu']}" aria-expanded="false" aria-haspopup="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
-</header>
-<nav class="mobile-nav" id="blog-mobile-nav" hidden aria-label="{t['nav_products']}">
-  <button class="icon-button close-mobile" id="blog-menu-close" aria-label="{t['close_menu']}"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-  <a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/aurion">{t['nav_aurion']}</a><a href="{root}/#/about">{t['nav_about']}</a><a href="{root}/#/contact">{t['nav_cta']}</a>
-</nav>
 <main class="blog-main" id="main">{body}</main>
 <footer class="footer">
   <div class="footer-top"><a class="brand" href="{root}/"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
@@ -611,51 +609,10 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
   <div class="footer-bottom"><span>© AXIASOFT</span><span>{t['made']} <span class="blue">✦</span></span></div>
 </footer>
 <script src="{root}/effects.js?v={fx_version}" defer></script>
-<script>
-/* The article pages are static HTML, so the two header controls the
-   storefront gets from app.js are wired here instead. Small on purpose: a
-   theme switch that writes the same key, and a drawer that matches the one
-   the storefront opens, because a visitor on a phone should not lose the
-   navigation when they follow a link into the blog. */
-(function () {{
-  var root = document.documentElement;
-  var toggle = document.getElementById('theme-toggle');
-  if (toggle) {{
-    /* Same two glyphs as the storefront (public/app.js), inline because this
-       page is server-rendered and does not load app.js. */
-    var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>';
-    var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
-    var paint = function () {{
-      var dark = root.dataset.theme === 'dark';
-      toggle.querySelector('.theme-icon').innerHTML = dark ? MOON : SUN;
-      var label = dark ? toggle.dataset.toLight : toggle.dataset.toDark;
-      if (label) {{ toggle.setAttribute('aria-label', label); toggle.setAttribute('title', label); }}
-    }};
-    paint();
-    toggle.addEventListener('click', function () {{
-      var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
-      root.dataset.theme = next;
-      try {{ localStorage.setItem('axia-theme', next); }} catch (e) {{}}
-      paint();
-    }});
-  }}
-  var open = document.getElementById('blog-menu');
-  var close = document.getElementById('blog-menu-close');
-  var drawer = document.getElementById('blog-mobile-nav');
-  if (open && drawer) {{
-    var show = function (on) {{
-      drawer.hidden = !on;
-      drawer.classList.toggle('open', on);
-      open.setAttribute('aria-expanded', String(on));
-      document.body.style.overflow = on ? 'hidden' : '';
-    }};
-    show(false);
-    open.addEventListener('click', function () {{ show(true); }});
-    if (close) {{ close.addEventListener('click', function () {{ show(false); }}); }}
-    drawer.addEventListener('click', function (e) {{ if (e.target.tagName === 'A') {{ show(false); }} }});
-  }}
-}})();
-</script>
+<script src="{root}/i18n.js" defer></script>
+<script src="{root}/icons.js" defer></script>
+<script src="{root}/brands.js" defer></script>
+<script src="{root}/app.js" defer></script>
 </body></html>'''
 
 

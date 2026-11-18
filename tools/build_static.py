@@ -392,8 +392,9 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
         # the back link on every article page. Only the article body, which is
         # author-written markdown, can carry a bare root-relative URL.
         (blog_dir / 'index.html').write_text(
-            blog.shell(head=index_head, body=index_body, lang=lang,
-                       base=base.rstrip('/'), default_theme=default_theme), encoding='utf-8')
+            inject_adapter(blog.shell(head=index_head, body=index_body, lang=lang,
+                                      base=base.rstrip('/'), default_theme=default_theme), base),
+            encoding='utf-8')
 
         for article in posts:
             item = dict(article)
@@ -414,9 +415,9 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
             # rebase over a finished document would prefix the shell's already
             # correct links a second time.
             (folder / 'index.html').write_text(
-                blog.shell(head=rebase(head), body=body, lang=lang,
-                           base=base.rstrip('/'), slug=str(article.get('slug') or ''),
-                           default_theme=default_theme),
+                inject_adapter(blog.shell(head=rebase(head), body=body, lang=lang,
+                                          base=base.rstrip('/'), slug=str(article.get('slug') or ''),
+                                          default_theme=default_theme), base),
                 encoding='utf-8')
         return blog_dir
 
@@ -434,9 +435,9 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
         item['html'] = rebase(item['html'])
         body = blog.render_article(item, lang='en', base=base.rstrip('/'))
         (folder / 'index.html').write_text(
-            blog.shell(head='', body=body, lang='en', base=base.rstrip('/'),
-                       default_theme=default_theme,
-                       slug=str(article.get('slug') or '')), encoding='utf-8')
+            inject_adapter(blog.shell(head='', body=body, lang='en', base=base.rstrip('/'),
+                                      default_theme=default_theme,
+                                      slug=str(article.get('slug') or '')), base), encoding='utf-8')
 
     (blog_dir / 'feed.xml').write_text(
         blog.render_rss(origin, base, articles), encoding='utf-8')
