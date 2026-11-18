@@ -640,7 +640,20 @@ Object.assign(fa,{
   "One or two sentences that make someone want to read on.": "یکی دو جمله که خواننده را به ادامهٔ خواندن تشویق کند.",
   "design, engineering, seo": "طراحی، مهندسی، سئو",
   "draft": "پیش‌نویس",
-  "leave empty to generate from the title": "خالی بگذارید تا از تیتر ساخته شود"
+  "leave empty to generate from the title": "خالی بگذارید تا از تیتر ساخته شود",
+  "Control the home hero, contact details and which sections the public site shows.": "هیروی صفحهٔ اصلی، راه‌های تماس و بخش‌هایی که سایت عمومی نشان می‌دهد را کنترل کنید.",
+  "Review requests against the published policy. No payment is issued here.": "درخواست‌ها را با سیاست منتشرشده بسنجید. در اینجا هیچ پرداختی انجام نمی‌شود.",
+  "Customer accounts and their request counts. An access change ends the session.": "حساب‌های مشتری و شمار درخواست‌هایشان. تغییر دسترسی، نشست را پایان می‌دهد.",
+  "Who opens this console, and what each role reaches. The owner hands out roles.": "این‌که چه کسی پنل را باز می‌کند و هر نقش به چه چیزهایی دسترسی دارد. نقش‌ها را مالک تعیین می‌کند.",
+  "Review customer submissions, update progress and keep a clear status history.": "درخواست‌های مشتری را بررسی کنید، پیشرفت را به‌روز نگه دارید و تاریخچهٔ روشن وضعیت بسازید.",
+  "Create, order, feature and publish the products shown by the AXIASOFT site.": "محصول‌های نمایش‌داده‌شده در سایت AXIASOFT را بسازید، مرتب کنید، برگزیده کنید و منتشر کنید.",
+  "Review conversations and reply through the website support channel.": "گفت‌وگوها را بررسی کنید و از کانال پشتیبانی وب‌سایت پاسخ دهید.",
+  "Recent audited administrative and account events. The log is read-only.": "رویدادهای تازهٔ حسابرسی‌شدهٔ مدیریتی و حساب‌ها. این گزارش فقط خواندنی است.",
+  "No project requests yet. Requests from the public site appear here.": "هنوز درخواستی ثبت نشده است. درخواست‌های سایت عمومی اینجا دیده می‌شوند.",
+  "No support conversations.": "گفت‌وگویی برای پشتیبانی نیست.",
+  "No project requests.": "درخواستی ثبت نشده است.",
+  "No recorded activity.": "رویدادی ثبت نشده است.",
+  "The image is stored under /uploads/covers. Choose a new image to replace the current one.": "تصویر در /uploads/covers نگهداری می‌شود. برای جایگزینی، تصویر تازه‌ای انتخاب کنید.",
 });
 
 const faPatterns=[
