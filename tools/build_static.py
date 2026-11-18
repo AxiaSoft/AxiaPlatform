@@ -392,8 +392,8 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
         # the back link on every article page. Only the article body, which is
         # author-written markdown, can carry a bare root-relative URL.
         (blog_dir / 'index.html').write_text(
-            inject_adapter(blog.shell(head=index_head, body=index_body, lang=lang,
-                                      base=base.rstrip('/'), default_theme=default_theme), base),
+            inject_snapshot(inject_adapter(blog.shell(head=index_head, body=index_body, lang=lang,
+                                      base=base.rstrip('/'), default_theme=default_theme), base), base),
             encoding='utf-8')
 
         for article in posts:
@@ -415,9 +415,9 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
             # rebase over a finished document would prefix the shell's already
             # correct links a second time.
             (folder / 'index.html').write_text(
-                inject_adapter(blog.shell(head=rebase(head), body=body, lang=lang,
+                inject_snapshot(inject_adapter(blog.shell(head=rebase(head), body=body, lang=lang,
                                           base=base.rstrip('/'), slug=str(article.get('slug') or ''),
-                                          default_theme=default_theme), base),
+                                          default_theme=default_theme), base), base),
                 encoding='utf-8')
         return blog_dir
 
@@ -435,9 +435,9 @@ def write_blog(out, base: str, origin: str, DB_PATH=None) -> None:
         item['html'] = rebase(item['html'])
         body = blog.render_article(item, lang='en', base=base.rstrip('/'))
         (folder / 'index.html').write_text(
-            inject_adapter(blog.shell(head='', body=body, lang='en', base=base.rstrip('/'),
+            inject_snapshot(inject_adapter(blog.shell(head='', body=body, lang='en', base=base.rstrip('/'),
                                       default_theme=default_theme,
-                                      slug=str(article.get('slug') or '')), base), encoding='utf-8')
+                                      slug=str(article.get('slug') or '')), base), base), encoding='utf-8')
 
     (blog_dir / 'feed.xml').write_text(
         blog.render_rss(origin, base, articles), encoding='utf-8')
@@ -876,6 +876,28 @@ def xiona_pages(out, base: str, settings_path: Path) -> list[dict]:
     # they work unchanged under any sub-path.
     print(f'  xiona : {len(pages)} page(s) of site copy indexed')
     return pages
+
+
+def inject_snapshot(html: str, base: str) -> str:
+    """Give the article pages the same data files the storefront loads.
+
+    The static adapter answers /api/site and /api/products from the snapshot
+    these files put on window.AXIA_STATIC. The storefront has always loaded
+    them; the blog's shell did not, so its adapter fell back to built-in
+    defaults and an article page rendered the shipped design while the
+    storefront rendered whatever the administrator had configured - a
+    different footer note, a different hero, sections switched on and off.
+
+    Only the static build injects these, because only the static build
+    produces them. The live server answers /api/site from the database, so a
+    404 on these three paths there is correct and is not linked to.
+    """
+    if 'data/settings.js' in html:
+        return html
+    tags = (f'<script src="{base}static-config.js" defer></script>'
+            f'<script src="{base}data/settings.js"></script>'
+            f'<script src="{base}data/products.js"></script>')
+    return html.replace('</head>', f'  {tags}\n</head>')
 
 
 def inject_adapter(html: str, base: str) -> str:

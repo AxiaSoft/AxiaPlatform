@@ -781,6 +781,37 @@ function mountHeader(opts){
   if (!main) return;
   main.insertAdjacentHTML('beforebegin', headerHTML(opts));
 }
+/* The footer, built from the same dictionary as the header and the same
+   destinations.
+
+   The blog carried its own footer in blog.py: three links instead of four,
+   "© AXIASOFT" with no year in it, and the tagline from a private Python
+   table. It was the same mistake as the header, in the one part of the page
+   nobody looks at, and it is why the bottom of an article still read as a
+   different site. The storefront's markup is the reference; this reproduces
+   it. */
+function footerHTML(opts){
+  const o = opts || {};
+  const lang = o.lang === 'en' ? 'en' : 'fa';
+  const href = o.href || (path => path);
+  const dict = window.AXIA_T || (v => v);
+  const L = lang === 'en' ? (v => v) : dict;
+  const year = new Date().getFullYear();
+  const links = [['privacy', 'Privacy'], ['terms', 'Terms'],
+                 ['refunds-policy', 'Refund policy'], ['contact', 'Contact']];
+  const items = links.map(([key, word]) =>
+    `<a href="${esc(href(key))}">${esc(L(word))}</a>`).join('');
+  return `<footer class="footer">
+<div class="footer-top"><a class="brand" href="${esc(href('home'))}"><span class="brand-mark"><img src="${assetUrl('brand/axiasoft-original.webp')}" alt="AXIASOFT original symbol"></span><img class="brand-wordmark" src="${assetUrl('brand/axiasoft-wordmark.webp')}" alt="AXIASOFT wordmark"></a><p>${esc(L('Thoughtful software. Built for what comes next.'))}</p><div class="footer-links">${items}</div></div>
+<div class="footer-bottom"><span>© <span id="year">${year}</span> AXIASOFT. ${esc(L('All rights reserved.'))}</span><span>${esc(L('Engineered with intent'))} <span class="blue">✦</span></span></div>
+</footer>`;
+}
+function mountFooter(opts){
+  if ($('footer.footer')) return;
+  const main = $('main');
+  if (!main) return;
+  main.insertAdjacentHTML('afterend', footerHTML(opts));
+}
 /* The blog is server-rendered and its markup is Persian or English depending on
    the address, so it passes its own language and links in. */
 window.AXIA_MOUNT_HEADER = function(lang, hrefs, current){
@@ -798,7 +829,9 @@ window.AXIA_MOUNT_HEADER = function(lang, hrefs, current){
   let opts = null;
   try { opts = JSON.parse(spec ? spec.textContent : 'null'); } catch (e) { opts = null; }
   if (!opts) return;
-  mountHeader({lang: opts.lang, href: path => (opts.hrefs || {})[path] || path, current: opts.current});
+  const href = path => (opts.hrefs || {})[path] || path;
+  mountHeader({lang: opts.lang, href, current: opts.current});
+  mountFooter({lang: opts.lang, href});
 })();
 function applyChrome(){
   /* Which sections are switched on, by route.
