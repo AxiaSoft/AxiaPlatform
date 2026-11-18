@@ -237,7 +237,35 @@ document.addEventListener('click', event => {
   localStorage.setItem('axia-theme', next);
   paintThemeIcon();
 });
-async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');if(b){const isAdmin=!!me&&me.role==='admin';const label=me?(isAdmin?'Admin panel':'My account'):'Sign in';b.setAttribute('aria-label',label);b.title=label;b.innerHTML='<span class="account-icon">'+ICON(isAdmin?'dashboard':'user')+'</span>';b.classList.toggle('is-signed-in',!!me);}b&&(b.onclick=()=>me?(me.role==='admin'?location.assign('/admin/'):go('/account')):openAuth());}
+async function refresh(){try{let x=await api('/api/me');me=x.user;csrf=x.csrf}catch{me=null}let b=$('#accountButton');if(b){const isAdmin=!!me&&me.role==='admin';const label=me?(isAdmin?'Admin panel':'My account'):'Sign in';b.setAttribute('aria-label',label);b.title=label;b.innerHTML='<span class="account-icon">'+ICON(isAdmin?'dashboard':'user')+'</span>';b.classList.toggle('is-signed-in',!!me);}/* The account button goes to the storefront, whichever page it is pressed on.
+   `go('/account')` sets location.hash, which is a route into the document you
+   are already on - fine on the storefront, and wrong on an article page,
+   where it produced /blog/#/account: a URL that does not exist. Nothing
+   happened and nothing reported it, so a signed-in visitor pressing the
+   account button on the blog got no response at all. Signed out was fine,
+   because the sign-in dialog is drawn into this document.
+   The account page is a route of the storefront, so the address is that
+   page, with the deploy base in front of it. */
+b&&(b.onclick=()=>{
+  if(!me)return openAuth();
+  /* Both destinations belong to the storefront, whichever page the button is
+     pressed on. This used to be `go('/account')`, which sets location.hash -
+     a route into the document you are already on. That is right on the
+     storefront and wrong on the blog, where it produced /blog/#/account: a
+     URL that does not exist. Nothing rendered, nothing reported an error, and
+     a signed-in visitor pressing the account button on the blog got no
+     response at all. Signed out was unaffected, because the sign-in dialog is
+     drawn into the current document.
+     assetUrl('') is the site root - it accounts for the deploy base and for
+     the page being under /blog/ or /admin/ - so the account page and the
+     admin panel resolve to the same place from every page. */
+  /* On the storefront itself the hash route is already the account page, and
+     go() gets there without a page load. Only somewhere else - the blog, an
+     article - does the trip have to start from the site root. */
+  if(me.role==='admin')return location.assign(assetUrl('admin/'));
+  if(IS_SHOP)return go('/account');
+  location.assign(assetUrl('')+'#/account');
+});}
 
 function sectionOff(name){const label=({about:'About',services:'Services',contact:'Contact',aurion:'AURION',catalog:'Products'})[name]||'This page';return `<div class="container"><section class="page-head"><div class="eyebrow">SECTION HIDDEN</div><h1>${label} is not<br><span class="gradient">published right now.</span></h1><p>An administrator has hidden this section of the site. The rest of AXIASOFT is still available.</p><a class="button button-primary" href="#/">Return home${ICON('arrow','dir-icon')}</a></section></div>`}
 /* The strip of promises directly under the hero buttons. It used to be four
