@@ -39,7 +39,7 @@ function can(permission){
 function allowedPage(page){ return can(PAGE_PERMISSION[page] || 'activity'); }
 function allowedPages(){ return ALL_PAGES.filter(allowedPage); }
 const PAGES=ALL_PAGES;
-const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],articles:[],articleDraft:null,agent:null,admins:null,adminForm:null,settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null,customerId:null,customer:null};
+const state={me:null,csrf:null,page:'dashboard',overview:null,orders:[],products:[],customers:[],tickets:[],refunds:[],audit:[],articles:[],articleDraft:null,agent:null,admins:null,adminForm:null,settings:null,savedSettings:null,siteTab:'identity',search:'',statusFilter:'All',productFilter:'All',categoryFilter:'All',productSort:'manual',selected:new Set(),dirty:false,menu:false,loading:false,lastSync:null,customerId:null,customer:null,foldCategories:false,productDraft:null};
 async function api(path,{method='GET',body,headers={}}={}){
  const h={'Content-Type':'application/json',...headers};
  if(method!=='GET'&&path!=='/api/login'){if(!state.csrf){const session=await fetch('/api/me',{credentials:'same-origin'}).then(r=>r.json()).catch(()=>({}));state.csrf=session.csrf||null}if(state.csrf)h['X-CSRF-Token']=state.csrf}
@@ -300,7 +300,10 @@ function productsHTML(){
  <div class="toolbar-right"><span class="muted" style="font-size:10px">${fmtNum(data.length)} ${T('of')} ${fmtNum(counts.all)} ${T('products')}</span>${sel.length?`<button class="btn btn-sm btn-quiet" data-act="bulk-publish">${T('Publish')} ${fmtNum(sel.length)}</button><button class="btn btn-sm btn-danger" data-act="bulk-unpublish">${T('Hide')} ${fmtNum(sel.length)}</button>`:''}</div></div>
  <div class="panel product-panel" style="padding:14px">${data.length?`${compact()?productCards(data,allShownSelected):productsTable(data,allShownSelected)}`:`<div class="empty"><div class="empty-icon">${ICON('package')}</div>${counts.all?T('No products match these filters. Clear the filters, or add a product.'):T('The catalog is empty — add the first product.')}</div>`}
  <div class="notice">${T('Removing a product unpublishes it. Featured products lead the catalog.')}</div></div>
- ${categoriesPanel(cats)}
+ <details class="fold" data-fold="categories" ${state.foldCategories?'open':''}>
+   <summary class="fold-head"><span class="fold-title">${T('Catalog categories')}</span><span class="fold-meta">${fmtNum(cats.length)} ${T('categories')}</span><span class="fold-chev">${ICON('down')}</span></summary>
+   ${categoriesPanel(cats, true)}
+ </details>
  `;
 }
 
@@ -325,10 +328,12 @@ function categoryRow(c,i,count){
   <button class="btn btn-sm ${used?'btn-quiet':'btn-danger'}" data-act="delete-category" data-cat="${esc(c.id)}" data-used="${used}" ${used?'disabled title="'+T('Move its products to another category first')+'"':''}>${T('Remove')}</button>
  </div>`;
 }
-function categoriesPanel(cats){
+function categoriesPanel(cats, bare){
  const orphaned=state.products.filter(orphanCategory);
- return `<section class="panel cat-panel" id="categoriesPanel">
-  <div class="panel-head"><div><h2>${T('Catalog categories')}</h2><p>${T('The tabs the public catalog offers. The site ships none; the demo carries its own.')}</p></div><span class="muted" style="font-size:10px">${fmtNum(cats.length)} ${T('categories')}</span></div>
+ // `bare` means the fold above already names this panel, so it does not draw a
+ // second heading of its own.
+ return `<section class="panel cat-panel${bare?' cat-panel-bare':''}" id="categoriesPanel">
+  ${bare?'':`<div class="panel-head"><div><h2>${T('Catalog categories')}</h2><p>${T('The tabs the public catalog offers. The site ships none; the demo carries its own.')}</p></div><span class="muted" style="font-size:10px">${fmtNum(cats.length)} ${T('categories')}</span></div>`}
   ${cats.length?`<div class="cat-list">${cats.map((c,i)=>categoryRow(c,i,cats.length)).join('')}</div>`:`<div class="empty" style="padding:18px"><div class="empty-icon">${ICON('package')}</div>${T('No categories yet. The catalog shows one grid and no tab row until you add one.')}</div>`}
   <form class="cat-add" data-form="category-add"><div class="field"><label>${T('Category name')}</label><input name="name" maxlength="40" required placeholder="${T('e.g. Websites')}"></div><div class="field"><label>${T('Persian name')}</label><input name="nameFa" maxlength="40" dir="rtl" placeholder="${T('optional')}"></div><div class="field"><label>${T('Category id')}</label><input name="id" maxlength="40" pattern="[a-z0-9-]{2,40}" required placeholder="websites"><span class="field-hint">${T('Lowercase letters, digits and hyphens. Products store this id, so it cannot change later.')}</span></div><button class="btn btn-primary">${T('Add category')}</button></form>
   ${orphaned.length?`<div class="notice">${fmtNum(orphaned.length)} ${T('products point at a category that no longer exists. Edit each one and pick a new category.')}</div>`:''}
@@ -606,7 +611,7 @@ function customerHTML() {
   const open = r.tickets.filter(t => t.status !== 'Closed').length;
   const appr = r.refunds.filter(x => x.status === 'Approved').length;
   const ticketRows = r.tickets.length ? r.tickets.map(t => `<div class="cust-row"><div class="cust-row-main"><b>${esc(t.subject)}</b><span class="cell-sub">${esc(t.ref)} · ${esc(moneyFreeDate(t.created_at))}${t.priority && t.priority !== 'Normal' ? ` · <span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>` : ''}</span></div><div class="cust-row-side">${pill(T(t.status))}<button class="btn btn-sm btn-quiet" data-act="customer-ticket" data-id="${t.id}">Open thread</button></div></div>`).join('') : '<p class="empty-note">No support conversations.</p>';
-  const orderRows = r.orders.length ? r.orders.map(o => `<div class="cust-row"><div class="cust-row-main"><b>${esc(o.number)} · ${esc(o.product_title || 'Project request')}</b><span class="cell-sub">${esc(moneyFreeDate(o.created_at))}</span></div><div class="cust-row-side"><span class="status-pill">${esc(T(o.status))}</span><select class="cust-status" data-order-status="${o.id}">${['Submitted', 'Under Review', 'Requirements Analysis', 'Quotation Sent', 'Awaiting Confirmation', 'In Development', 'Testing', 'Ready for Delivery', 'Delivered', 'Cancelled'].map(s => `<option value="${s}"${o.status === s ? ' selected' : ''}>${esc(T(s))}</option>`).join('')}</select></div></div>`).join('') : '<p class="empty-note">No project requests.</p>';
+  const orderRows = r.orders.length ? r.orders.map(o => `<div class="cust-row"><div class="cust-row-main"><b>${esc(o.number)} · ${esc(o.product_title || 'Project request')}</b><span class="cell-sub">${esc(moneyFreeDate(o.created_at))}</span></div><div class="cust-row-side"><span class="status-pill">${esc(T(o.status))}</span>${picker('status', ['Submitted','Under Review','Requirements Analysis','Quotation Sent','Awaiting Confirmation','In Development','Testing','Ready for Delivery','Delivered','Cancelled'].map(x=>({value:x,label:T(x)})), o.status, {className:'cust-status', label:T('Status'), onPick:'pickerCustomerOrderStatus', dataId:o.id})}</div></div>`).join('') : '<p class="empty-note">No project requests.</p>';
   const refundRows = r.refunds.length ? r.refunds.map(x => `<div class="cust-row"><div class="cust-row-main"><b>${esc(x.order_number || '')} · ${esc(x.ref)}</b><span class="cell-sub">${esc(x.reason)}</span></div><div class="cust-row-side">${pill(T(x.status))}${x.status === 'Under review' ? `<button class="btn btn-sm btn-quiet" data-act="customer-refund" data-id="${x.id}" data-decision="Approved">${esc(T('Approve'))}</button><button class="btn btn-sm btn-quiet" data-act="customer-refund" data-id="${x.id}" data-decision="Rejected">${esc(T('Reject'))}</button>` : ''}</div></div>`).join('') : '<p class="empty-note">No refund requests.</p>';
   const eventRows = r.events.length ? r.events.slice(0, 18).map(e => `<div class="cust-event"><span>${esc(moneyFreeDate(e.created_at))}</span><b>${esc(T(e.action))}</b><span class="cell-sub">${esc(e.entity)}${e.entity_id ? ' · ' + esc(e.entity_id) : ''}${e.actor_name ? ' · ' + esc(e.actor_name) : ''}</span></div>`).join('') : '<p class="empty-note">No recorded activity.</p>';
   return `${pageHead(esc(c.name), 'Customer profile', 'Everything recorded about this account, and the controls the server allows over it.', `<button class="btn btn-quiet" data-act="customer-back">← All customers</button>`)}
@@ -637,16 +642,19 @@ function customerHTML() {
   <div class="panel" style="padding:18px"><div class="panel-head"><div><h2>${esc(T('Activity'))}</h2><p>${esc(T('Sign-ins, changes and decisions recorded against this account.'))}</p></div></div>${eventRows}</div>`;
 }
 
+/* From a customer's profile into one of their conversations.
+   The profile already has the ticket, so it is handed straight to openTicket()
+   rather than being looked up in an inbox this page never fetched. */
+function openCustomerTicket(id){
+  const t=(state.customer?.tickets||[]).find(x=>Number(x.id)===Number(id));
+  if(!t){toast(T('That conversation is no longer available.'),true);return}
+  openTicket(id, t);
+}
+
 /* Order status and refund decisions are re-issued from here, reusing the same
    endpoints the Orders and Refunds tabs use, then the profile is redrawn so the
    operator sees the new state in place. */
-async function customerOrderStatus(sel) {
-  try {
-    await api('/api/admin/orders/status', { method: 'PUT', body: { id: Number(sel.dataset.orderStatus), status: sel.value } });
-    toast(T('Order status updated.'));
-    await openCustomer(state.customerId);
-  } catch (e) { toast(e.message, true); }
-}
+
 
 async function customerRefund(btn) {
   const decision = btn.dataset.decision;
@@ -909,7 +917,7 @@ function blogMarkdown(source){
  flush();
  return out.join('\n')}
 
-function activityHTML(){return`${pageHead('Security & operations','Activity log','Recent audited administrative and account events. The log is read-only.',`<button class="btn btn-quiet" data-act="refresh">${ICON('refresh')} Refresh log</button>`)}<div class="panel"><div class="panel-head"><div><h2>Audit events</h2><p>Latest ${fmtNum(state.audit.length)} recorded events</p></div></div>${state.audit.length?`<div class="activity-list">${state.audit.map(a=>`<div class="activity-item"><span class="activity-dot">${iconFor(a.entity)}</span><div><strong>${esc(actionLabel(a.action))} · ${esc(a.entity)}</strong><p>${esc(a.actor_name||'System')} ${a.actor_email?`(${esc(a.actor_email)})`:''} · Record ${esc(a.entity_id)}</p></div><time>${moneyFreeDate(a.created_at)}</time></div>`).join('')}</div>`:`<div class="empty">No audited events recorded yet.</div>`}</div>`}
+function activityHTML(){return`${pageHead('Security & operations','Activity log','Recent audited administrative and account events. The log is read-only.',`<button class="btn btn-quiet" data-act="refresh">${ICON('refresh')} Refresh log</button>`)}<div class="panel activity-panel"><div class="panel-head"><div><h2>Audit events</h2><p>Latest ${fmtNum(state.audit.length)} recorded events</p></div></div>${state.audit.length?`<div class="activity-list" tabindex="0" aria-label="${T('Audit events')}">${state.audit.map(a=>`<div class="activity-item"><span class="activity-dot">${iconFor(a.entity)}</span><div><strong>${esc(actionLabel(a.action))} · ${esc(a.entity)}</strong><p>${esc(a.actor_name||'System')} ${a.actor_email?`(${esc(a.actor_email)})`:''} · Record ${esc(a.entity_id)}</p></div><time>${moneyFreeDate(a.created_at)}</time></div>`).join('')}</div>`:`<div class="empty">No audited events recorded yet.</div>`}</div>`}
 /* ---------------------------------------------------------------- admins
    Who else can open this console, and what each of them may reach.
 
@@ -986,7 +994,7 @@ function adminsHTML(){
 }
 
 function actionLabel(s){return({create:'Created',update:'Updated',unpublish:'Unpublished',status_change:'Changed order status',ticket_status:'Changed ticket status',ticket_reply:'Replied to ticket',refund_decision:'Recorded refund decision',customer_access:'Changed customer access',settings:'Updated website settings',login:'Signed in',register:'Registered'})[s]||s}
-function contentHTML(){switch(state.page){case'site':return siteHTML();case'articles':return articlesHTML();case'orders':return ordersHTML();case'products':return productsHTML();case'customers':return customersHTML();case'support':return supportHTML();case'refunds':return refundsHTML();case'activity':return activityHTML();case'admins':return adminsHTML();default:return overviewHTML()}}
+function contentHTML(){switch(state.page){case'site':return siteHTML();case'articles':return articlesHTML();case'orders':return ordersHTML();case'products':return state.productDraft ? productDraftHTML() : productsHTML();case'customers':return customersHTML();case'support':return supportHTML();case'refunds':return refundsHTML();case'activity':return activityHTML();case'admins':return adminsHTML();default:return overviewHTML()}}
 async function fetchPageData(){state.loading=true;try{
  if(state.page==='dashboard'){
 state.overview=await api('/api/admin/overview');
@@ -1101,6 +1109,11 @@ function togglePicker(pickerEl, open){
     if(on)on.focus();
   }
 }
+document.addEventListener('toggle', e => {
+  const fold = e.target.closest && e.target.closest('[data-fold="categories"]');
+  if (fold) state.foldCategories = fold.open;
+}, true);
+
 document.addEventListener('click',e=>{
   const btn=e.target.closest('[data-picker-btn]');
   if(btn){togglePicker(btn.closest('[data-picker]'));return}
@@ -1197,11 +1210,44 @@ async function openOrder(id){const o=state.orders.find(x=>x.id===Number(id));if(
    Categories come from the settings document (the operator's list), and a
    product whose category has been deleted keeps it available as an option so
    saving the product cannot silently move it somewhere else. */
-async function productForm(p=null){
+/* The product editor's own page header, replacing the modal title it had.
+   A page can say where it goes back to; a modal could only be dismissed. */
+function productFormHead(edit, p){
+  return `<div class="page-head"><div><div class="eyebrow">${T(edit?'Catalog editor':'New catalog product')}</div>
+    <h1>${T(edit?'Edit product':'Add a product concept')}</h1>
+    <p>${T(edit?'Changes affect the public product data, its featured slot and its order.':'Add a product to the database-backed catalog.')}</p></div>
+    <div class="head-actions"><button class="btn btn-quiet" type="button" data-act="product-cancel">${ICON('back')} ${T('Back to products')}</button></div></div>`;
+}
+
+/* Open the product editor as a page of the console.
+
+   It was a modal. A modal cannot be scrolled from the browser's scrollbar,
+   cannot be linked to, cannot survive a refresh, and on a phone the keyboard
+   covers the field you are typing in with no way to move the dialog. The
+   fields are unchanged; only where they are drawn has moved. */
+async function openProductEditor(p){
+  state.productDraft = p ? p.id : 'new';
+  const html = await productForm(p);
+  if (!html) return;                       // the "add a category first" guard
+  if (location.hash !== '#products') history.replaceState(null, '', '#products');
+  state.page = 'products';
+  $('#pageContent').innerHTML = html;
+  updateNav();
+}
+/* contentHTML() draws the draft synchronously on a re-render, so a refresh or a
+   language switch does not throw away what the operator opened. */
+function productDraftHTML(){
+  const p = state.productDraft === 'new'
+    ? null
+    : state.products.find(x => Number(x.id) === Number(state.productDraft));
+  return productForm(p, true) || productsHTML();
+}
+
+async function productForm(p=null, sync=false){
  const edit=!!p;
  /* The categories live in the settings document. Fetch it if this screen has
     not already, so the form is not limited to the one route that preloads it. */
- if(!state.settings){
+ if(!state.settings && !sync){
   try{const r=await api('/api/admin/settings');state.settings=r.settings||null}catch(e){state.settings=null}
  }
  const cats=siteCategories();
@@ -1210,10 +1256,10 @@ async function productForm(p=null){
     from the API, the whole action is refused with the reason on screen and a
     button that jumps to the editor below. */
  if(!cats.length){
-  showModal(`${modalHead('Catalog editor',T('Add a category first'),T('Products are filed under a category, and this site has none yet.'))}
+  if(!sync) $('#pageContent').innerHTML = `${modalHead('Catalog editor',T('Add a category first'),T('Products are filed under a category, and this site has none yet.'))}
    <p class="muted" style="font-size:11px;line-height:1.8">${T('Categories are the tabs the public catalog offers.')} ${T('Add one below, then come back and add the product.')}</p>
-   <div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">${T('Cancel')}</button><button class="btn btn-primary" type="button" data-act="goto-categories">${T('Go to categories')}</button></div>`);
-  return;
+   <div class="form-actions"><button class="btn btn-quiet" type="button" data-act="product-cancel">${T('Cancel')}</button><button class="btn btn-primary" type="button" data-act="goto-categories">${T('Go to categories')}</button></div>`;
+  return '';
  }
  const current=p?.category||(cats[0]?.id||'');
  // A product whose category was deleted keeps its value, marked, so that saving
@@ -1221,7 +1267,7 @@ async function productForm(p=null){
  const catOptions=cats.map(c=>({value:c.id,label:categoryLabel(c.id)}));
  if(current&&!cats.some(c=>c.id===current))
    catOptions.push({value:current,label:`${current} (${T('category removed')})`});
- showModal(`${modalHead(edit?'Catalog editor':'New catalog product',edit?T('Edit product'):T('Add a product concept'),edit?T('Changes affect the public product data, its featured slot and its order.'):T('Add a product to the database-backed catalog.'))}
+  return `${productFormHead(edit, p)}
  <form data-form="product" data-id="${p?.id||''}" class="product-form">
   <fieldset class="form-group"><legend>${T('Content')}</legend><div class="form-grid">
    <div class="field full"><label for="pf-title">${T('Product title')}</label><input id="pf-title" name="title" required maxlength="140" value="${esc(p?.title||'')}" placeholder="${T('Arya — Software with wings.')}"></div>
@@ -1249,10 +1295,15 @@ async function productForm(p=null){
    <div class="field full"><label class="check-line"><input name="published" type="checkbox" ${p&&!p.published?'':'checked'}> ${T('Published in product data')}</label><span class="field-hint">${T('AURION stays a showcase concept; no trading or payment is enabled.')}</span></div>
   </div></fieldset>
 
-  <div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">${T('Cancel')}</button><button class="btn btn-primary">${edit?T('Save product'):T('Create product')}</button></div>
- </form>`,true)}
+  <div class="form-actions"><button class="btn btn-quiet" type="button" data-act="product-cancel">${T('Cancel')}</button><button class="btn btn-primary">${edit?T('Save product'):T('Create product')}</button></div>
+ </form>`;
+}
 
-function openTicket(id){const t=state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div><div class="detail-item"><small>Priority</small><strong>${t.priority?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:'—'}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label>${picker('status', ['Open','In progress','Closed'].map(x=>({value:x,label:T(x)})), t.status, {label:T('Status')})}</div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
+/* Open a conversation's thread.
+   The ticket is passed in when the caller already has it - the customer
+   profile holds its own copy and never loads the whole support inbox, so
+   looking it up in state.tickets alone left that button doing nothing. */
+function openTicket(id, ticket){const t=ticket||state.tickets.find(x=>x.id===Number(id));if(!t)return;const msgs=[{message:t.message,sender:t.email,created_at:t.created_at},...(t.messages||[])];showModal(`${modalHead('Support conversation',esc(t.ref),esc(t.subject))}<div class="detail-grid" style="margin-bottom:14px"><div class="detail-item"><small>Customer email</small><strong>${esc(t.email)}</strong></div><div class="detail-item"><small>Ticket state</small><strong>${pill(t.status)}</strong></div><div class="detail-item"><small>Priority</small><strong>${t.priority?`<span class="pri pri-${esc(String(t.priority).toLowerCase())}">${esc(T(t.priority))}</span>`:'—'}</strong></div></div><div class="thread">${msgs.map(m=>`<div class="message ${m.sender==='Team'||m.sender===state.me.name?'admin':''}">${esc(m.message)}<small>${esc(m.sender||'Customer')} · ${moneyFreeDate(m.created_at)}</small></div>`).join('')}</div><form data-form="ticket-reply" data-id="${t.id}"><div class="field"><label>Reply to customer</label><textarea name="message" required minlength="2" maxlength="3000" placeholder="Write a clear, helpful response…"></textarea></div><div class="form-grid" style="margin-top:10px"><div class="field"><label>Ticket status</label>${picker('status', ['Open','In progress','Closed'].map(x=>({value:x,label:T(x)})), t.status, {label:T('Status')})}</div><div class="field" style="align-content:end"><span class="field-hint">Saving a reply moves the ticket to In progress.</span></div></div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Close</button><button class="btn btn-primary">Send reply</button></div></form>`,true)}
 function refundModal(id,decision){const r=state.refunds.find(x=>x.id===Number(id));if(!r)return;showModal(`${modalHead('Refund review',`${decision} request ${esc(r.ref)}`,`Order ${esc(r.order_number)} · submitted ${moneyFreeDate(r.created_at)}`)}<div class="detail-item"><small>Customer's stated reason</small><p>${esc(r.reason)}</p></div><form data-form="refund" data-id="${r.id}" data-decision="${decision}"><div class="field" style="margin-top:12px"><label>Administrative note</label><textarea name="note" maxlength="1000" placeholder="Record the review rationale. This will not trigger a payment."></textarea></div><div class="field" style="margin-top:10px"><label>Transaction reference (optional, record only)</label><input name="transaction_ref" maxlength="120"></div><div class="notice">${decision==='Approved'?'Approval records a decision only.':'Rejection records a decision only.'} The website does not process or confirm payment-provider refunds.</div><div class="modal-actions"><button class="btn btn-quiet" type="button" data-act="close-modal">Cancel</button><button class="btn ${decision==='Approved'?'btn-primary':'btn-danger'}">Record ${decision.toLowerCase()}</button></div></form>`)}
 function exportCsv(kind){const data=({orders:state.orders,products:state.products,customers:state.customers,tickets:state.tickets,refunds:state.refunds})[kind]||[];if(!data.length){toast('There are no records to export.');return}const columns=Object.keys(data[0]).filter(k=>!['password_hash','csrf','token_hash'].includes(k));const csv=[columns.map(qcsv).join(','),...data.map(row=>columns.map(k=>qcsv(Array.isArray(row[k])?row[k].join('; '):row[k])).join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`axiasoft-${kind}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('CSV export downloaded.')}
 function qcsv(v){return'"'+String(v??'').replace(/"/g,'""')+'"'}
@@ -1274,7 +1325,7 @@ return}
  if(rteBtn){applyFormat(rteBtn.dataset.rte);return}
  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
  if(act==='close-modal'||(act==='backdrop-close'&&e.target===b)){closeModal();return}
- if(act==='goto-categories'){closeModal();document.querySelector('#categoriesPanel')?.scrollIntoView({behavior:'smooth',block:'center'});const f=$('[data-form="category-add"] input');if(f)f.focus();return}
+ if(act==='goto-categories'){state.page='products';state.foldCategories=true;if(location.hash!=='#products')history.replaceState(null,'','#products');fetchPageData().then(()=>{document.querySelector('#categoriesPanel')?.scrollIntoView({behavior:'smooth',block:'center'});const f=$('[data-form="category-add"] input');if(f)f.focus();});return}
  if(act==='move-category'){moveCategory(b);return}
  if(act==='delete-category'){deleteCategory(b);return}
  if(act==='toggle-nav'){const s=$('#sidebar');s?.classList.toggle('open');$('.side-scrim')?.classList.toggle('show',s?.classList.contains('open'));return}
@@ -1332,9 +1383,10 @@ return}
  if(act==='save-article'){saveArticle(null,b.dataset.status);return}
  if(act==='edit-article'){openArticle(+b.dataset.id);return}
  if(act==='delete-article'){deleteArticle(+b.dataset.id);return}
+ if(act==='product-cancel'){state.productDraft=null;state.page='products';location.hash='#products';if(!state.products.length)fetchPageData();else $('#pageContent').innerHTML=contentHTML();return}
  if(act==='logout'){logout();return}
- if(act==='new-product'){productForm().catch(e=>toast(e.message,true));return}
- if(act==='edit-product'){const p=state.products.find(x=>x.id===Number(b.dataset.id));if(p)productForm(p).catch(e=>toast(e.message,true));return}
+ if(act==='new-product'){openProductEditor(null);return}
+ if(act==='edit-product'){const p=state.products.find(x=>x.id===Number(b.dataset.id));if(p)openProductEditor(p);return}
  if(act==='view-order'){openOrder(b.dataset.id);return}
  if(act==='view-ticket'){openTicket(b.dataset.id);return}
  if(act==='refund-decision'){refundModal(b.dataset.id,b.dataset.decision);return}
@@ -1362,7 +1414,7 @@ return}
  if(act==='customer-open'){openCustomer(b.dataset.id);return}
  if(act==='customer-back'){backToCustomers();return}
  if(act==='customer-refund'){customerRefund(b);return}
- if(act==='customer-ticket'){state.page='tickets';openTicket(b.dataset.id);return}
+ if(act==='customer-ticket'){openCustomerTicket(b.dataset.id);return}
 }
 async function bulkPublishAll(){
  if(!await confirmDialog({title:'Publish every hidden product?',
@@ -1576,7 +1628,7 @@ async function submitHandler(e){const form=e.target.closest('form[data-form]');i
  }
  if(form.dataset.form==='faq'){await saveFaq(form);return}
  if(form.dataset.form==='brands'){await saveBrands(form);return}
- if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}closeModal();state.overview=null;await fetchPageData();return}
+ if(form.dataset.form==='product'){const features=String(values.features||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const technologies=String(values.technologies||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).slice(0,20);const payload={title:values.title,slug:values.slug,category:values.category,status:values.status,price_label:values.price_label,cover:values.cover_image||'',summary:values.summary,description:values.description,github_url:(values.github_url||'').trim(),features,technologies,published:form.elements.published.checked,featured:form.elements.featured?.checked||false,position:Number(values.position)||0};if(form.dataset.id){payload.id=Number(form.dataset.id);await api('/api/admin/products',{method:'PUT',body:payload});toast('Product changes saved.')}else{await api('/api/admin/products',{method:'POST',body:payload});toast('Product added.')}state.overview=null;await fetchPageData();state.page='products';if(location.hash!=='#products')history.replaceState(null,'','#products');return}
  if(form.dataset.form==='category-add'){
   const cats=siteCategories().slice();
   const id=String(values.id||'').trim().toLowerCase();
@@ -1652,6 +1704,16 @@ window.pickerMarkDirty = () => {
       '<div class="dirty-note" role="status"><span>●</span> Unsaved changes on this page — press <strong>Save</strong> to publish them to the site.</div>');
   }
 };
+window.pickerCustomerOrderStatus = async (value, host) => {
+  const id = Number(host.dataset.id || 0);
+  if (!id) return;
+  try {
+    await api('/api/admin/orders/status', {method:'PUT', body:{id, status:value}});
+    toast(T('Order status updated.'));
+    await openCustomer(state.customerId);
+  } catch (e) { toast(e.message, true); }
+};
+
 window.pickerAdminRole = async (value, host) => {
   const id = Number(host.dataset.id || 0);
   if (!id) return;
@@ -1669,7 +1731,7 @@ window.pickerAdminRole = async (value, host) => {
 
 function inputHandler(e){
  brandInput(e);faqInput(e);
-if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-order-status]')&&state.customerId){customerOrderStatus(e.target);return}
+if(e.target.matches('[data-search]')){state.search=e.target.value;clearTimeout(inputHandler.timer);inputHandler.timer=setTimeout(()=>{const c=$('#pageContent');if(c)c.innerHTML=contentHTML();const input=$('[data-search]');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length)}},180)}if(e.target.matches('[data-status-filter]')){state.statusFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}if(e.target.matches('[data-product-filter]')){state.productFilter=e.target.value;$('#pageContent').innerHTML=contentHTML()}
 if(e.target.matches('[data-cat-name],[data-cat-name-fa]')){
  const id=e.target.dataset.catName||e.target.dataset.catNameFa;
  const field=e.target.dataset.catName?'name':'nameFa';

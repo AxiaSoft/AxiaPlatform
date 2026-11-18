@@ -151,19 +151,30 @@ class SupportConversationTests(unittest.TestCase):
         self.assertEqual(status, 400, body)
 
     def test_the_console_sends_a_canonical_value(self):
-        # The <option> must carry value=, or the browser posts the translation.
-        # Both copies are checked: admin/ is the source and public/admin/ is what
-        # the build ships, and a fix applied to only one of them reaches only
-        # half the deployments.
+        """The value posted is the status, never its translation.
+
+        This used to be an assertion about a <select>: the options had to carry
+        value= or the browser posted the visible label, and the visible label is
+        translated. The console draws its own list now, which makes the same
+        mistake possible in a different way - the list must carry value: as the
+        untranslated status and label: as the translated one - so the same rule
+        is asserted against the picker.
+
+        Both copies are checked: public/admin/ is the source and admin/ is what
+        the build ships.
+        """
         for relative in ('admin/admin.js', 'public/admin/admin.js'):
             js = (ROOT / relative).read_text(encoding='utf-8')
             start = js.index('ticket-reply" data-id=')
-            section = js[start:start + 1100]
-            self.assertIn('value="${s}"', section,
-                          f'{relative}: the status <option> has no value=, '
-                          'so a translated label is posted')
-            self.assertIn('esc(T(s))', section,
-                          f'{relative}: the label must still be translated')
+            section = js[start:start + 1400]
+            self.assertIn("['Open','In progress','Closed'].map(x=>({value:x,label:T(x)}))",
+                          section,
+                          f'{relative}: the thread status list must map each '
+                          'canonical status to its translated label')
+            # And the picker's own markup puts the raw value in the DOM, never
+            # the label.
+            self.assertIn('data-value="${esc(o.value)}"', js,
+                          f'{relative}: the option must publish its value')
 
     # -- where the customer sees the reply -------------------------------- #
     def test_the_customer_sees_the_teams_reply(self):

@@ -166,8 +166,15 @@ class CustomerProfileTests(unittest.TestCase):
         self.assertIn("if(act==='customer-open'){openCustomer(b.dataset.id);return}", self.admin_js)
 
     def test_the_profile_re_issues_order_status(self):
+        """Changing a status on the profile still writes through the API.
+
+        The control is a picker rather than a <select> - a native select opens
+        the operating system's menu - so the callback carries the id in the
+        picker's own data-id and posts the same endpoint.
+        """
         self.assertIn("api('/api/admin/orders/status'", self.admin_js)
-        self.assertIn('customerOrderStatus', self.admin_js)
+        self.assertIn('pickerCustomerOrderStatus', self.admin_js)
+        self.assertIn("dataId:o.id", self.admin_js)
 
     def test_the_profile_re_issues_refund_decisions(self):
         self.assertIn("api('/api/admin/refunds/decision'", self.admin_js)

@@ -625,6 +625,11 @@ Object.assign(fa,{
   "What each role reaches": "هر نقش به چه چیزی دسترسی دارد",
   "Your session ends on this device. Nothing else changes.": "نشست شما روی این دستگاه بسته می‌شود. چیز دیگری تغییر نمی‌کند.",
   "loses console access now. Their customer account stays.": "همین حالا دسترسی کنسول را از دست می‌دهد. حساب مشتری‌اش می‌ماند.",
+  "Filter by category": "فیلتر بر پایهٔ دسته",
+  "Filter by status": "فیلتر بر پایهٔ وضعیت",
+  "Filter by visibility": "فیلتر بر پایهٔ نمایش",
+  "Sort products": "ترتیب محصولات",
+  "That conversation is no longer available.": "آن گفت‌وگو دیگر در دسترس نیست."
 });
 
 const faPatterns=[
