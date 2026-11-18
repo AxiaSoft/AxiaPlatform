@@ -629,7 +629,18 @@ Object.assign(fa,{
   "Filter by status": "فیلتر بر پایهٔ وضعیت",
   "Filter by visibility": "فیلتر بر پایهٔ نمایش",
   "Sort products": "ترتیب محصولات",
-  "That conversation is no longer available.": "آن گفت‌وگو دیگر در دسترس نیست."
+  "That conversation is no longer available.": "آن گفت‌وگو دیگر در دسترس نیست.",
+  "(comma separated, up to 6)": "با ویرگول، حداکثر ۶",
+  "(shown on the blog card and used as the meta description)": "روی کارت وبلاگ دیده می‌شود و توضیح متای صفحه است",
+  "A clear, specific headline": "تیتر روشن و مشخص",
+  "Each article gets its own page at /blog/<slug>/, with sharing tags and a sitemap entry.": "هر مقاله در /blog/<slug>/ صفحهٔ خودش را دارد، با برچسب اشتراک‌گذاری و ورودی نقشهٔ سایت.",
+  "Article body": "متن مقاله",
+  "Line breaks make paragraphs. Use the toolbar for headings, lists, quotes, code and links.": "خط تازه پاراگراف می‌سازد. برای تیتر، فهرست، نقل‌قول، کد و پیوند از نوار ابزار استفاده کنید.",
+  "No articles yet. The first one publishes to /blog/ with its own page and RSS item.": "هنوز مقاله‌ای نیست. نخستین در /blog/ با صفحهٔ خودش و آیتم RSS منتشر می‌شود.",
+  "One or two sentences that make someone want to read on.": "یکی دو جمله که خواننده را به ادامهٔ خواندن تشویق کند.",
+  "design, engineering, seo": "طراحی، مهندسی، سئو",
+  "draft": "پیش‌نویس",
+  "leave empty to generate from the title": "خالی بگذارید تا از تیتر ساخته شود"
 });
 
 const faPatterns=[

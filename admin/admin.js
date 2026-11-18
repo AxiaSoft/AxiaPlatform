@@ -687,58 +687,79 @@ function articlesHTML(){
  const published=rows.filter(a=>a.status==='published').length;
  const cards=rows.length?rows.map(a=>`<article class="article-row">
    <div class="article-row-main">
-     <div class="article-row-meta"><span class="pill ${a.status==='published'?'green':'blue'}">${a.status==='published'?'Published':'Draft'}</span>
-       <time>${moneyFreeDate(a.published_at||a.updated_at)}</time><span>${fmtNum(a.reading_minutes||1)} min read</span></div>
+     <div class="article-row-meta"><span class="pill ${a.status==='published'?'green':'blue'}">${esc(T(a.status==='published'?'Published':'Draft'))}</span>
+       <time>${moneyFreeDate(a.published_at||a.updated_at)}</time><span>${fmtNum(a.reading_minutes||1)} ${esc(T('min read'))}</span></div>
      <h3>${esc(a.title)}</h3>
      <p>${esc(a.summary||'')}</p>
      <small>/${esc(a.slug)}</small>
    </div>
    <div class="article-row-actions">
-     <a class="btn btn-sm btn-quiet" href="${baseUrl(`blog/${esc(a.slug)}/`)}" target="_blank" rel="noopener">View ${ICON('external')}</a>
-     <button class="btn btn-sm btn-quiet" data-act="edit-article" data-id="${a.id}">Edit</button>
-     <button class="btn btn-sm btn-danger" data-act="delete-article" data-id="${a.id}">Delete</button>
+     <a class="btn btn-sm btn-quiet" href="${baseUrl(`blog/${esc(a.slug)}/`)}" target="_blank" rel="noopener">${esc(T('View'))} ${ICON('external')}</a>
+     <button class="btn btn-sm btn-quiet" data-act="edit-article" data-id="${a.id}">${esc(T('Edit'))}</button>
+     <button class="btn btn-sm btn-danger" data-act="delete-article" data-id="${a.id}">${esc(T('Delete'))}</button>
    </div>
- </article>`).join(''):`<div class="empty-state">No articles yet. Write the first one — it publishes to /blog/ with its own page, sitemap entry and RSS item.</div>`;
- return `<div class="panel-head"><div><h2>Blog articles</h2><p>${fmtNum(rows.length)} total · ${fmtNum(published)} published · ${fmtNum(rows.length-published)} draft</p></div>
-   <button class="btn btn-sm btn-primary" data-act="new-article">✎ New article</button></div>
+ </article>`).join(''):`<div class="empty-state">${esc(T('No articles yet. The first one publishes to /blog/ with its own page and RSS item.'))}</div>`;
+ return `<div class="panel-head"><div><h2>${esc(T('Blog articles'))}</h2><p>${fmtNum(rows.length)} ${esc(T('total'))} · ${fmtNum(published)} ${esc(T('published'))} · ${fmtNum(rows.length-published)} ${esc(T('draft'))}</p></div>
+   <button class="btn btn-sm btn-primary" data-act="new-article">${ICON('plus')} ${esc(T('New article'))}</button></div>
  <div class="article-list">${cards}</div>
- <div class="panel-foot"><h3>How publishing works</h3>
-   <p>Articles are rendered on the server at <code>/blog/&lt;slug&gt;/</code> with a canonical URL, Open Graph tags,
-   <code>BlogPosting</code> structured data and an entry in <code>/sitemap.xml</code> and <code>/blog/feed.xml</code>.
-   That is what lets a search engine index them without running JavaScript. Publish, then submit the sitemap once in
-   Google Search Console.</p></div>`}
+ <div class="panel-foot"><h3>${esc(T('How publishing works'))}</h3>
+   <p>${esc(T('Each article gets its own page at /blog/<slug>/, with sharing tags and a sitemap entry.'))}</p></div>`}
+
+/* The editor's toolbar.
+   It used to draw letters and symbols - H, B, I, •, 1., ❝, </>, and a colour
+   emoji for the link - which were a different font at a different weight from
+   the icon set beside them, and looked unlike anything else in the console.
+   Each button is an icon now, with the name kept as its label. */
+/* The few marks the editor toolbar needs that the shared set does not carry.
+   Same viewBox, stroke width and line caps as AXIA_ICON, so they line up. */
+const EDITOR_GLYPHS={
+ heading:'<path d="M6 5v14M18 5v14M6 12h12"/>',
+ subheading:'<path d="M7 8v10M17 8v10M7 13h10"/>',
+ bold:'<path d="M8 5h5.5a3.5 3.5 0 0 1 0 7H8zM8 12h6.5a3.5 3.5 0 0 1 0 7H8z"/>',
+ italic:'<path d="M15 5h-5M14 19H9M13 5 11 19"/>',
+ ul:'<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>',
+ ol:'<path d="M10 6h10M10 12h10M10 18h10M4 5h1v4M3.5 18h2"/>',
+ quote:'<path d="M7 7h4v4a4 4 0 0 1-4 4M15 7h4v4a4 4 0 0 1-4 4"/>',
+ code:'<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
+ link:'<path d="M10 14a4 4 0 0 0 5.6 0l3-3A4 4 0 0 0 13 5.4L11.5 7M14 10a4 4 0 0 0-5.6 0l-3 3A4 4 0 0 0 11 18.6L12.5 17"/>',
+ divider:'<path d="M4 12h16"/>'
+};
+function editorGlyph(name){
+  const path=EDITOR_GLYPHS[name]||'';
+  return `<svg class="icon rte-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${path}</svg>`;
+}
 
 const ARTICLE_TOOLS=[
- ['h2','Heading','H'],['h3','Subheading','h'],['bold','Bold','B'],['italic','Italic','I'],
- ['ul','Bullet list','•'],['ol','Numbered list','1.'],['quote','Quote','❝'],
- ['code','Code','</>'],['link','Link','🔗'],['hr','Divider','—']
+ ['h2','Heading','heading'],['h3','Subheading','subheading'],['bold','Bold','bold'],
+ ['italic','Italic','italic'],['ul','Bullet list','ul'],['ol','Numbered list','ol'],
+ ['quote','Quote','quote'],['code','Code','code'],['link','Link','link'],['hr','Divider','divider']
 ];
 
 function editorHTML(a){
  const tags=(a.tags||[]).join(', ');
  const words=(a.body||'').trim().split(/\s+/).filter(Boolean).length;
  return `<div class="editor-bar">
-   <button class="btn btn-sm btn-quiet" data-act="close-article">← Back</button>
-   <div class="editor-bar-mid"><strong>${a.id?'Editing':'New article'}</strong><small>${fmtNum(words)} words · ${fmtNum(Math.max(1,Math.round(words/200)))} min read</small></div>
+   <button class="btn btn-sm btn-quiet" data-act="close-article">${ICON('back','dir-icon')} ${esc(T('Back'))}</button>
+   <div class="editor-bar-mid"><strong>${esc(T(a.id?'Editing':'New article'))}</strong><small>${fmtNum(words)} ${esc(T('words'))} · ${fmtNum(Math.max(1,Math.round(words/200)))} ${esc(T('min read'))}</small></div>
    <div class="editor-bar-right">
-     <button class="btn btn-sm btn-quiet" data-act="article-preview">Preview</button>
-     <button class="btn btn-sm btn-quiet" data-act="save-article" data-status="draft">Save draft</button>
-     <button class="btn btn-sm btn-primary" data-act="save-article" data-status="published">${a.status==='published'?'Update':'Publish'}</button>
+     <button class="btn btn-sm btn-quiet" data-act="article-preview">${esc(T('Preview'))}</button>
+     <button class="btn btn-sm btn-quiet" data-act="save-article" data-status="draft">${esc(T('Save draft'))}</button>
+     <button class="btn btn-sm btn-primary" data-act="save-article" data-status="published">${esc(T(a.status==='published'?'Update':'Publish'))}</button>
    </div>
  </div>
  <form data-form="article" class="editor-form" data-id="${a.id||''}">
   <div class="editor-fields">
-   <label class="field"><span>Title</span><input name="title" value="${esc(a.title||'')}" maxlength="120" placeholder="A clear, specific headline" required></label>
-   <label class="field"><span>URL slug</span><input name="slug" value="${esc(a.slug||'')}" maxlength="90" placeholder="leave empty to generate from the title" dir="ltr"></label>
+   <label class="field"><span>${esc(T('Title'))}</span><input name="title" value="${esc(a.title||'')}" maxlength="120" placeholder="${esc(T('A clear, specific headline'))}" required></label>
+   <label class="field"><span>${esc(T('URL slug'))}</span><input name="slug" value="${esc(a.slug||'')}" maxlength="90" placeholder="${esc(T('leave empty to generate from the title'))}" dir="ltr"></label>
   </div>
-  <label class="field"><span>Summary <small>(shown on the blog card and used as the meta description)</small></span><textarea name="summary" rows="2" maxlength="320" placeholder="One or two sentences that make someone want to read on.">${esc(a.summary||'')}</textarea></label>
-  <label class="field"><span>Tags <small>(comma separated, up to 6)</small></span><input name="tags" value="${esc(tags)}" placeholder="design, engineering, seo"></label>
-  <div class="field"><span>Article</span>
+  <label class="field"><span>${esc(T('Summary'))} <small>${esc(T('(shown on the blog card and used as the meta description)'))}</small></span><textarea name="summary" rows="2" maxlength="320" placeholder="${esc(T('One or two sentences that make someone want to read on.'))}">${esc(a.summary||'')}</textarea></label>
+  <label class="field"><span>${esc(T('Tags'))} <small>${esc(T('(comma separated, up to 6)'))}</small></span><input name="tags" value="${esc(tags)}" placeholder="${esc(T('design, engineering, seo'))}"></label>
+  <div class="field"><span>${esc(T('Article'))}</span>
     <div class="rte">
-      <div class="rte-toolbar">${ARTICLE_TOOLS.map(([cmd,label,glyph])=>`<button type="button" class="rte-btn" data-rte="${cmd}" title="${label}" aria-label="${label}">${glyph}</button>`).join('')}</div>
-      <div class="rte-surface" id="articleBody" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Article body" spellcheck="true">${markdownToEditorHTML(a.body||'')}</div>
+      <div class="rte-toolbar">${ARTICLE_TOOLS.map(([cmd,label,glyph])=>`<button type="button" class="rte-btn" data-rte="${cmd}" title="${esc(T(label))}" aria-label="${esc(T(label))}">${editorGlyph(glyph)}</button>`).join('')}</div>
+      <div class="rte-surface" id="articleBody" contenteditable="true" role="textbox" aria-multiline="true" aria-label="${esc(T('Article body'))}" spellcheck="true">${markdownToEditorHTML(a.body||'')}</div>
     </div>
-    <small class="field-hint">Line breaks create paragraphs. Use the toolbar for headings, lists, quotes, code and links. Everything is escaped before it renders.</small>
+    <small class="field-hint">${esc(T('Line breaks make paragraphs. Use the toolbar for headings, lists, quotes, code and links.'))}</small>
   </div>
  </form>`}
 

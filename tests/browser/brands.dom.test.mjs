@@ -221,7 +221,7 @@ aw.localStorage.setItem('axia-lang', 'en');
 aw.fetch = async (url) => {
   const u = String(url);
   let body = {};
-  if (u.includes('/api/me')) body = { user: { id: 1, name: 'Admin', email: 'a@b.test', role: 'admin' }, csrf: 'tok' };
+  if (u.includes('/api/me')) body = { user: { id: 1, name: 'Admin', email: 'a@b.test', role: 'admin', admin_role: 'owner', permissions: ['support','customers','sales','catalog','content','activity','admins'] }, csrf: 'tok' };
   else if (u.includes('/api/admin/overview')) body = { orders: [], products: [], tickets: [], refunds: [], users: [] };
   else if (u.includes('/api/admin/products')) body = { products: [] };
   /* The product form files a product under one of the operator's categories, so
