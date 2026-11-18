@@ -176,7 +176,7 @@ img{max-width:100%}
  .container,.footer{width:calc(100% - 28px)}
  .topbar{padding-left:10px;padding-right:10px}
  .brand-wordmark{width:42px}.brand-mark{width:27px;height:27px}
- .theme-toggle{width:33px;height:33px}.mobile-menu{width:33px;height:33px}
+ .theme-toggle{width:33px;height:33px}.mobile-menu{width:33px;height:33px} .account-button{width:33px;height:33px} .account-button .account-icon{display:grid;place-items:center;width:17px;height:17px} .account-button .account-icon svg{width:17px;height:17px;display:block} .account-button.is-signed-in{color:var(--blue);border-color:rgba(106,169,255,.4);background:rgba(106,169,255,.09)}
  .hero{padding-top:38px}.hero-actions .button{align-items:center}
  .hero-art{height:250px}.hero-logo{width:170px;height:170px}.hero-orbit{width:min(225px,54%,50vw)}
  .orbit-tag{max-width:120px;font-size:8px;padding:7px 8px}.orbit-tag b{font-size:9px}
@@ -224,8 +224,8 @@ img{max-width:100%}
     by app.js; this rule only says how to draw them. */
  .tilt-hover{transform-style:preserve-3d;transition:transform .34s cubic-bezier(.2,.72,.24,1),border-color .22s ease,box-shadow .34s ease!important}
  .tilt-hover.is-tilting{transform:perspective(820px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(24px) scale(1.022);will-change:transform;z-index:5;box-shadow:0 34px 70px rgba(0,0,0,.42),0 0 0 1px rgba(120,178,255,.16)}
- .hero-logo.is-tilting{transform:perspective(950px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(20px)}
- .aurion-core.aurion-logo-hover.is-tilting{transform:perspective(950px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(18px)}
+ .hero-logo.is-tilting{transform:perspective(760px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(34px) scale(1.04);box-shadow:none!important} .hero-logo.is-tilting img{filter:drop-shadow(0 34px 40px rgba(0,0,0,.5)) drop-shadow(0 0 34px rgba(60,135,255,.5))}
+ .aurion-core.aurion-logo-hover.is-tilting{transform:perspective(780px) rotateX(var(--tilt-y,0deg)) rotateY(var(--tilt-x,0deg)) translateZ(30px) scale(1.035);box-shadow:none!important}
  .mouse-light{isolation:isolate}
  .mouse-light::before{content:"";position:absolute;inset:0;z-index:3;border-radius:inherit;pointer-events:none;opacity:0;background:radial-gradient(260px circle at var(--light-x,50%) var(--light-y,50%),rgba(133,190,255,.22),rgba(80,144,234,.08) 35%,transparent 68%);transition:opacity .2s ease}
  .mouse-light.is-lit::before{opacity:1}
@@ -366,19 +366,6 @@ button:disabled:active,
 /* Announcement bar — driven by the admin console's storefront settings.
    It sits above the sticky header, never scrolls the page sideways, and is
    removed from the DOM entirely when the administrator turns it off. */
-.announcement{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
-  padding:10px max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));
-  font-size:12px;line-height:1.5;text-align:center;border-bottom:1px solid var(--line);
-  position:relative;z-index:21;background:var(--surface2);color:var(--text)}
-.announcement[hidden]{display:none}
-.announcement.tone-info{background:linear-gradient(100deg,rgba(58,128,232,.18),rgba(58,128,232,.07));border-bottom-color:rgba(106,169,255,.28)}
-.announcement.tone-promo{background:linear-gradient(100deg,rgba(82,213,176,.16),rgba(82,213,176,.05));border-bottom-color:rgba(82,213,176,.28)}
-.announcement.tone-warning{background:linear-gradient(100deg,rgba(244,200,121,.18),rgba(244,200,121,.06));border-bottom-color:rgba(244,200,121,.32)}
-.announcement-text{max-width:70ch}
-.announcement-link{color:var(--blue);font-weight:650;white-space:nowrap}
-.announcement-close{border:0;background:transparent;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:8px;margin-inline-start:6px}
-.announcement-close:hover{color:var(--text)}
-@media(max-width:650px){.announcement{font-size:11px;gap:9px;padding:9px 12px}}
 /* Persian: the corner arrow belongs on the leading (left) edge, and card copy
    keeps clear of it. Without this the ↗ sat on top of the last line of text. */
 html[lang="fa"] .arrow-link{right:auto;left:22px}
@@ -1327,3 +1314,17 @@ body.preview-open .topbar { visibility: hidden; }
    in a left-to-right page and left in a right-to-left one; drawing one fixed
    glyph means half the visitors see it pointing backwards. */
 [dir="rtl"] .dir-icon { transform: scaleX(-1); }
+
+/* ------------------------------------------------------------- confirm dialog
+   The site's own question, in the site's own clothes. window.confirm() is the
+   browser's: its font, its language, its button order, and it cannot be styled
+   or translated. This is the same modal surface as everything else. */
+.modal-confirm{width:min(410px,100%)}
+.modal-confirm .modal-head{margin-bottom:12px}
+.modal-confirm .modal-head h2{font-size:19px;letter-spacing:-.02em;margin:0}
+.confirm-body{margin:0;font-size:12px;line-height:1.85;color:var(--muted)}
+.confirm-actions{display:flex;gap:var(--btn-gap);justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
+.confirm-actions .button{white-space:nowrap}
+.button-danger{background:linear-gradient(130deg,#e04a5e,#c22f44);color:#fff;box-shadow:0 8px 26px rgba(204,52,72,.24)}
+.button-danger:hover{box-shadow:0 10px 32px rgba(204,52,72,.38)}
+.modal-confirm:focus-within{outline:none}

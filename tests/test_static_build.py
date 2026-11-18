@@ -1732,7 +1732,34 @@ class BlogShellParityTests(unittest.TestCase):
         self.assertIn('drawer.hidden = !on', self.blog)
 
     def test_the_blog_loads_the_shared_stylesheet(self):
-        self.assertIn('styles.css?v=site-', self.blog)
+        # The URL is a template: the version is resolved at render time from the
+        # built index.html, so the assertion is that the parameter is present and
+        # filled from a single source, not that one particular hash is typed in.
+        self.assertIn('styles.css?v={css_version}', self.blog)
+
+    def test_the_blog_version_comes_from_the_built_page(self):
+        """The blog must never pin a version of its own.
+
+        It used to hard-code ?v=site-21. The storefront moved to content hashes
+        and the article pages kept serving the old stylesheet, which is exactly
+        what "the article page does not match the site" looked like. The value
+        now comes from the built HTML, so it cannot fall behind again.
+        """
+        import re
+        for name in ('styles.css', 'effects.css', 'blog.css'):
+            self.assertNotRegex(self.blog, rf'{re.escape(name)}\?v=[0-9]',
+                                f'{name} has a literal version again')
+        self.assertIn("css_version = asset_version('styles.css')", self.blog)
+
+    def test_the_blog_asset_version_reads_the_build_stamp(self):
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server'))
+        import blog as blog_module
+        source = (Path(__file__).resolve().parents[1] / 'index.html').read_text(encoding='utf-8')
+        import re
+        build_stamp = re.search(r'styles\.css\?v=([\w.-]+)', source)
+        if build_stamp:
+            self.assertEqual(blog_module.asset_version('styles.css'), build_stamp.group(1))
 
 
 class AurionPlanLandingTests(unittest.TestCase):

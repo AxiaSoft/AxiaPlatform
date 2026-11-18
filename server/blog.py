@@ -12,6 +12,11 @@ pipe tables and blank-line separated blocks. Everything else is escaped text.
 import json
 import html
 import re
+from pathlib import Path
+
+# The two directories this module reads. server/blog.py -> server/ -> repo root.
+ROOT = Path(__file__).resolve().parents[1]
+PUBLIC = ROOT / 'public'
 
 MAX_TITLE = 120
 MAX_SLUG = 90
@@ -474,6 +479,51 @@ def head_tags(title, description, canonical, origin, base, kind, article=None, i
     return '\n  '.join(blocks)
 
 
+def asset_version(name, kind='site'):
+    """The ?v= this asset is being served under right now.
+
+    The article pages are rendered by the server, which does not run the static
+    build. They used to carry the version that was current the day they were
+    written - ?v=site-21 - so a visitor who followed a link from the storefront
+    to an article downloaded the stylesheet the storefront had used months ago.
+    Same markup, older design: exactly the "the article page does not match the
+    site" report.
+
+    Two sources, in order:
+
+    1. The built HTML, which the static build stamps with a content hash. This
+       is the storefront's own answer, so the two cannot disagree.
+    2. The file's own bytes, for anything the build does not stamp - blog.css is
+       served straight from public/ and never appears in a page the build
+       rewrites.
+
+    If neither is available the value is '1': still a correct cache key for a
+    deployment where nothing changes underneath it.
+    """
+    import hashlib
+    # 1. Ask the built storefront what it is using.
+    for candidate in (ROOT / 'index.html', PUBLIC / 'index.html'):
+        try:
+            if not candidate.is_file():
+                continue
+            text = candidate.read_text(encoding='utf-8')
+            found = re.search(rf'{re.escape(name)}\?v=([\w.-]+)', text)
+            if found:
+                return found.group(1)
+        except OSError:
+            continue
+    # 2. Hash the file the server actually serves.
+    for folder in (PUBLIC, ROOT):
+        try:
+            path = folder / name
+            if path.is_file():
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()[:8]
+                return f'{kind}-{digest}'
+        except OSError:
+            continue
+    return '1'
+
+
 def shell(head, body, lang='fa', base='', slug='', default_theme=''):
     """Complete document around a rendered blog page.
 
@@ -489,6 +539,10 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
     # the empty string, which the script reads as "follow the system".
     theme = default_theme if default_theme in ('dark', 'light', 'system') else ''
     theme_json = json.dumps(theme)
+    # Read once per render, from the same stamp the storefront is served with.
+    css_version = asset_version('styles.css')
+    fx_version = asset_version('effects.css')
+    blog_version = asset_version('blog.css', 'blog')
     root = base.rstrip('/')
     blog_home = f'{root}/blog/'
     # The language switch points at the same page in the other language.
@@ -533,20 +587,20 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
   }})();
   </script>
   <link rel="preload" href="{root}/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{root}/styles.css?v=site-21">
-  <link rel="stylesheet" href="{root}/effects.css?v=fx-6">
-  <link rel="stylesheet" href="{root}/blog.css?v=8">
+  <link rel="stylesheet" href="{root}/styles.css?v={css_version}">
+  <link rel="stylesheet" href="{root}/effects.css?v={fx_version}">
+  <link rel="stylesheet" href="{root}/blog.css?v={blog_version}">
 </head>
 <body class="blog-body">
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
 <a class="skip-link" href="#main">{t['skip']}</a>
 <header class="topbar">
   <a href="{root}/" class="brand" aria-label="AXIASOFT home"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
-  <nav class="nav-links" aria-label="{t['nav_products']}"><a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/about">{t['nav_about']}</a></nav>
-  <div class="nav-actions"><a class="blog-lang" href="{other_lang_url}" hreflang="{other_lang}" lang="{other_lang}" rel="alternate">{switch_label}</a><button class="icon-button theme-toggle" id="theme-toggle" aria-label="{t['theme_toggle']}" title="{t['theme_toggle']}" data-to-light="{t['theme_to_light']}" data-to-dark="{t['theme_to_dark']}"><span class="theme-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span></button><a class="button button-small button-primary nav-cta" href="{root}/#/contact">{t['nav_cta']} <span>↗</span></a><button class="mobile-menu icon-button" id="blog-menu" aria-label="{t['open_menu']}" aria-expanded="false">☰</button></div>
+  <nav class="nav-links" aria-label="{t['nav_products']}"><a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/aurion">{t['nav_aurion']}</a><a href="{root}/#/about">{t['nav_about']}</a></nav>
+  <div class="nav-actions"><a class="blog-lang" href="{other_lang_url}" hreflang="{other_lang}" lang="{other_lang}" rel="alternate">{switch_label}</a><button class="icon-button theme-toggle" id="theme-toggle" aria-label="{t['theme_toggle']}" title="{t['theme_toggle']}" data-to-light="{t['theme_to_light']}" data-to-dark="{t['theme_to_dark']}"><span class="theme-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg></span></button><a class="button button-small button-primary nav-cta" href="{root}/#/contact"><span class="button-label">{t['nav_cta']}</span><svg class="icon dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a><button class="mobile-menu icon-button" id="blog-menu" aria-label="{t['open_menu']}" aria-expanded="false" aria-haspopup="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
 </header>
 <nav class="mobile-nav" id="blog-mobile-nav" hidden aria-label="{t['nav_products']}">
-  <button class="icon-button close-mobile" id="blog-menu-close" aria-label="{t['close_menu']}">×</button>
+  <button class="icon-button close-mobile" id="blog-menu-close" aria-label="{t['close_menu']}"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   <a href="{root}/#/products">{t['nav_products']}</a><a href="{root}/#/services">{t['nav_services']}</a><a href="{blog_home}" aria-current="page">{t['nav_blog']}</a><a href="{root}/#/aurion">{t['nav_aurion']}</a><a href="{root}/#/about">{t['nav_about']}</a><a href="{root}/#/contact">{t['nav_cta']}</a>
 </nav>
 <main class="blog-main" id="main">{body}</main>
@@ -556,7 +610,7 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
   <div class="footer-links"><a href="{root}/#/contact">{t['contact']}</a><a href="{blog_home}">{t['feed']}</a><a href="{root}/#/privacy">{t['privacy']}</a></div></div>
   <div class="footer-bottom"><span>© AXIASOFT</span><span>{t['made']} <span class="blue">✦</span></span></div>
 </footer>
-<script src="{root}/effects.js?v=fx-6" defer></script>
+<script src="{root}/effects.js?v={fx_version}" defer></script>
 <script>
 /* The article pages are static HTML, so the two header controls the
    storefront gets from app.js are wired here instead. Small on purpose: a
@@ -569,7 +623,7 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
   if (toggle) {{
     /* Same two glyphs as the storefront (public/app.js), inline because this
        page is server-rendered and does not load app.js. */
-    var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>';
+    var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></svg>';
     var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.6 8.6 0 1 0 10.8 10.8Z"/></svg>';
     var paint = function () {{
       var dark = root.dataset.theme === 'dark';

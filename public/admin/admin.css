@@ -613,3 +613,64 @@ html[lang="fa"] .article-row h3{line-height:1.65}
 .btn .icon { width: 15px; height: 15px; }
 .cat-handle .icon { width: 14px; height: 14px; }
 [dir="rtl"] .dir-icon { transform: scaleX(-1); }
+
+/* ------------------------------------------------------------ administrators
+   The role table: who can open the console, and what each role reaches. */
+.role-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.role-card{border:1px solid var(--line);border-radius:11px;padding:13px 14px;background:var(--surface2)}
+.role-card.is-owner{border-color:rgba(106,169,255,.34);background:rgba(106,169,255,.06)}
+.role-card-head{display:flex;flex-direction:column;gap:6px}
+.role-card-head small{color:var(--muted);font-size:10px;line-height:1.6}
+.role-perms{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.perm{font-size:9px;letter-spacing:.03em;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--faint)}
+
+.role-chip{display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.05em;
+  border-radius:999px;padding:4px 9px;border:1px solid var(--line);white-space:nowrap}
+.role-owner{color:var(--blue);border-color:rgba(106,169,255,.4);background:rgba(106,169,255,.1)}
+.role-support{color:var(--green);border-color:rgba(82,213,176,.34);background:rgba(82,213,176,.08)}
+.role-sales{color:var(--amber);border-color:rgba(244,200,121,.34);background:rgba(244,200,121,.08)}
+.role-content{color:#b2a5ff;border-color:rgba(178,165,255,.34);background:rgba(178,165,255,.08)}
+.role-analyst{color:var(--muted);border-color:var(--line);background:var(--surface2)}
+
+/* The row of controls beside an administrator keeps one gap and wraps rather
+   than squeezing. */
+[data-admin-role]{min-width:132px}
+.data-table td .btn + .btn{margin-inline-start:0}
+
+/* The console's own notification: not window.alert(), which carries the
+   browser's font and language. */
+.admin-toast{position:fixed;inset-inline-end:20px;bottom:20px;z-index:60;max-width:min(360px,88vw);
+  background:var(--surface2);border:1px solid var(--line);border-radius:11px;padding:12px 16px;
+  font-size:12px;line-height:1.5;box-shadow:0 18px 44px rgba(0,0,0,.4);
+  opacity:0;transform:translateY(10px);pointer-events:none;transition:opacity .18s,transform .18s}
+.admin-toast.show{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){.admin-toast{transition:none}}
+
+/* ----------------------------------------------------------------- pickers
+   A list of choices the console draws itself: <select> opened the operating
+   system's own menu, in its font and its language, and could not be styled. */
+.picker{position:relative;display:inline-block;min-width:0}
+.picker-btn{display:inline-flex;align-items:center;justify-content:space-between;gap:12px;
+  width:100%;height:var(--btn-h);padding:0 12px;border:1px solid var(--line);border-radius:9px;
+  background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;text-align:start}
+.picker-btn:hover{border-color:var(--line-strong,rgba(255,255,255,.14))}
+.picker-btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.picker-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picker-value.is-empty{color:var(--faint)}
+.picker-chev{display:grid;place-items:center;color:var(--faint);flex:none;transition:transform .16s}
+.picker-chev svg{width:14px;height:14px}
+.picker.is-open .picker-chev{transform:rotate(180deg)}
+.picker-list{position:absolute;z-index:40;top:calc(100% + 6px);inset-inline-start:0;min-width:100%;
+  max-height:280px;overflow:auto;padding:5px;border:1px solid var(--line);border-radius:11px;
+  background:var(--surface2);box-shadow:0 22px 50px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:1px}
+.picker-list[hidden]{display:none}
+.picker-option{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 10px;border:0;border-radius:7px;background:transparent;color:var(--muted);
+  font-size:12px;text-align:start;cursor:pointer;white-space:nowrap}
+.picker-option:hover,.picker-option:focus-visible{background:var(--surface);color:var(--text);outline:none}
+.picker-option.is-on{color:var(--text);font-weight:650}
+.picker-option .icon{width:14px;height:14px;color:var(--blue);flex:none}
+
+/* Inside a toolbar the picker keeps the height the selects had. */
+.toolbar .picker{min-width:150px}
+@media(max-width:700px){.toolbar .picker{min-width:0;flex:1 1 140px;width:100%}}

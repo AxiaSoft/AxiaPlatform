@@ -59,3 +59,6 @@ public/uploads/
 # A rendered sample of the icon set, made on demand for review - not source.
 icon-set.png
 icon-set.html
+
+# Local test harness (jsdom installed outside the repo, linked in here)
+node_modules
