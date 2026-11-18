@@ -1406,16 +1406,34 @@ if(mobileMenuButton){
     document.body.style.overflow='hidden';
     const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:440;
     let closing=false;
-    const closeMenu=()=>{
+    /* `refocus` is false when the menu closes because the window got wide:
+       the button it would focus is hidden at that width, and pulling focus to
+       something invisible is worse than leaving it where the visitor put it. */
+    const closeMenu=(refocus=true)=>{
       if(closing)return;
       closing=true;nav.classList.remove('is-open');
       document.body.style.overflow='';
       mobileMenuButton.setAttribute('aria-expanded','false');
-      window.setTimeout(()=>{nav.remove();mobileMenuButton.focus()},duration)
+      // These belong to this one opening; leaving them on window would stack
+      // a new pair on every press.
+      window.removeEventListener('resize',wideClose);
+      window.removeEventListener('orientationchange',wideClose);
+      window.setTimeout(()=>{nav.remove();if(refocus)mobileMenuButton.focus()},duration)
     };
-    $('.close-mobile',nav).onclick=closeMenu;
-    $$('a',nav).forEach(a=>a.onclick=closeMenu);
+    $('.close-mobile',nav).onclick=()=>closeMenu();
+    $$('a',nav).forEach(a=>a.onclick=()=>closeMenu());
     nav.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
+    /* The drawer is only a drawer below 820px; above that the CSS hides it and
+       the header shows the links instead. Rotating a phone into landscape - or
+       a tablet into its desktop width - used to leave the menu in the DOM with
+       <body> still locked: the page could not scroll, and pressing the menu
+       button again hit the guard above and did nothing, so the menu was gone
+       for good until a reload. The menu is closed when the window becomes
+       wide, and the lock is released with it. */
+    const wideClose=()=>{if(window.innerWidth>820)closeMenu(false)};
+    window.addEventListener('resize',wideClose,{passive:true});
+    window.addEventListener('orientationchange',wideClose,{passive:true});
+    wideClose();
     requestAnimationFrame(()=>{nav.classList.add('is-open');requestAnimationFrame(()=>$('a',nav)?.focus())})
   }
 }
