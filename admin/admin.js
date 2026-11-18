@@ -184,7 +184,7 @@ function picker(name, options, current, {id='', label='', placeholder='', onPick
       <span class="picker-value${chosen ? '' : ' is-empty'}">${esc(chosen ? chosen.label : (placeholder || label))}</span>
       <span class="picker-chev">${ICON('down')}</span>
     </button>
-    <div class="picker-list" role="listbox" hidden>
+    <div class="picker-list" data-picker-list role="listbox" hidden>
       ${options.map(o => `<button type="button" role="option" class="picker-option${chosen && String(o.value) === String(chosen.value) ? ' is-on' : ''}"
         data-picker-option data-value="${esc(o.value)}" aria-selected="${chosen && String(o.value) === String(chosen.value) ? 'true' : 'false'}">
         <span>${esc(o.label)}</span>${chosen && String(o.value) === String(chosen.value) ? ICON('check') : ''}
