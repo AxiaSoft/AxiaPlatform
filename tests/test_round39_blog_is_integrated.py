@@ -43,8 +43,11 @@ class SignInWorksOnEveryPage(unittest.TestCase):
         self.assertIn('document.body||document.documentElement', APP)
 
     def test_the_dialog_is_still_wired_to_the_account_button(self):
-        self.assertIn('b.onclick=()=>me?', APP,
-                      'the account button no longer opens the account dialog')
+        # The handler's shape is a matter for test_round42_account_button; what
+        # this round is guarding is that signing out still reaches the dialog.
+        i = APP.index("$('#accountButton')")
+        self.assertIn('openAuth()', APP[i:APP.index('\nfunction ', i)],
+                      'the account button no longer opens the sign-in dialog')
 
 
 class TheThemeSwitchWorksEverywhere(unittest.TestCase):
