@@ -108,5 +108,63 @@ class TheNavObeysTheSettingsOnBothPages(unittest.TestCase):
         self.assertIn('"products"', shell)
 
 
+class TheFooterIsSharedToo(unittest.TestCase):
+    """The footer was the third copy of the chrome, and nobody noticed.
+
+    It was hand-written in blog.py: three links instead of the storefront's
+    four, "© AXIASOFT" with no year, and the tagline from blog.py's own table.
+    The header was shared last round and the page still read as a different
+    site, because the bottom of it was not.
+    """
+
+    def test_the_blog_does_not_write_its_own_footer(self):
+        blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
+        self.assertNotIn('<footer class="footer">', blog,
+                         'the blog is drawing a footer again')
+
+    def test_the_footer_has_one_build_function(self):
+        self.assertIn('function footerHTML(', APP)
+        self.assertIn('function mountFooter(', APP)
+        # The same destinations the storefront's footer carries.
+        for key in ('privacy', 'terms', 'refunds-policy', 'contact'):
+            self.assertIn(f"['{key}'", APP, f'the shared footer has no {key} link')
+
+    def test_the_shared_footer_carries_the_year(self):
+        # The blog's copy read "© AXIASOFT" with no year in it.
+        self.assertIn('<span id="year">', APP)
+
+    def test_the_blog_page_mounts_the_shared_footer(self):
+        self.assertIn('mountFooter({lang: opts.lang, href})', APP)
+
+
+class TheBlogReadsTheRealSiteSettings(unittest.TestCase):
+    """An article page was rendering the shipped design, not the live one.
+
+    The static adapter answers /api/site and /api/products from the snapshot
+    that static-config.js, data/settings.js and data/products.js put on
+    window.AXIA_STATIC. The storefront has always loaded those three; the
+    blog's shell did not, so its adapter fell back to built-in defaults and
+    kept its own idea of the footer note, the hero and which sections exist.
+    """
+
+    def test_the_build_gives_article_pages_the_snapshot(self):
+        build = (ROOT / 'tools' / 'build_static.py').read_text(encoding='utf-8')
+        self.assertIn('def inject_snapshot(', build)
+        for name in ('static-config.js', 'data/settings.js', 'data/products.js'):
+            self.assertIn(name, build)
+        # Every blog write site goes through it, like the adapter.
+        self.assertEqual(build.count('inject_snapshot(inject_adapter('), 3)
+
+    def test_the_live_server_does_not_link_to_files_it_does_not_serve(self):
+        """Those three paths 404 on the server build, and correctly.
+
+        The server answers /api/site from the database. Linking the tags
+        unconditionally would put three failing requests in every article
+        page's console, so the injection belongs to the static build only.
+        """
+        blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
+        self.assertNotIn('static-config.js', blog)
+
+
 if __name__ == '__main__':
     unittest.main()

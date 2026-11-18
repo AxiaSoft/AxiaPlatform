@@ -948,11 +948,22 @@ class PageFrameTests(unittest.TestCase):
         self.assertNotIn('position:fixed', footer.group(1))
 
     def test_the_blog_shell_has_the_same_shape(self):
-        # blog.py writes its own <main>/<footer> pair and loads the same
-        # stylesheet, so the rule has to hold there too.
+        """The flex column has to hold on the blog as well as the storefront.
+
+        blog.py writes its own <main> and loads the same stylesheet. The footer
+        is no longer one of the things it writes: that was a third copy of the
+        chrome, with three links instead of four and no copyright year, so
+        app.js mounts the shared one. What matters for this test is only that
+        the page is the same flex column - a <main> that takes the slack,
+        followed by a footer that is mounted into it.
+        """
         blog = (ROOT / 'server' / 'blog.py').read_text(encoding='utf-8')
         self.assertIn('<main class="blog-main" id="main">', blog)
-        self.assertIn('<footer class="footer">', blog)
+        self.assertNotIn('<footer class="footer">', blog,
+                         'the blog is drawing its own footer again')
+        app = (ROOT / 'public' / 'app.js').read_text(encoding='utf-8')
+        self.assertIn('function footerHTML(', app)
+        self.assertIn('<footer class="footer">', app)
 
     def test_the_about_page_has_no_approach_card(self):
         start = self.app.index('function about(')

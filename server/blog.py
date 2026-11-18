@@ -559,6 +559,10 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
         'aurion': f'{root}/#/aurion',
         'about': f'{root}/#/about',
         'contact': f'{root}/#/contact',
+        # The footer links to the same four legal pages the storefront's does.
+        'privacy': f'{root}/#/privacy',
+        'terms': f'{root}/#/terms',
+        'refunds-policy': f'{root}/#/refunds-policy',
     }
     # Blog or article: the blog entry is the current page on both.
     current = 'blog'
@@ -602,12 +606,11 @@ def shell(head, body, lang='fa', base='', slug='', default_theme=''):
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
 <a class="skip-link" href="#main">{t['skip']}</a>
 <main class="blog-main" id="main">{body}</main>
-<footer class="footer">
-  <div class="footer-top"><a class="brand" href="{root}/"><span class="brand-mark"><img src="{root}/brand/axiasoft-original.webp" alt="AXIASOFT"></span><img class="brand-wordmark" src="{root}/brand/axiasoft-wordmark.webp" alt="AXIASOFT"></a>
-  <p>{t['tagline']}</p>
-  <div class="footer-links"><a href="{root}/#/contact">{t['contact']}</a><a href="{blog_home}">{t['feed']}</a><a href="{root}/#/privacy">{t['privacy']}</a></div></div>
-  <div class="footer-bottom"><span>© AXIASOFT</span><span>{t['made']} <span class="blue">✦</span></span></div>
-</footer>
+<!-- No footer here on purpose. It used to be written in this file, with three
+     links instead of the storefront's four, no copyright year, and the tagline
+     from a private table - the same duplication the header had, in the one
+     part of the page that is easiest to forget. app.js mounts the shared one
+     from the description above. -->
 <script src="{root}/effects.js?v={fx_version}" defer></script>
 <script src="{root}/i18n.js" defer></script>
 <script src="{root}/icons.js" defer></script>
