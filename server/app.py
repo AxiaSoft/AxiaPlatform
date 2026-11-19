@@ -125,6 +125,36 @@ COMPRESSIBLE_TYPES = ('text/', 'application/javascript', 'application/json',
 COMPRESS_MIN_BYTES = 1024
 
 
+def file_etag(stat):
+    """A strong validator for a static file: size and mtime, both in hex.
+
+    The same pair the gzip cache is keyed on, for the same reason - a rebuild
+    changes one or the other, so a client can never be told "unchanged" about a
+    file that is not the one it holds.
+    """
+    return '"%x-%x"' % (stat.st_size, stat.st_mtime_ns)
+
+
+def etag_matches(header, etag):
+    """Whether an If-None-Match header covers ``etag``.
+
+    The grammar allows a list, weak prefixes and ``*``. Only the common shape
+    is handled exactly; anything unrecognised returns False, which costs a full
+    response and never serves the wrong bytes.
+    """
+    if not header:
+        return False
+    if header.strip() == '*':
+        return True
+    for candidate in header.split(','):
+        candidate = candidate.strip()
+        if candidate.startswith('W/'):
+            candidate = candidate[2:].strip()
+        if candidate == etag:
+            return True
+    return False
+
+
 def compressed_static(path, content_type, accept_encoding=''):
     """Return ``(body, encoding)`` for a static file, gzipped when it pays.
 
@@ -554,6 +584,54 @@ class AxiServer(ThreadingMixIn, HTTPServer):
         super().handle_error(request, client_address)
 
 
+def overview_counts(db):
+    """The console's dashboard numbers, in three scans instead of twelve.
+
+    Each of these used to be its own ``SELECT count(*)``: four passes over
+    ``orders``, three over ``users`` and three over ``products`` to produce a
+    dozen integers that a single grouped pass answers. The saving grows with
+    the table, and the dashboard is the first thing the console asks for after
+    every sign-in.
+
+    The shape of the answer is unchanged: same keys, same values.
+    """
+    orders = {}
+    for status, n in db.execute('SELECT status, count(*) FROM orders GROUP BY status'):
+        orders[status] = n
+    published_n = hidden_n = featured_n = 0
+    for published, featured, n in db.execute(
+            'SELECT published, featured, count(*) FROM products GROUP BY published, featured'):
+        if published:
+            published_n += n
+            if featured:
+                featured_n += n
+        else:
+            hidden_n += n
+    customers = active = 0
+    for role, is_active, n in db.execute(
+            'SELECT role, active, count(*) FROM users GROUP BY role, active'):
+        if role != 'customer':
+            continue
+        customers += n
+        if is_active:
+            active += n
+    return {
+        'customers': customers,
+        'orders': sum(orders.values()),
+        'pending': sum(orders.get(s, 0) for s in
+                       ('Submitted', 'Under Review', 'Requirements Analysis')),
+        'active': sum(orders.get(s, 0) for s in ('In Development', 'Testing')),
+        'completed': orders.get('Delivered', 0),
+        'tickets': db.execute("SELECT count(*) FROM tickets WHERE status='Open'").fetchone()[0],
+        'refunds': db.execute("SELECT count(*) FROM refunds WHERE status='Under review'").fetchone()[0],
+        'published': published_n,
+        'hidden': hidden_n,
+        'featured': featured_n,
+        'customers_active': active,
+        'customers_suspended': customers - active,
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = 'AXIASOFT'
     sys_version = ''
@@ -608,17 +686,36 @@ class Handler(SimpleHTTPRequestHandler):
             GUARD.release(self.client)
 
     # -- responses ----------------------------------------------------------- #
-    def _send_json(self, obj, status=200, extra=None):
-        raw = json.dumps(obj, ensure_ascii=False).encode()
+    def _send_json(self, obj, status=200, extra=None, compress=True):
+        raw = json.dumps(obj, ensure_ascii=False, separators=(',', ':')).encode()
+        # API bodies were sent as-is, and the console's dashboard is 55KB of
+        # JSON - mostly repeated keys and status strings, which is the easiest
+        # thing there is to compress. Gzip takes it to about a tenth.
+        # `separators` is the other half: the default `", "` and `": "` put a
+        # space after every comma and colon in the whole document.
+        encoding = ''
+        if (compress and len(raw) >= COMPRESS_MIN_BYTES
+                and 'gzip' in (self.headers.get('Accept-Encoding') or '')):
+            candidate = gzip.compress(raw, compresslevel=6)
+            if len(candidate) < len(raw):
+                raw, encoding = candidate, 'gzip'
         self._responded = True
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(raw)))
         self.send_header('Cache-Control', 'no-store')
+        if encoding:
+            self.send_header('Content-Encoding', encoding)
+            self.send_header('Vary', 'Accept-Encoding')
         if extra:
             for k, v in extra.items():
                 self.send_header(k, v)
         self.end_headers()
+        # A HEAD response carries headers only. Writing the body anyway left
+        # stray bytes on a keep-alive connection, where the next response
+        # parser reads them as the start of a reply.
+        if self.command == 'HEAD':
+            return
         try:
             self.wfile.write(raw)
         except (BrokenPipeError, ConnectionResetError):
@@ -1018,15 +1115,44 @@ class Handler(SimpleHTTPRequestHandler):
         # blog falls back to the visitor's saved choice and then the system.
         payload = blog.shell(head=head, body=body, lang=lang, base=base,
                              slug=slug, default_theme=default_theme).encode('utf-8')
+        # A rendered page gets a validator too. The render already happened by
+        # the time we know the bytes, so this cannot save the SQL, but it does
+        # save the transfer: a returning reader re-validates and gets 304.
+        # The ETag is over the final bytes, so any change to the article, the
+        # settings or the shell changes it.
+        etag = '"%s"' % hashlib.blake2b(payload, digest_size=12).hexdigest()
+        not_modified = etag_matches(self.headers.get('If-None-Match'), etag)
         self._responded = True
+        if not_modified and self.command in ('GET', 'HEAD'):
+            self.send_response(304)
+            self.send_header('ETag', etag)
+            self.send_header('Cache-Control', cache)
+            self.end_headers()
+            return
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.send_header('Content-Length', str(len(payload)))
+        self.send_header('ETag', etag)
         self.send_header('Cache-Control', cache)
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.end_headers()
         if self.command != 'HEAD':
             self.wfile.write(payload)
+
+    @staticmethod
+    def _static_cache_control(path, suffix):
+        """How long a static file may be reused without asking.
+
+        Fonts and brand marks never change under the same name, so they are
+        immutable for a week. Images and other binary assets get a day. Text -
+        the HTML, the CSS that styles it and the JavaScript that runs it - is
+        revalidated every time, which is free now that it carries an ETag.
+        """
+        if path in IMMUTABLE_DIRS or path.startswith(IMMUTABLE_DIRS):
+            return 'public, max-age=604800'
+        if suffix in BIG_ASSET_TYPES:
+            return 'public, max-age=86400'
+        return 'no-cache'
 
     def serve_static(self, path):
         if not SAFE_PATH_RE.match(path) or '..' in path or '\\' in path or '\x00' in path:
@@ -1050,12 +1176,32 @@ class Handler(SimpleHTTPRequestHandler):
         suffix = target.suffix.lower()
         ctype = STATIC_TYPES.get(suffix, 'application/octet-stream')
         try:
+            stat = target.stat()
+            etag = file_etag(stat)
+            # Conditional GET. The site is served with `no-cache` so a rebuilt
+            # file is picked up immediately - correct, but until now it meant
+            # every visit re-downloaded every asset in full: 134KB on the home
+            # page, 37KB of it a dictionary. With a validator the same visit
+            # costs one 304 per file and no body at all. `no-cache` is kept:
+            # it says "revalidate", which is exactly what now happens.
+            not_modified = etag_matches(self.headers.get('If-None-Match'), etag)
+            # Cheap case first: a 304 never needs the file, never needs gzip,
+            # and never touches the compression cache.
+            if not_modified and self.command in ('GET', 'HEAD'):
+                self._responded = True
+                self.send_response(304)
+                self.send_header('ETag', etag)
+                self.send_header('Cache-Control', self._static_cache_control(path, suffix))
+                self.send_header('Vary', 'Accept-Encoding')
+                self.end_headers()
+                return
             payload, encoding = compressed_static(target, ctype,
                                                   self.headers.get('Accept-Encoding') or '')
             self._responded = True
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             self.send_header('Content-Length', str(len(payload)))
+            self.send_header('ETag', etag)
             if encoding:
                 self.send_header('Content-Encoding', encoding)
                 # A cache must not hand a gzipped body to a client that did not
@@ -1070,12 +1216,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_header('Content-Security-Policy',
                                  "default-src 'none'; style-src 'unsafe-inline'; img-src data:")
                 self.send_header('X-Content-Type-Options', 'nosniff')
-            if path in IMMUTABLE_DIRS or path.startswith(IMMUTABLE_DIRS):
-                self.send_header('Cache-Control', 'public, max-age=604800')
-            elif suffix in BIG_ASSET_TYPES:
-                self.send_header('Cache-Control', 'public, max-age=86400')
-            else:
-                self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Cache-Control', self._static_cache_control(path, suffix))
             self.end_headers()
             if self.command != 'HEAD':
                 self.wfile.write(payload)
@@ -1305,20 +1446,7 @@ class Handler(SimpleHTTPRequestHandler):
                                  'is_owner': roles.role_of(user) == 'owner'}); return
 
             if p == '/api/admin/overview':
-                counts = {
-                    'customers': db.execute("SELECT count(*) FROM users WHERE role='customer'").fetchone()[0],
-                    'orders': db.execute('SELECT count(*) FROM orders').fetchone()[0],
-                    'pending': db.execute("SELECT count(*) FROM orders WHERE status IN ('Submitted','Under Review','Requirements Analysis')").fetchone()[0],
-                    'active': db.execute("SELECT count(*) FROM orders WHERE status IN ('In Development','Testing')").fetchone()[0],
-                    'completed': db.execute("SELECT count(*) FROM orders WHERE status='Delivered'").fetchone()[0],
-                    'tickets': db.execute("SELECT count(*) FROM tickets WHERE status='Open'").fetchone()[0],
-                    'refunds': db.execute("SELECT count(*) FROM refunds WHERE status='Under review'").fetchone()[0],
-                    'published': db.execute('SELECT count(*) FROM products WHERE published=1').fetchone()[0],
-                    'hidden': db.execute('SELECT count(*) FROM products WHERE published=0').fetchone()[0],
-                    'featured': db.execute('SELECT count(*) FROM products WHERE published=1 AND featured=1').fetchone()[0],
-                    'customers_active': db.execute("SELECT count(*) FROM users WHERE role='customer' AND active=1").fetchone()[0],
-                    'customers_suspended': db.execute("SELECT count(*) FROM users WHERE role='customer' AND active=0").fetchone()[0],
-                }
+                counts = overview_counts(db)
                 orders = db.execute('SELECT o.*,p.title product_title FROM orders o JOIN products p ON p.id=o.product_id ORDER BY o.created_at DESC LIMIT 500').fetchall()
                 products = db.execute('SELECT * FROM products ORDER BY featured DESC, position, id').fetchall()
                 tickets = db.execute('SELECT * FROM tickets ORDER BY created_at DESC LIMIT 8').fetchall()
