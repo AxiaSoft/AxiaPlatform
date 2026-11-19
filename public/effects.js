@@ -251,6 +251,13 @@
   let revealObserver = null;
 
   function initReveal() {
+    /* With reduced motion asked for, nothing is observed at all: every reveal
+       block is simply shown. Returning here without building the observer used
+       to leave `revealObserver` null, and decorateReveal() - called from the
+       route hooks for content that appears later - then threw on
+       `revealObserver.observe(...)`. The throw aborted the rest of that hook,
+       so content loaded afterwards stayed at opacity 0: the setting meant to
+       spare the reader animation hid the page from them instead. */
     if (prefersReduced()) {
       document.querySelectorAll('.reveal').forEach((el) => el.classList.add('is-visible'));
       return;
@@ -292,6 +299,11 @@
         el.classList.add('reveal');
         if (step) el.style.setProperty('--reveal-delay', Math.min(index * step, 420) + 'ms');
         el.dataset.reveal = el.dataset.reveal || 'up';
+        if (!revealObserver) {
+          // Reduced motion: the block is shown, not animated. See initReveal.
+          el.classList.add('is-visible');
+          return;
+        }
         observed++;
         revealObserver.observe(el);
       });

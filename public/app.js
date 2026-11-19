@@ -43,7 +43,14 @@ const BRAND_STORAGE = 'axia-brand';
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));/* Icons come from public/icons.js, which every page loads before this file.
    The fallback keeps a template literal safe if it ever does not. */
 const ICON=(n,c)=>typeof AXIA_ICON==='function'?AXIA_ICON(n,c):'';
-async function api(path,opts={}){let headers={'Content-Type':'application/json',...(opts.headers||{})};if(opts.method&&opts.method!=='GET'){if(!csrf){try{csrf=(await fetch('/api/me').then(r=>r.json())).csrf}catch{}}if(csrf)headers['X-CSRF-Token']=csrf}let r=await fetch(path,{...opts,headers,credentials:'same-origin'}),d=await r.json().catch(()=>({error:'Unexpected server response'}));if(r.headers.get('X-CSRF-Token'))csrf=r.headers.get('X-CSRF-Token');if(!r.ok)throw Error(d.error||'Request failed');return d}
+async function api(path,opts={}){let headers={'Content-Type':'application/json',...(opts.headers||{})};if(opts.method&&opts.method!=='GET'){if(!csrf){try{csrf=(await fetch('/api/me').then(r=>r.json())).csrf}catch{}}if(csrf)headers['X-CSRF-Token']=csrf}let r=await fetch(path,{...opts,headers,credentials:'same-origin'});
+  /* 304 carries no body. That happens when the browser had a copy and the
+     server confirmed it is still current - a validated re-fetch. The body is
+     then the cached one, which fetch normally supplies itself; if a 304 does
+     surface here, ask again with caching bypassed rather than parsing an
+     empty body into a JSON error. */
+  if(r.status===304)r=await fetch(path,{...opts,headers,credentials:'same-origin',cache:'no-store'});
+  let d=await r.json().catch(()=>({error:'Unexpected server response'}));if(r.headers.get('X-CSRF-Token'))csrf=r.headers.get('X-CSRF-Token');if(!r.ok)throw Error(d.error||'Request failed');return d}
 /* A question the site asks in its own voice.
    window.confirm() wears the browser's fonts, its language and its buttons: a
    German Chrome user was answering a Persian site in German. This is a dialog
